@@ -19,11 +19,11 @@ import ClubProfile from './pages/ClubProfile';
 import Help from './pages/Help';
 import PlayerProfile from './pages/PlayerProfile';
 
-const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Cargando...</div>;
   if (!user) return <Navigate to="/" replace />;
-  return children;
+  return <>{children}</>;
 };
 
 const AppRoutes = () => {
