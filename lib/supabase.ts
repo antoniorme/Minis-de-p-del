@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Helper function to safely retrieve environment variables
-const getEnv = (key: string) => {
-  // Try import.meta.env (Vite standard)
+// Helper function to safely retrieve environment variables across different environments
+const getEnv = (key: string, fallbackKey: string = '') => {
+  // Try import.meta.env (Vite)
   try {
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -12,30 +12,28 @@ const getEnv = (key: string) => {
     }
   } catch (e) {}
 
-  // Try process.env (Node/CRA fallback)
+  // Try process.env (Node/CRA)
   try {
     if (typeof process !== 'undefined' && process.env) {
-      return process.env[key];
+      if (process.env[key]) return process.env[key];
+      if (fallbackKey && process.env[fallbackKey]) return process.env[fallbackKey];
     }
   } catch (e) {}
 
-  return undefined;
+  return '';
 };
 
-const supabaseUrl = getEnv('VITE_SUPABASE_URL');
-const supabaseKey = getEnv('VITE_SUPABASE_ANON_KEY');
+const supabaseUrl = getEnv('VITE_SUPABASE_URL', 'REACT_APP_SUPABASE_URL');
+const supabaseKey = getEnv('VITE_SUPABASE_ANON_KEY', 'REACT_APP_SUPABASE_ANON_KEY');
 
 if (!supabaseUrl || !supabaseKey) {
-  // This will appear in the browser console if Vercel env vars are missing
-  console.error(
-    'CRITICAL ERROR: Supabase configuration is missing.\n' +
-    'Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your Vercel Environment Variables.'
-  );
+  console.warn('Supabase URL or Key is missing. Authentication will fail.');
 }
 
-// Initialize client strictly. 
-// If url/key are undefined, createClient might throw, alerting the developer immediately instead of failing silently.
+// Initialize client with fallback values to prevent immediate crash if config is missing
+// We use a placeholder URL to ensure the supabase client is always instantiated,
+// preventing "cannot read property of undefined" errors when importing 'supabase' elsewhere.
 export const supabase = createClient(
-  supabaseUrl || '', 
-  supabaseKey || ''
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseKey || 'placeholder'
 );
