@@ -26,42 +26,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initSession = async () => {
-        // DETECCIÓN INTELIGENTE DE ENTORNO
-        // Si NO estamos en un dominio de Vercel, asumimos entorno de desarrollo/preview
-        // y forzamos el modo offline para saltar el login.
-        const hostname = window.location.hostname;
-        const isProduction = hostname.includes('vercel.app');
-
+        const isProduction = window.location.hostname.includes('vercel.app');
+        
         if (!isProduction) {
-            console.log("🛠️ ENTORNO DE DESARROLLO DETECTADO: Login desactivado.");
+            console.log("🛠️ DESARROLLO LOCAL: Login desactivado.");
             setIsOfflineMode(true);
             const devUser = {
                 id: 'dev-user-id',
                 email: 'admin@padelpro.local',
-                app_metadata: {},
-                user_metadata: {},
                 aud: 'authenticated',
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
+                app_metadata: {},
+                user_metadata: {}
             } as User;
-            
             setUser(devUser);
-            setSession({ user: devUser, access_token: 'mock-token' } as Session);
+            setSession({ user: devUser, access_token: 'mock' } as Session);
             setLoading(false);
-            return; // IMPORTANTE: Salimos aquí para no llamar a Supabase
+            return;
         }
 
-        // LÓGICA DE PRODUCCIÓN (VERCEL)
         try {
-            const { data: { session }, error } = await supabase.auth.getSession();
-            if (error || !session) {
-                setSession(null);
-                setUser(null);
-            } else {
-                setSession(session);
-                setUser(session.user);
-            }
+            const { data: { session } } = await supabase.auth.getSession();
+            setSession(session);
+            setUser(session?.user ?? null);
         } catch (error) {
-            console.error("Error Auth:", error);
+            console.error(error);
         } finally {
             setLoading(false);
         }
@@ -70,7 +59,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Solo actualizamos si NO estamos en modo offline forzado
       if (!isOfflineMode) {
           setSession(session);
           setUser(session?.user ?? null);
@@ -79,13 +67,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => subscription.unsubscribe();
-  }, []); // Dependencias vacías para ejecutar solo al montar
+  }, [isOfflineMode]);
 
   const signOut = async () => {
     if (isOfflineMode) {
-        if(confirm("Estás en modo desarrollo. ¿Quieres recargar la página?")) {
-            window.location.reload();
-        }
+        window.location.reload();
     } else {
         await supabase.auth.signOut();
         setUser(null);

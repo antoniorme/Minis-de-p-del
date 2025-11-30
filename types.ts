@@ -1,4 +1,5 @@
 
+
 export interface Player {
   id: string; // UUID from DB
   user_id?: string;
@@ -81,8 +82,7 @@ export type TournamentAction =
   | { type: 'SET_STATE'; payload: Partial<TournamentState> }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'RESET_LOCAL'; }
-  | { type: 'RESET_TOURNAMENT'; }
-  | { type: 'LOAD_DEMO_DATA'; }
   | { type: 'TOGGLE_BALLS'; payload: number }
   | { type: 'TOGGLE_WATER'; payload: string }
-  | { type: 'TOGGLE_PAID'; payload: string };
+  | { type: 'TOGGLE_PAID'; payload: string }
+  | { type: 'LOAD_DEMO_DATA'; };

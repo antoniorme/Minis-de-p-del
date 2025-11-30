@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
 import { HistoryProvider } from './store/HistoryContext';
+import { TimerProvider } from './store/TimerContext'; // New Import
 import { Layout } from './components/Layout';
 
 // Pages
@@ -59,9 +60,11 @@ const App: React.FC = () => {
     <AuthProvider>
       <HistoryProvider>
         <TournamentProvider>
-            <HashRouter>
-            <AppRoutes />
-            </HashRouter>
+            <TimerProvider> {/* Wrap app with Timer Context */}
+                <HashRouter>
+                <AppRoutes />
+                </HashRouter>
+            </TimerProvider>
         </TournamentProvider>
       </HistoryProvider>
     </AuthProvider>

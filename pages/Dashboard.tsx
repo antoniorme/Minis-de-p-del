@@ -29,14 +29,14 @@ const Dashboard: React.FC = () => {
 
   const handleReset = () => {
       if (window.confirm('¿Estás seguro de que quieres borrar todos los datos del torneo actual? Esta acción no se puede deshacer.')) {
-          dispatch({ type: 'RESET_TOURNAMENT' });
+          dispatch({ type: 'RESET_LOCAL' });
       }
   };
   
   const handleArchiveAndReset = () => {
       if (window.confirm('Esto guardará el torneo en el historial y reiniciará la aplicación para un nuevo torneo. ¿Continuar?')) {
           archiveTournament(state);
-          dispatch({ type: 'RESET_TOURNAMENT' });
+          dispatch({ type: 'RESET_LOCAL' });
       }
   };
 

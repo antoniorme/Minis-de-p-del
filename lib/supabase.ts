@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // Helper function to safely retrieve environment variables across different environments
@@ -8,7 +9,7 @@ const getEnv = (key: string, fallbackKey: string = '') => {
     if (typeof import.meta !== 'undefined' && import.meta.env) {
        // @ts-ignore
        const val = import.meta.env[key];
-       if (val) return val;
+       if (typeof val === 'string') return val;
     }
   } catch (e) {}
 
