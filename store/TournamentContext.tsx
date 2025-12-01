@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback } 
 import { TournamentState, TournamentAction, Player, Pair, Match, Group } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { getMatchRating, calculateEloDelta, calculateDisplayRanking, BASE_ELO_BY_CATEGORY } from '../utils/Elo';
 
 const GROUP_NAMES = ['A', 'B', 'C', 'D'];
 const STORAGE_KEY = 'padelpro_local_db_v3'; 
@@ -116,7 +117,7 @@ interface TournamentContextType {
     nextRoundDB: () => Promise<void>;
     deletePairDB: (pairId: string) => Promise<void>;
     archiveAndResetDB: () => Promise<void>;
-    regenerateMatchesDB: () => Promise<void>; // NEW REPAIR FUNCTION
+    regenerateMatchesDB: () => Promise<void>; 
     formatPlayerName: (p?: Player) => string;
 }
 
@@ -200,10 +201,25 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 mappedPairs = recalculateStats(mappedPairs, mappedMatches);
                 const groups = generateGroupsHelper(mappedPairs, false);
 
-                dispatch({ type: 'SET_STATE', payload: {
-                    id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
-                    players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups
-                }});
+                // AUTO-FIX: If round > 0 but no matches, reset to setup to allow restart
+                if (activeTournament.current_round > 0 && mappedMatches.length === 0) {
+                    console.warn("Data Corruption Detected: Active tournament has no matches. Resetting to setup.");
+                    dispatch({ type: 'SET_STATE', payload: { 
+                        id: activeTournament.id,
+                        status: 'setup', 
+                        currentRound: 0,
+                        players: players || [],
+                        pairs: mappedPairs,
+                        matches: [],
+                        groups: groups 
+                    }});
+                    // Optionally fix DB automatically here, but let's just fix state first
+                } else {
+                    dispatch({ type: 'SET_STATE', payload: {
+                        id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
+                        players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups
+                    }});
+                }
             }
         } catch (e) {
             console.warn("Supabase load error:", e);
@@ -220,24 +236,19 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     }, [state, isOfflineMode]);
 
-    // --- ACTIONS ---
-
     const addPlayerToDB = async (p: Partial<Player>): Promise<string | null> => {
         const newP = { 
             ...p, global_rating: 1200, category_ratings: {}, main_category: p.categories?.[0] || 'Iniciación', matches_played: 0 
         };
-
         if (isOfflineMode) {
             const newId = `local-${Date.now()}`;
             dispatch({ type: 'SET_STATE', payload: { players: [...state.players, { ...newP, id: newId } as Player] } });
             return newId;
         }
-        
         const { data, error } = await supabase.from('players').insert({ 
             user_id: user!.id, name: p.name, nickname: p.nickname, email: p.email, phone: p.phone, categories: p.categories,
             global_rating: 1200, main_category: newP.main_category, category_ratings: {}
         }).select().single();
-        
         if(error || !data) return null;
         loadData();
         return data.id;
@@ -292,37 +303,24 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         loadData();
     }
 
-    // NEW FUNCTION: Force regenerate matches if they are missing in DB
     const regenerateMatchesDB = async () => {
         if (isOfflineMode || !state.id) return;
-        
-        // Re-generate standard group matches
-        const groups = generateGroupsHelper(state.pairs, false); // Keep order
+        const groups = generateGroupsHelper(state.pairs, false); 
         const matches = generateGroupMatchesHelper(groups);
-        
-        // Check existing matches in DB to avoid duplicates
         const { data: existingMatches } = await supabase.from('matches').select('round, pair_a_id, pair_b_id').eq('tournament_id', state.id);
-        
         const matchesToInsert = matches.filter(m => {
-            // Check if this match already exists
-            const exists = existingMatches?.some(ex => 
-                ex.round === m.round && 
-                ((ex.pair_a_id === m.pairAId && ex.pair_b_id === m.pairBId) || 
-                 (ex.pair_a_id === m.pairBId && ex.pair_b_id === m.pairAId))
-            );
+            const exists = existingMatches?.some(ex => ex.round === m.round && ((ex.pair_a_id === m.pairAId && ex.pair_b_id === m.pairBId) || (ex.pair_a_id === m.pairBId && ex.pair_b_id === m.pairAId)));
             return !exists;
         });
-
         if (matchesToInsert.length > 0) {
             const dbMatches = matchesToInsert.map(m => ({
-                tournament_id: state.id!, round: m.round, court_id: m.courtId,
-                pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false
+                tournament_id: state.id!, round: m.round, court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false
             }));
             await supabase.from('matches').insert(dbMatches);
             loadData();
-            alert(`Se han regenerado ${matchesToInsert.length} partidos perdidos.`);
+            alert(`Regenerados ${matchesToInsert.length} partidos.`);
         } else {
-            alert("Todos los partidos parecen correctos. No se han generado nuevos.");
+            alert("No se detectaron partidos faltantes.");
         }
     };
 
@@ -368,7 +366,38 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         dispatch({ type: 'SET_STATE', payload: { matches: newMatches, pairs: newPairs } });
 
         const match = state.matches.find(m => m.id === matchId);
-        // ... (Rest of ELO Logic from previous step goes here, omitted for brevity as it was correct)
+        if (match && !match.elo_processed) {
+            const pairA = state.pairs.find(p => p.id === match.pairAId);
+            const pairB = state.pairs.find(p => p.id === match.pairBId);
+            if (pairA && pairB) {
+                const p1 = state.players.find(p => p.id === pairA.player1Id);
+                const p2 = state.players.find(p => p.id === pairA.player2Id);
+                const p3 = state.players.find(p => p.id === pairB.player1Id);
+                const p4 = state.players.find(p => p.id === pairB.player2Id);
+
+                if (p1 && p2 && p3 && p4) {
+                    const matchCategory = inferMatchCategory([p1, p2, p3, p4]);
+                    const r1 = getMatchRating(p1, matchCategory);
+                    const r2 = getMatchRating(p2, matchCategory);
+                    const r3 = getMatchRating(p3, matchCategory);
+                    const r4 = getMatchRating(p4, matchCategory);
+                    const avgEloA = (r1 + r2) / 2;
+                    const avgEloB = (r3 + r4) / 2;
+                    const delta = calculateEloDelta(avgEloA, avgEloB, sA, sB);
+
+                    const applyUpdate = async (p: Player, d: number) => {
+                        const newRatings = { ...p.category_ratings } || {};
+                        const currentCatRating = newRatings[matchCategory] || (p.global_rating || 1200);
+                        newRatings[matchCategory] = Math.round(currentCatRating + d);
+                        const newGlobal = Math.round((p.global_rating || 1200) + (d * 0.25)); 
+                        await supabase.from('players').update({ global_rating: newGlobal, category_ratings: newRatings, matches_played: (p.matches_played || 0) + 1 }).eq('id', p.id);
+                    };
+
+                    await Promise.all([applyUpdate(p1, delta), applyUpdate(p2, delta), applyUpdate(p3, -delta), applyUpdate(p4, -delta)]);
+                    await supabase.from('matches').update({ elo_processed: true } as any).eq('id', matchId);
+                }
+            }
+        }
     };
 
     const nextRoundDB = async () => {
@@ -407,19 +436,13 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
 
         if (state.id) {
-             // Check idempotency
-             const { count } = await supabase.from('matches').select('id', { count: 'exact', head: true }).eq('tournament_id', state.id).eq('round', nextR);
-             
-             if (!count || count === 0) {
-                 if (playoffMatches.length > 0) {
-                    const dbMatches = playoffMatches.map(m => ({
-                        tournament_id: state.id!, round: m.round, phase: m.phase, bracket: m.bracket,
-                        court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false
-                    }));
-                    await supabase.from('matches').insert(dbMatches);
-                }
-             }
-            
+            if (playoffMatches.length > 0) {
+                const dbMatches = playoffMatches.map(m => ({
+                    tournament_id: state.id!, round: m.round, phase: m.phase, bracket: m.bracket,
+                    court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false
+                }));
+                await supabase.from('matches').insert(dbMatches);
+            }
             await supabase.from('tournaments').update({ current_round: nextR }).eq('id', state.id);
             dispatch({ type: 'SET_STATE', payload: { currentRound: nextR } });
             setTimeout(() => loadData(), 500); 
@@ -428,7 +451,15 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const archiveAndResetDB = async () => {
         if (isOfflineMode) { dispatch({ type: 'RESET_LOCAL' }); return; }
-        if (state.id) { await supabase.from('tournaments').update({ status: 'finished' }).eq('id', state.id); dispatch({ type: 'RESET_LOCAL' }); loadData(); }
+        if (state.id) {
+             // DEEP CLEAN: Delete matches and pairs, keeping tournament record but reset, OR mark finished and start new.
+             // Actually, for a "Hard Reset" (Trash icon), we should delete everything.
+             await supabase.from('matches').delete().eq('tournament_id', state.id);
+             await supabase.from('tournament_pairs').delete().eq('tournament_id', state.id);
+             await supabase.from('tournaments').delete().eq('id', state.id);
+             dispatch({ type: 'RESET_LOCAL' });
+             loadData(); 
+        }
     };
 
     const formatPlayerName = (p?: Player): string => {
