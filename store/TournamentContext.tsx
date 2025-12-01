@@ -8,23 +8,14 @@ const GROUP_NAMES = ['A', 'B', 'C', 'D'];
 const STORAGE_KEY = 'padelpro_local_db_v3'; 
 export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
 
-// --- Logic Helpers ---
-
+// --- Logic Helpers (Keep same logic) ---
 const generateGroupsHelper = (pairs: Pair[], isNewTournament: boolean = false): Group[] => {
   let activePairs = pairs.filter(p => !p.isReserve);
-  
-  if (isNewTournament) {
-      activePairs = [...activePairs].sort(() => 0.5 - Math.random());
-  }
-  
+  if (isNewTournament) { activePairs = [...activePairs].sort(() => 0.5 - Math.random()); }
   activePairs = activePairs.slice(0, 16);
-
   const groups: Group[] = [];
   for (let i = 0; i < 4; i++) {
-    groups.push({
-      id: GROUP_NAMES[i],
-      pairIds: activePairs.slice(i * 4, (i + 1) * 4).map(p => p.id)
-    });
+    groups.push({ id: GROUP_NAMES[i], pairIds: activePairs.slice(i * 4, (i + 1) * 4).map(p => p.id) });
   }
   return groups;
 };
@@ -36,14 +27,9 @@ const generateGroupMatchesHelper = (groups: Group[]): Partial<Match>[] => {
       if(!g) return [];
       return idxs.map((pairIdx, i) => {
           if (!g.pairIds[pairIdx[0]] || !g.pairIds[pairIdx[1]]) return null;
-          return {
-              round, phase: 'group' as const, bracket: null, courtId: court + i,
-              pairAId: g.pairIds[pairIdx[0]], pairBId: g.pairIds[pairIdx[1]],
-              scoreA: null, scoreB: null, isFinished: false
-          };
+          return { round, phase: 'group' as const, bracket: null, courtId: court + i, pairAId: g.pairIds[pairIdx[0]], pairBId: g.pairIds[pairIdx[1]], scoreA: null, scoreB: null, isFinished: false };
       }).filter(Boolean) as Partial<Match>[];
   };
-  
   matches.push(...createMatches('A', 1, [[0,1], [2,3]], 1));
   matches.push(...createMatches('B', 1, [[0,1], [2,3]], 3));
   matches.push(...createMatches('C', 1, [[0,1], [2,3]], 5));
@@ -56,14 +42,12 @@ const generateGroupMatchesHelper = (groups: Group[]): Partial<Match>[] => {
   matches.push(...createMatches('B', 4, [[0,3], [1,2]], 1));
   matches.push(...createMatches('C', 4, [[0,3], [1,2]], 3));
   matches.push(...createMatches('D', 4, [[0,3], [1,2]], 5));
-
   return matches;
 };
 
 const recalculateStats = (pairs: Pair[], matches: Match[]) => {
     const statsMap: Record<string, { played: number, won: number, gameDiff: number }> = {};
     pairs.forEach(p => { statsMap[p.id] = { played: 0, won: 0, gameDiff: 0 }; });
-
     matches.forEach(m => {
         if (!m.isFinished || m.scoreA === null || m.scoreB === null) return;
         if (!statsMap[m.pairAId]) statsMap[m.pairAId] = { played: 0, won: 0, gameDiff: 0 };
@@ -93,6 +77,8 @@ const inferMatchCategory = (players: Player[]): string => {
     return p?.main_category || p?.categories?.[0] || '4ª CAT';
 };
 
+// --- Context ---
+
 const initialState: TournamentState = {
   status: 'setup',
   currentRound: 0,
@@ -117,7 +103,7 @@ interface TournamentContextType {
     nextRoundDB: () => Promise<void>;
     deletePairDB: (pairId: string) => Promise<void>;
     archiveAndResetDB: () => Promise<void>;
-    regenerateMatchesDB: () => Promise<void>; 
+    regenerateMatchesDB: () => Promise<void>;
     formatPlayerName: (p?: Player) => string;
 }
 
@@ -177,6 +163,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         try {
             const { data: players } = await supabase.from('players').select('*').eq('user_id', user.id).order('name');
             const { data: tournaments } = await supabase.from('tournaments').select('*').eq('user_id', user.id).neq('status', 'finished').limit(1);
+            
             const activeTournament = tournaments?.[0];
 
             if (!activeTournament) {
@@ -201,19 +188,12 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 mappedPairs = recalculateStats(mappedPairs, mappedMatches);
                 const groups = generateGroupsHelper(mappedPairs, false);
 
-                // AUTO-FIX: If round > 0 but no matches, reset to setup to allow restart
+                // Auto-Fix: If stuck in active round but no matches, reset to setup
                 if (activeTournament.current_round > 0 && mappedMatches.length === 0) {
-                    console.warn("Data Corruption Detected: Active tournament has no matches. Resetting to setup.");
-                    dispatch({ type: 'SET_STATE', payload: { 
-                        id: activeTournament.id,
-                        status: 'setup', 
-                        currentRound: 0,
-                        players: players || [],
-                        pairs: mappedPairs,
-                        matches: [],
-                        groups: groups 
-                    }});
-                    // Optionally fix DB automatically here, but let's just fix state first
+                     console.warn("Detected corrupted state (Round > 0 but 0 matches). resetting to setup.");
+                     dispatch({ type: 'SET_STATE', payload: { id: activeTournament.id, status: 'setup', currentRound: 0, players: players || [], pairs: mappedPairs, matches: [], groups: groups } });
+                     // Optional: Update DB to reflect reset
+                     await supabase.from('tournaments').update({ status: 'setup', current_round: 0 }).eq('id', activeTournament.id);
                 } else {
                     dispatch({ type: 'SET_STATE', payload: {
                         id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
@@ -236,6 +216,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     }, [state, isOfflineMode]);
 
+    // Actions
     const addPlayerToDB = async (p: Partial<Player>): Promise<string | null> => {
         const newP = { 
             ...p, global_rating: 1200, category_ratings: {}, main_category: p.categories?.[0] || 'Iniciación', matches_played: 0 
@@ -245,10 +226,12 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             dispatch({ type: 'SET_STATE', payload: { players: [...state.players, { ...newP, id: newId } as Player] } });
             return newId;
         }
+        
         const { data, error } = await supabase.from('players').insert({ 
             user_id: user!.id, name: p.name, nickname: p.nickname, email: p.email, phone: p.phone, categories: p.categories,
             global_rating: 1200, main_category: newP.main_category, category_ratings: {}
         }).select().single();
+        
         if(error || !data) return null;
         loadData();
         return data.id;
@@ -436,13 +419,19 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
 
         if (state.id) {
-            if (playoffMatches.length > 0) {
-                const dbMatches = playoffMatches.map(m => ({
-                    tournament_id: state.id!, round: m.round, phase: m.phase, bracket: m.bracket,
-                    court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false
-                }));
-                await supabase.from('matches').insert(dbMatches);
+            // FIX: Check idempotency (if matches for next round exist)
+            const { count } = await supabase.from('matches').select('id', { count: 'exact', head: true }).eq('tournament_id', state.id).eq('round', nextR);
+            
+            if (!count || count === 0) {
+                 if (playoffMatches.length > 0) {
+                    const dbMatches = playoffMatches.map(m => ({
+                        tournament_id: state.id!, round: m.round, phase: m.phase, bracket: m.bracket,
+                        court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false
+                    }));
+                    await supabase.from('matches').insert(dbMatches);
+                }
             }
+
             await supabase.from('tournaments').update({ current_round: nextR }).eq('id', state.id);
             dispatch({ type: 'SET_STATE', payload: { currentRound: nextR } });
             setTimeout(() => loadData(), 500); 
@@ -450,10 +439,12 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const archiveAndResetDB = async () => {
-        if (isOfflineMode) { dispatch({ type: 'RESET_LOCAL' }); return; }
+        if (isOfflineMode) {
+            dispatch({ type: 'RESET_LOCAL' });
+            return;
+        }
         if (state.id) {
-             // DEEP CLEAN: Delete matches and pairs, keeping tournament record but reset, OR mark finished and start new.
-             // Actually, for a "Hard Reset" (Trash icon), we should delete everything.
+             // DEEP CLEAN: Borrar todo para reiniciar de verdad
              await supabase.from('matches').delete().eq('tournament_id', state.id);
              await supabase.from('tournament_pairs').delete().eq('tournament_id', state.id);
              await supabase.from('tournaments').delete().eq('id', state.id);

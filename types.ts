@@ -11,6 +11,7 @@ export interface Player {
   global_rating?: number; // Rating transversal (amortiguado)
   category_ratings?: Record<string, number>; // Mapa: { "3ª CAT": 1450, "4ª CAT": 1500 }
   main_category?: string; // Categoría "casa"
+  matches_played?: number; // Added for tracking match count
   
   // Legacy / Visual
   manual_rating?: number; 
@@ -83,7 +84,7 @@ export interface PastTournament {
     winnerMain?: string; 
     winnerConsolation?: string; 
     playerCount: number;
-    data: TournamentState; 
+    data?: TournamentState; // Made optional as history list often doesn't have full data
 }
 
 export type TournamentAction =
