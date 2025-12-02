@@ -27,30 +27,41 @@ const ActiveTournament: React.FC = () => {
   
   const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
 
-  // --- DATA FILTERING ---
+  // --- DATA FILTERING & LOGIC ---
   const currentMatches = state.matches.filter(m => m.round === state.currentRound);
   
-  // SEGUIMIENTO DE USO DE PISTAS PARA DETECTAR DUPLICADOS
-  const courtUsage: Record<number, number> = {};
-
-  // Ordenar: Pistas 1-6 primero, Pista 0 al final.
-  const sortedMatches = [...currentMatches].sort((a, b) => {
-      // Pista 0 siempre al final
+  // 1. Identificar partidos duplicados (Technical Rest) vs Jugables
+  // Priorizamos el cuadro Principal sobre Consolación si comparten pista
+  const sortedMatchesPriority = [...currentMatches].sort((a, b) => {
+      // Pista 0 al final
       if (a.courtId === 0 && b.courtId !== 0) return 1;
       if (a.courtId !== 0 && b.courtId === 0) return -1;
-      
-      // Si comparten pista física
-      if (a.courtId === b.courtId && a.courtId !== 0) {
-          // Prioridad: Main Bracket > Consolation
+
+      // Si comparten pista, Main va primero
+      if (a.courtId === b.courtId) {
           if (a.bracket === 'main' && b.bracket !== 'main') return -1;
           if (b.bracket === 'main' && a.bracket !== 'main') return 1;
       }
       return a.courtId - b.courtId;
   });
 
-  // CORRECCIÓN LÓGICA: Solo contamos los partidos que TIENEN PISTA (CourtId > 0)
-  // Los de Pista 0 (En Espera) se ignoran para avanzar de ronda.
-  const activePlayableMatches = currentMatches.filter(m => m.courtId > 0);
+  const playableMatchIds = new Set<string>();
+  const seenCourts = new Set<number>();
+
+  sortedMatchesPriority.forEach(m => {
+      if (m.courtId > 0) {
+          if (!seenCourts.has(m.courtId)) {
+              playableMatchIds.add(m.id);
+              seenCourts.add(m.courtId);
+          }
+          // Si ya vimos la pista, este es un duplicado/descanso técnico
+      }
+      // Pista 0 se ignora para playable
+  });
+
+  // 2. Calcular estado de finalización
+  // Solo contamos los partidos que son "Playable" (Tienen pista y no son duplicados de descanso)
+  const activePlayableMatches = currentMatches.filter(m => playableMatchIds.has(m.id));
   const finishedPlayableMatches = activePlayableMatches.filter(m => m.isFinished).length;
   const allMatchesFinished = activePlayableMatches.length > 0 && activePlayableMatches.length === finishedPlayableMatches;
 
@@ -319,25 +330,19 @@ const ActiveTournament: React.FC = () => {
 
       {/* Matches List */}
       <div className="space-y-4">
-        {sortedMatches.length === 0 ? (
+        {sortedMatchesPriority.length === 0 ? (
             <div className="text-center py-10 text-slate-400 italic">Cargando partidos...</div>
         ) : (
-            sortedMatches.map(match => {
+            sortedMatchesPriority.map(match => {
                 // LÓGICA DE VISUALIZACIÓN
-                // Pista 0 = En Espera (Pero jugable)
-                // Duplicado en Pista > 0 = Descanso Técnico
                 const isWaiting = match.courtId === 0;
-                let isTechnicalRest = false;
                 
-                if (!isWaiting) {
-                    if (courtUsage[match.courtId]) isTechnicalRest = true;
-                    courtUsage[match.courtId] = (courtUsage[match.courtId] || 0) + 1;
-                }
-
-                const isBlocked = isTechnicalRest && !match.isFinished;
+                // Es "Blocked" si NO es Playable (es un duplicado de pista de consolación)
+                const isPlayable = playableMatchIds.has(match.id);
+                const isTechnicalRest = !isPlayable && !isWaiting; // Si no es jugable y no es Court 0, es un descanso técnico
 
                 return (
-                <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${isWaiting ? 'bg-slate-50 border-slate-300' : isBlocked ? 'bg-slate-100 opacity-60' : match.isFinished ? 'border-emerald-200 bg-emerald-50/30' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${isWaiting ? 'bg-slate-50 border-slate-300' : isTechnicalRest ? 'bg-slate-100 opacity-60' : match.isFinished ? 'border-emerald-200 bg-emerald-50/30' : 'bg-white border-slate-200 shadow-sm'}`}>
                     <div className={`${isWaiting ? 'bg-slate-200' : 'bg-slate-100'} px-4 py-2 flex justify-between items-center border-b border-slate-200`}>
                         <span className={`font-bold text-xs uppercase flex gap-2 items-center ${isWaiting ? 'text-slate-600' : 'text-slate-700'}`}>
                             {isWaiting ? (
@@ -362,7 +367,7 @@ const ActiveTournament: React.FC = () => {
                             className="flex items-center justify-between mb-3 cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors"
                             onClick={() => setSelectedPairId(match.pairAId)}
                         >
-                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isBlocked ? 'text-slate-400' : 'text-slate-800'}`}>
+                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>
                                  {getPairName(match.pairAId)} <Info size={14} className="text-slate-300"/>
                              </span>
                              <span className="text-3xl font-black text-slate-900">{match.scoreA ?? '-'}</span>
@@ -371,13 +376,13 @@ const ActiveTournament: React.FC = () => {
                             className="flex items-center justify-between cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors"
                             onClick={() => setSelectedPairId(match.pairBId)}
                         >
-                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isBlocked ? 'text-slate-400' : 'text-slate-800'}`}>
+                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>
                                  {getPairName(match.pairBId)} <Info size={14} className="text-slate-300"/>
                              </span>
                              <span className="text-3xl font-black text-slate-900">{match.scoreB ?? '-'}</span>
                         </div>
 
-                        {!match.isFinished && !isBlocked && !isWaiting && (
+                        {!match.isFinished && !isTechnicalRest && !isWaiting && (
                             <button 
                                 onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)}
                                 className={`w-full mt-6 py-4 rounded-xl text-base font-bold text-white shadow-md touch-manipulation bg-blue-600 active:bg-blue-700`}
@@ -385,12 +390,18 @@ const ActiveTournament: React.FC = () => {
                                 Introducir Resultado
                             </button>
                         )}
-                        {isWaiting && (
-                             <div className="w-full mt-4 py-2 bg-slate-200 rounded-lg text-center text-xs font-bold text-slate-500 uppercase">
-                                 Se juega en la siguiente ronda
-                             </div>
+                        
+                        {/* Habilitamos botón para partidos de ESPERA (por si el usuario quiere forzar) pero visualmente distinto */}
+                        {isWaiting && !match.isFinished && (
+                            <button 
+                                onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)}
+                                className={`w-full mt-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-center text-xs font-bold text-slate-500 uppercase transition-colors`}
+                            >
+                                Forzar Resultado (Opcional)
+                            </button>
                         )}
-                        {isBlocked && (
+
+                        {isTechnicalRest && (
                              <div className="w-full mt-4 py-2 bg-slate-200 rounded-lg text-center text-xs font-bold text-slate-400 uppercase">
                                  Pista Ocupada
                              </div>

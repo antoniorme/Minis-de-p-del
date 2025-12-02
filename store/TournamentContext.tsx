@@ -615,7 +615,9 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // 3. GENERAR SEMIS MAIN + CUARTOS CONSOLACIÓN TURNO 2 (Ronda 6)
         else if (state.currentRound === 5) {
             // A. Mover los partidos de espera de la ronda 5 a la ronda 6 y asignarles pista
-            const waitingMatches = state.matches.filter(m => m.round === 5 && m.courtId === 0);
+            // ROBUST FIX: No buscar solo courtId=0, buscar CUALQUIER partido de consolación no finalizado.
+            // Esto arregla el caso donde el usuario ya tenía partidos duplicados en Pista 5 y 6.
+            const waitingMatches = state.matches.filter(m => m.round === 5 && m.bracket === 'consolation' && !m.isFinished);
             
             // Si estamos en online, actualizamos estos partidos en la DB
             if (waitingMatches.length > 0 && !isOfflineMode) {
@@ -629,11 +631,10 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             }
 
             // B. Generar Semis Main (Pista 1 y 2)
-            const qfMatches = state.matches.filter(m => m.round === 5 && m.courtId !== 0);
-            const mainQF = qfMatches.filter(m => m.bracket === 'main');
+            const qfMatches = state.matches.filter(m => m.round === 5 && m.isFinished && m.bracket === 'main');
             
             const getWinner = (court: number) => {
-                const m = mainQF.find(m => m.courtId === court);
+                const m = qfMatches.find(m => m.courtId === court);
                 return m ? ((m.scoreA||0)>(m.scoreB||0)?m.pairAId:m.pairBId) : null;
             };
 
@@ -668,8 +669,8 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
              // B. Semis Consolación
              // Necesitamos ganadores de R5 (Cons QF Turno 1) y R6 (Cons QF Turno 2)
-             const consQF_R5 = state.matches.filter(m => m.round === 5 && m.bracket === 'consolation' && m.courtId !== 0);
-             const consQF_R6 = state.matches.filter(m => m.round === 6 && m.bracket === 'consolation'); // Los que movimos antes
+             const consQF_R5 = state.matches.filter(m => m.round === 5 && m.bracket === 'consolation' && m.isFinished);
+             const consQF_R6 = state.matches.filter(m => m.round === 6 && m.bracket === 'consolation' && m.isFinished); // Los que movimos
              
              // Helper para sacar ganador de un array de partidos dado un ID de pista original
              // En R5 usaron Pistas 5 y 6. En R6 usaron Pistas 3 y 4.
