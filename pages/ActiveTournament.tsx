@@ -56,6 +56,14 @@ const ActiveTournament: React.FC = () => {
       return matches.sort((a, b) => a.round - b.round);
   };
 
+  const getPhaseLabel = (m: any) => {
+      if (m.round <= 4) return '';
+      if (m.phase === 'qf') return 'Cuartos';
+      if (m.phase === 'sf') return 'Semis';
+      if (m.phase === 'final') return 'Final';
+      return 'Playoff';
+  };
+
   // --- HANDLERS ---
 
   const handleStart = async () => {
@@ -247,7 +255,7 @@ const ActiveTournament: React.FC = () => {
 
   // --- VIEW: ACTIVE TOURNAMENT ---
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 pb-32"> {/* Increased padding for floating button */}
       {/* Header */}
       <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 pb-4 -mx-6 px-6 pt-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -266,7 +274,11 @@ const ActiveTournament: React.FC = () => {
             currentMatches.map(match => (
                 <div key={match.id} className={`relative bg-white rounded-2xl border ${match.isFinished ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 shadow-sm'} overflow-hidden`}>
                     <div className="bg-slate-100 px-4 py-2 flex justify-between items-center border-b border-slate-200">
-                        <span className="font-bold text-slate-700 text-sm">Pista {match.courtId}</span>
+                        <span className="font-bold text-slate-700 text-xs uppercase flex gap-2">
+                            {match.courtId === 0 ? <span className="text-orange-600">En Espera</span> : `Pista ${match.courtId}`}
+                            {getPhaseLabel(match) && <span className="text-slate-400">- {getPhaseLabel(match)}</span>}
+                            {match.bracket === 'consolation' && <span className="text-blue-500">(Consolación)</span>}
+                        </span>
                         {match.isFinished && (
                              <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1 text-slate-400 hover:text-blue-500">
                                  <Edit2 size={14} />
@@ -307,6 +319,9 @@ const ActiveTournament: React.FC = () => {
             ))
         )}
       </div>
+
+      {/* Spacer to ensure last item is visible above floating button */}
+      <div className="h-24"></div>
 
       {/* Next Round Button */}
       {currentMatches.length > 0 && (

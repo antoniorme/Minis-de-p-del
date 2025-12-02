@@ -604,10 +604,11 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 3, pairAId: safeGet(rankingsB, 0).id, pairBId: safeGet(rankingsD, 1).id }); 
             playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 4, pairAId: safeGet(rankingsD, 0).id, pairBId: safeGet(rankingsB, 1).id }); 
 
+            // CONSOLACION: Usamos Pista 0 para los partidos que no caben (Solo hay 6 pistas)
             playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 5, pairAId: safeGet(rankingsA, 2).id, pairBId: safeGet(rankingsC, 3).id }); 
             playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 6, pairAId: safeGet(rankingsC, 2).id, pairBId: safeGet(rankingsA, 3).id }); 
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 5, pairAId: safeGet(rankingsB, 2).id, pairBId: safeGet(rankingsD, 3).id }); 
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 6, pairAId: safeGet(rankingsD, 2).id, pairBId: safeGet(rankingsB, 3).id }); 
+            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsB, 2).id, pairBId: safeGet(rankingsD, 3).id }); // Pista 0: Espera
+            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsD, 2).id, pairBId: safeGet(rankingsB, 3).id }); // Pista 0: Espera
         }
 
         else if (state.currentRound === 5) {
@@ -627,9 +628,12 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             if (wMain1 && wMain3) playoffMatches.push({ round: 6, bracket: 'main', phase: 'sf', courtId: 1, pairAId: wMain1, pairBId: wMain3 });
             if (wMain2 && wMain4) playoffMatches.push({ round: 6, bracket: 'main', phase: 'sf', courtId: 2, pairAId: wMain2, pairBId: wMain4 });
 
+            // Consolation Semis: Now they can play on courts 3 and 4 or 5 and 6
+            // We use 3 and 4 since main semis use 1 and 2
             const consQF = qfMatches.filter(m => m.bracket === 'consolation');
             if (consQF.length >= 4) {
                  const getW = (m: Match) => (m.scoreA || 0) > (m.scoreB || 0) ? m.pairAId : m.pairBId;
+                 // Assuming order from generation: 0->Court5, 1->Court6, 2->Court0, 3->Court0
                  playoffMatches.push({ round: 6, bracket: 'consolation', phase: 'sf', courtId: 3, pairAId: getW(consQF[0]), pairBId: getW(consQF[2]) });
                  playoffMatches.push({ round: 6, bracket: 'consolation', phase: 'sf', courtId: 4, pairAId: getW(consQF[1]), pairBId: getW(consQF[3]) });
             }

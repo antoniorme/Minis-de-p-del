@@ -4,7 +4,8 @@ import { Trophy, Grid, GitMerge, ArrowLeft, Edit2 } from 'lucide-react';
 
 const Results: React.FC = () => {
   const { state, updateScoreDB, formatPlayerName } = useTournament(); // Use global helper
-  const [tab, setTab] = useState<'groups' | 'bracket'>('groups');
+  // CHANGE: Default to bracket if in Playoffs (Round > 4)
+  const [tab, setTab] = useState<'groups' | 'bracket'>(state.currentRound > 4 ? 'bracket' : 'groups');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [editMatchId, setEditMatchId] = useState<string | null>(null);
   const [scoreA, setScoreA] = useState('');
@@ -165,12 +166,26 @@ const Results: React.FC = () => {
                   <div className="space-y-6 relative">
                       <div>
                           <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS</p>
-                          <BracketMatch title="QF1" p1={getGroupPosName('A',1)} p2={getGroupPosName('C',2)} {...getMatchData('qf-m-1')} />
-                          <BracketMatch title="QF2" p1={getGroupPosName('C',1)} p2={getGroupPosName('A',2)} {...getMatchData('qf-m-2')} />
-                          <BracketMatch title="QF3" p1={getGroupPosName('B',1)} p2={getGroupPosName('D',2)} {...getMatchData('qf-m-3')} />
-                          <BracketMatch title="QF4" p1={getGroupPosName('D',1)} p2={getGroupPosName('B',2)} {...getMatchData('qf-m-4')} />
+                          <BracketMatch title="QF1 - Pista 1" p1={getGroupPosName('A',1)} p2={getGroupPosName('C',2)} {...getMatchData('qf-m-1')} />
+                          <BracketMatch title="QF2 - Pista 2" p1={getGroupPosName('C',1)} p2={getGroupPosName('A',2)} {...getMatchData('qf-m-2')} />
+                          <BracketMatch title="QF3 - Pista 3" p1={getGroupPosName('B',1)} p2={getGroupPosName('D',2)} {...getMatchData('qf-m-3')} />
+                          <BracketMatch title="QF4 - Pista 4" p1={getGroupPosName('D',1)} p2={getGroupPosName('B',2)} {...getMatchData('qf-m-4')} />
                       </div>
                       <p className="text-center text-xs text-slate-400 mt-4 italic">El cuadro se genera automáticamente al finalizar la fase de grupos.</p>
+                  </div>
+              </div>
+
+              {/* CONSOLATION BRACKET */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <h3 className="text-blue-500 font-bold mb-4 text-center flex items-center justify-center gap-2"><Grid size={18}/> Consolación</h3>
+                  <div className="space-y-6 relative">
+                      <div>
+                          <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS</p>
+                          <BracketMatch title="QF C1 - Pista 5" p1={getGroupPosName('A',3)} p2={getGroupPosName('C',4)} {...getMatchData('qf-c-1')} />
+                          <BracketMatch title="QF C2 - Pista 6" p1={getGroupPosName('C',3)} p2={getGroupPosName('A',4)} {...getMatchData('qf-c-2')} />
+                          <BracketMatch title="QF C3 - En Espera" p1={getGroupPosName('B',3)} p2={getGroupPosName('D',4)} {...getMatchData('qf-c-3')} />
+                          <BracketMatch title="QF C4 - En Espera" p1={getGroupPosName('D',3)} p2={getGroupPosName('B',4)} {...getMatchData('qf-c-4')} />
+                      </div>
                   </div>
               </div>
           </div>

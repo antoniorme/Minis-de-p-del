@@ -62,6 +62,14 @@ const Dashboard: React.FC = () => {
     }
   }
 
+  const getRoundLabel = (r: number) => {
+      if (r <= 4) return r;
+      if (r === 5) return 'Cuartos';
+      if (r === 6) return 'Semis';
+      if (r === 7) return 'Final';
+      return '-';
+  };
+
   return (
     <div className="space-y-8 pb-10">
       <div>
@@ -94,7 +102,7 @@ const Dashboard: React.FC = () => {
         />
         <StatCard 
           title="Ronda Actual" 
-          value={state.currentRound || '-'} 
+          value={getRoundLabel(state.currentRound)} 
           icon={Clock} 
           color="text-pink-400" 
           onClick={() => navigate('/active')}
