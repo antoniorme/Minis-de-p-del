@@ -1,8 +1,9 @@
+
 import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
-import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2 } from 'lucide-react';
+import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2, Hash } from 'lucide-react';
 import { TournamentState } from '../types';
 import { calculateDisplayRanking, manualToElo } from '../utils/Elo';
 
@@ -125,11 +126,24 @@ const PlayerProfile: React.FC = () => {
 
       {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between col-span-2">
-                   <div className="flex justify-between items-start mb-2"><div className="p-2 bg-rose-100 text-rose-600 rounded-lg"><Activity size={20}/></div><span className="text-xs font-bold text-slate-400 uppercase">Win Rate</span></div>
-                   <div className="flex items-end gap-2"><span className="text-4xl font-black text-slate-900">{stats.matchesPlayed > 0 ? Math.round((stats.wins / stats.matchesPlayed) * 100) : 0}%</span><span className="text-xs text-slate-500 mb-1 font-medium">{stats.wins}V - {stats.losses}D</span></div>
-                   <div className="w-full bg-slate-100 h-1.5 mt-3 rounded-full overflow-hidden"><div className="bg-rose-500 h-full rounded-full" style={{ width: `${stats.matchesPlayed > 0 ? (stats.wins / stats.matchesPlayed) * 100 : 0}%` }}></div></div>
+               {/* Total Matches Card */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center">
+                  <Hash size={24} className="text-slate-500 mb-2"/>
+                  <span className="text-2xl font-black text-slate-900">{stats.matchesPlayed}</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 text-center">Partidos</span>
               </div>
+
+              {/* Win Rate */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between col-span-1">
+                   <div className="flex justify-between items-start mb-2">
+                       <div className="text-rose-600"><Activity size={20}/></div>
+                       <span className="text-[10px] font-bold text-slate-400 uppercase">Win Rate</span>
+                   </div>
+                   <div className="flex items-end gap-1">
+                       <span className="text-2xl font-black text-slate-900">{stats.matchesPlayed > 0 ? Math.round((stats.wins / stats.matchesPlayed) * 100) : 0}%</span>
+                   </div>
+              </div>
+              
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center"><Trophy size={24} className="text-emerald-500 mb-2"/><span className="text-2xl font-black text-slate-900">{stats.mainTitles}</span><span className="text-[10px] uppercase font-bold text-slate-400 text-center">Campeón</span></div>
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center"><Medal size={24} className="text-blue-500 mb-2"/><span className="text-2xl font-black text-slate-900">{stats.consTitles}</span><span className="text-[10px] uppercase font-bold text-slate-400 text-center">Consolación</span></div>
           </div>
