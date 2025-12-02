@@ -577,6 +577,19 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const nextR = state.currentRound + 1;
         let playoffMatches: Partial<Match>[] = [];
 
+        // 1. FASE DE GRUPOS (Rondas 1, 2, 3 -> Avanzar simplemente)
+        // Los partidos ya fueron creados al inicio, solo subimos el contador.
+        if (state.currentRound < 4) {
+             if (isOfflineMode) {
+                 dispatch({ type: 'SET_STATE', payload: { currentRound: nextR } });
+                 return;
+             }
+             const { error } = await supabase.from('tournaments').update({ current_round: nextR }).eq('id', state.id);
+             if (error) throw new Error(`Error actualizando ronda: ${error.message}`);
+             loadData();
+             return;
+        }
+
         if (state.currentRound === 4) {
             const pairsWithStats = recalculateStats(state.pairs, state.matches);
             const rankingsA = getRankedPairsForGroup(pairsWithStats, state.groups, 'A');
