@@ -1,13 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
-import { Users, PlayCircle, CheckCircle, Clock, Database, Trash2, Archive, RefreshCw } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Database, Trash2, Archive, RefreshCw, AlertTriangle, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
   const { state, dispatch, loadData } = useTournament();
   const { archiveTournament } = useHistory();
   const navigate = useNavigate();
+
+  // MODAL STATE
+  const [modalConfig, setModalConfig] = useState<{
+      type: 'reset' | 'archive' | 'demo' | 'reload' | null;
+      isOpen: boolean;
+  }>({ type: null, isOpen: false });
 
   const StatCard = ({ title, value, icon: Icon, color, onClick }: any) => (
     <div 
@@ -26,30 +32,26 @@ const Dashboard: React.FC = () => {
     </div>
   );
 
-  const handleReset = () => {
-      if (window.confirm('¿Estás seguro de que quieres borrar todos los datos del torneo actual? Esta acción no se puede deshacer.')) {
+  const performAction = () => {
+      if (modalConfig.type === 'reset') {
           dispatch({ type: 'RESET_LOCAL' });
-      }
-  };
-  
-  const handleArchiveAndReset = () => {
-      if (window.confirm('Esto guardará el torneo en el historial y reiniciará la aplicación para un nuevo torneo. ¿Continuar?')) {
+      } else if (modalConfig.type === 'archive') {
           archiveTournament(state);
           dispatch({ type: 'RESET_LOCAL' });
+      } else if (modalConfig.type === 'demo') {
+          dispatch({ type: 'LOAD_DEMO_DATA' });
+      } else if (modalConfig.type === 'reload') {
+          loadData();
       }
+      setModalConfig({ type: null, isOpen: false });
   };
-
-  const handleLoadDemo = () => {
-      if (state.pairs.length > 0) {
-          if (!window.confirm('Ya hay datos registrados. ¿Quieres borrarlos y cargar datos de prueba?')) return;
+  
+  const openModal = (type: 'reset' | 'archive' | 'demo' | 'reload') => {
+      // Check specific conditions before opening
+      if (type === 'demo' && state.pairs.length > 0) {
+          // If pairs exist, show confirmation that data will be lost
       }
-      dispatch({ type: 'LOAD_DEMO_DATA' });
-  };
-
-  // Panic Button: Force Reload from DB
-  const handleForceReload = () => {
-      loadData();
-      alert("Datos recargados desde la nube.");
+      setModalConfig({ type, isOpen: true });
   }
 
   const ActivityIcon = (status: string) => {
@@ -132,7 +134,7 @@ const Dashboard: React.FC = () => {
           <div className="flex flex-col gap-3">
                {state.status === 'finished' && (
                    <button 
-                    onClick={handleArchiveAndReset}
+                    onClick={() => openModal('archive')}
                     className="flex items-center justify-center gap-2 px-4 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm shadow-lg font-bold animate-pulse"
                    >
                        <Archive size={18} />
@@ -142,7 +144,7 @@ const Dashboard: React.FC = () => {
 
                {state.status === 'setup' && (
                    <button 
-                    onClick={handleLoadDemo}
+                    onClick={() => openModal('demo')}
                     className="flex items-center justify-center gap-2 px-4 py-4 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm border border-slate-300 shadow-sm font-bold"
                    >
                        <Database size={18} />
@@ -152,14 +154,14 @@ const Dashboard: React.FC = () => {
                
                <div className="flex gap-2">
                    <button 
-                    onClick={handleReset}
+                    onClick={() => openModal('reset')}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-4 bg-white hover:bg-red-50 text-red-600 rounded-xl text-sm border border-red-200 shadow-sm font-bold"
                    >
                        <Trash2 size={18} />
                        Resetear Torneo
                    </button>
                    <button 
-                    onClick={handleForceReload}
+                    onClick={() => openModal('reload')}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-4 bg-white hover:bg-blue-50 text-blue-600 rounded-xl text-sm border border-blue-200 shadow-sm font-bold"
                    >
                        <RefreshCw size={18} />
@@ -168,6 +170,48 @@ const Dashboard: React.FC = () => {
                </div>
           </div>
       </div>
+
+      {/* GLOBAL CONFIRMATION MODAL */}
+      {modalConfig.isOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${modalConfig.type === 'archive' || modalConfig.type === 'reload' ? 'bg-blue-100 text-blue-600' : 'bg-rose-100 text-rose-600'}`}>
+                      {modalConfig.type === 'archive' ? <Archive size={32}/> : 
+                       modalConfig.type === 'reload' ? <RefreshCw size={32}/> :
+                       <AlertTriangle size={32} />}
+                  </div>
+                  
+                  <h3 className="text-xl font-black text-slate-900 mb-2">
+                      {modalConfig.type === 'reset' && '¿Resetear Torneo?'}
+                      {modalConfig.type === 'archive' && '¿Archivar Torneo?'}
+                      {modalConfig.type === 'demo' && '¿Cargar Demo?'}
+                      {modalConfig.type === 'reload' && '¿Recargar Datos?'}
+                  </h3>
+                  
+                  <p className="text-slate-500 mb-8 leading-relaxed">
+                      {modalConfig.type === 'reset' && 'Se borrarán todos los datos locales del torneo actual. Esta acción no se puede deshacer.'}
+                      {modalConfig.type === 'archive' && 'El torneo se guardará en el historial y se preparará la app para uno nuevo.'}
+                      {modalConfig.type === 'demo' && 'Se borrarán los datos actuales y se cargarán jugadores de prueba.'}
+                      {modalConfig.type === 'reload' && 'Se forzará una recarga desde la base de datos de Supabase.'}
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-3">
+                      <button 
+                        onClick={performAction}
+                        className={`w-full py-4 rounded-xl font-bold text-white shadow-lg ${modalConfig.type === 'archive' || modalConfig.type === 'reload' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-rose-600 hover:bg-rose-700'}`}
+                      >
+                          Confirmar Acción
+                      </button>
+                      <button 
+                        onClick={() => setModalConfig({ type: null, isOpen: false })}
+                        className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200"
+                      >
+                          Cancelar
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

@@ -12,6 +12,12 @@ export const BASE_ELO_BY_CATEGORY: Record<string, number> = {
     '1ª CAT': 1850
 };
 
+// Convierte escala 1-10 a ELO aproximado (1000 - 1900)
+export const manualToElo = (rating: number = 5): number => {
+    // 1 -> 1000, 3 -> 1200, 5 -> 1400, 8 -> 1700, 10 -> 1900
+    return 900 + (rating * 100);
+};
+
 // --- 1. OBTENER RATING EFECTIVO PARA UN PARTIDO ---
 export const getMatchRating = (player: Player, matchCategory: string): number => {
     // A. Si ya tiene rating en esa categoría, úsalo
@@ -51,34 +57,16 @@ export const calculateEloDelta = (
 };
 
 // --- 4. RANKING "REAL" (La métrica maestra para el club) ---
-// Promedio ponderado: 50% Global + 30% Principal + 20% Mejor Adyacente
+// Ahora integra la Valoración Manual como factor de corrección.
+// Fórmula: 70% Rendimiento Estadístico + 30% Valoración Manual
 export const calculateDisplayRanking = (player: Player): number => {
-    const global = player.global_rating || 1200;
+    const globalStatsElo = player.global_rating || 1200;
     
-    // Si no tiene categoría principal definida, usa la primera de su lista o Iniciación
-    const mainCat = player.main_category || player.categories?.[0] || 'Iniciación';
-    const ratingMain = player.category_ratings?.[mainCat] || global; // Fallback al global si no tiene específico
+    // Convertimos la valoración manual (1-10) a escala ELO
+    const manualElo = manualToElo(player.manual_rating || 5);
 
-    // Buscar mejor adyacente (simple: buscamos el rating más alto que no sea el principal)
-    let bestAdjacent = 0;
-    if (player.category_ratings) {
-        const ratings = Object.values(player.category_ratings);
-        bestAdjacent = Math.max(...ratings, ratingMain); // Si no tiene otros, usa el main
-    } else {
-        bestAdjacent = ratingMain;
-    }
-
-    // Fórmula
-    const ranking = (0.5 * global) + (0.3 * ratingMain) + (0.2 * bestAdjacent);
+    // Calculamos el ranking ponderado
+    const ranking = (0.7 * globalStatsElo) + (0.3 * manualElo);
+    
     return Math.round(ranking);
 };
-
-// --- Helper: Obtener categoría adyacente (opcional para lógica futura) ---
-const getAdjacentCategories = (cat: string): string[] => {
-    const idx = TOURNAMENT_CATEGORIES.indexOf(cat);
-    if (idx === -1) return [];
-    const adj = [];
-    if (idx > 0) adj.push(TOURNAMENT_CATEGORIES[idx - 1]);
-    if (idx < TOURNAMENT_CATEGORIES.length - 1) adj.push(TOURNAMENT_CATEGORIES[idx + 1]);
-    return adj;
-}

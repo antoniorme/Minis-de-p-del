@@ -4,7 +4,7 @@ import { Search, Filter, Edit2, Save, User, Eye, Trophy, Activity } from 'lucide
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 // FIX: Use correct exported function name
-import { calculateDisplayRanking } from '../utils/Elo'; 
+import { calculateDisplayRanking, manualToElo } from '../utils/Elo'; 
 
 const PlayerManager: React.FC = () => {
   const { state, updatePlayerInDB, formatPlayerName } = useTournament();
@@ -20,8 +20,8 @@ const PlayerManager: React.FC = () => {
       return matchesCat && matchesSearch;
   });
 
-  // Ordenar por ranking global (Mejores primero)
-  filteredPlayers.sort((a, b) => calculateDisplayRanking(b) - calculateDisplayRanking(a));
+  // LOGIC CHANGE: Ordenar alfabéticamente por nombre
+  filteredPlayers.sort((a, b) => a.name.localeCompare(b.name));
 
   const handleSave = () => {
       if (editingPlayer) {
@@ -41,6 +41,11 @@ const PlayerManager: React.FC = () => {
               categories: exists ? cats.filter(c => c !== cat) : [...cats, cat]
           };
       });
+  };
+
+  // Helper para previsualizar el ranking en el modal
+  const getPreviewRanking = (p: Player) => {
+      return calculateDisplayRanking(p);
   };
 
   return (
@@ -74,8 +79,8 @@ const PlayerManager: React.FC = () => {
               return (
               <div key={player.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
                   <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${idx < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-500'}`}>
-                          {idx + 1}
+                      <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-sm">
+                          {player.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
                           <div className="font-bold text-slate-800 text-lg flex items-center gap-2">
@@ -100,25 +105,35 @@ const PlayerManager: React.FC = () => {
       {/* Edit Modal */}
       {editingPlayer && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-slide-up">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
                   <h3 className="text-xl font-bold mb-6 text-slate-900">Editar Jugador</h3>
                   <div className="space-y-4">
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre Real</label><input value={editingPlayer.name} onChange={e => setEditingPlayer({...editingPlayer, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo</label><input value={editingPlayer.nickname || ''} onChange={e => setEditingPlayer({...editingPlayer, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       
-                      {/* NEW MANUAL RATING INPUT */}
-                      <div>
-                          <label className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1"><Trophy size={12}/> Valoración Manual (1-10)</label>
-                          <div className="flex items-center gap-4 mt-1">
+                      {/* MANUAL RATING SLIDER WITH REAL-TIME PREVIEW */}
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          <label className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1 mb-2"><Trophy size={12}/> Valoración Manual (1-10)</label>
+                          <div className="flex items-center gap-4">
                               <input 
                                 type="range" min="1" max="10" step="0.5"
                                 value={editingPlayer.manual_rating || 5} 
                                 onChange={e => setEditingPlayer({...editingPlayer, manual_rating: parseFloat(e.target.value)})} 
-                                className="w-full accent-amber-500" 
+                                className="w-full accent-amber-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
                               />
-                              <span className="font-bold text-xl text-amber-700">{editingPlayer.manual_rating || 5}</span>
+                              <span className="font-bold text-xl text-amber-700 w-10 text-center">{editingPlayer.manual_rating || 5}</span>
                           </div>
-                          <p className="text-[10px] text-slate-400 mt-1">Ajusta el nivel inicial del jugador.</p>
+                          
+                          <div className="mt-4 flex justify-between items-center text-xs">
+                                <div>
+                                    <span className="block text-slate-400 uppercase">ELO Estadístico</span>
+                                    <span className="font-bold text-slate-700">{Math.round(editingPlayer.global_rating || 1200)}</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-slate-400 uppercase">Ranking Final</span>
+                                    <span className="font-black text-emerald-600 text-lg transition-all">{getPreviewRanking(editingPlayer)} pts</span>
+                                </div>
+                          </div>
                       </div>
 
                       <div>

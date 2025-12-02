@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
-import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, Grid } from 'lucide-react';
+import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2 } from 'lucide-react';
 import { TournamentState } from '../types';
+import { calculateDisplayRanking, manualToElo } from '../utils/Elo';
 
 const PlayerProfile: React.FC = () => {
   const { playerId } = useParams<{ playerId: string }>();
@@ -14,7 +15,7 @@ const PlayerProfile: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
 
   const player = state.players.find(p => p.id === playerId);
-  const [editForm, setEditForm] = useState(player || { name: '', nickname: '', categories: [] as string[], email: '', phone: '', id: '', paid: false });
+  const [editForm, setEditForm] = useState(player || { name: '', nickname: '', categories: [] as string[], email: '', phone: '', id: '', manual_rating: 5 });
 
   const stats = useMemo(() => {
       if (!playerId) return null;
@@ -69,6 +70,11 @@ const PlayerProfile: React.FC = () => {
   const handleSave = () => { updatePlayerInDB(editForm); setIsEditing(false); };
   const toggleEditCategory = (cat: string) => { setEditForm(prev => { const cats = prev.categories || []; const exists = cats.includes(cat); return { ...prev, categories: exists ? cats.filter(c => c !== cat) : [...cats, cat] }; }); };
 
+  // Calculate Ratings for Display
+  const currentRanking = calculateDisplayRanking(player);
+  const rawStatsElo = player.global_rating || 1200;
+  const manualVal = player.manual_rating || 5;
+
   return (
     <div className="space-y-6 pb-20">
        <div className="flex items-center justify-between">
@@ -87,6 +93,33 @@ const PlayerProfile: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-600 border-t border-slate-100 pt-4">
                <div className="flex items-center gap-3 p-2"><Smartphone size={18} className="text-emerald-500"/><span>{player.phone || 'Sin teléfono'}</span></div>
                <div className="flex items-center gap-3 p-2"><Mail size={18} className="text-blue-500"/><span className="truncate">{player.email || 'Sin email'}</span></div>
+          </div>
+      </div>
+
+      {/* ELO & RANKING CARD */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><BarChart2 size={100} /></div>
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Nivel de Juego</h3>
+          
+          <div className="flex items-end justify-between mb-2">
+              <div>
+                  <div className="text-4xl font-black text-white">{currentRanking}</div>
+                  <div className="text-xs text-emerald-400 font-bold uppercase">Ranking PadelPro</div>
+              </div>
+              <div className="text-right">
+                   <div className="text-xl font-bold text-slate-300">{manualVal} <span className="text-xs text-slate-500">/10</span></div>
+                   <div className="text-[10px] text-slate-500 uppercase">Val. Manual</div>
+              </div>
+          </div>
+          
+          <div className="w-full bg-slate-700 h-2 rounded-full overflow-hidden mb-4">
+              {/* Visual bar relative to max 2000 */}
+              <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min((currentRanking / 2000) * 100, 100)}%` }}></div>
+          </div>
+
+          <div className="flex justify-between items-center text-xs text-slate-400 border-t border-slate-700 pt-3">
+              <span>Estadístico: <span className="text-white font-bold">{rawStatsElo}</span> (70%)</span>
+              <span>Manual: <span className="text-white font-bold">{manualToElo(manualVal)}</span> (30%)</span>
           </div>
       </div>
 
@@ -124,6 +157,22 @@ const PlayerProfile: React.FC = () => {
                   <div className="space-y-4">
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre</label><input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo</label><input value={editForm.nickname || ''} onChange={e => setEditForm({...editForm, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
+                      
+                      {/* MANUAL RATING SLIDER */}
+                      <div>
+                          <label className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1"><Trophy size={12}/> Valoración Manual (1-10)</label>
+                          <div className="flex items-center gap-4 mt-1">
+                              <input 
+                                type="range" min="1" max="10" step="0.5"
+                                value={editForm.manual_rating || 5} 
+                                onChange={e => setEditForm({...editForm, manual_rating: parseFloat(e.target.value)})} 
+                                className="w-full accent-amber-500" 
+                              />
+                              <span className="font-bold text-xl text-amber-700">{editForm.manual_rating || 5}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1">Afecta al 30% del Ranking PadelPro.</p>
+                      </div>
+
                       <div>
                         <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías</label>
                         <div className="flex flex-wrap gap-2">

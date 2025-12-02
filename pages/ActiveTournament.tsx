@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useTournament } from '../store/TournamentContext';
+import { useTournament, GenerationMethod } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
-import { Square, ChevronRight, Edit2, Info, User, Play, AlertTriangle, X } from 'lucide-react';
+import { Square, ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock } from 'lucide-react';
 import { Player } from '../types';
 
 const ActiveTournament: React.FC = () => {
@@ -16,6 +16,9 @@ const ActiveTournament: React.FC = () => {
   const [lastEditedMatchId, setLastEditedMatchId] = useState<string | null>(null);
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
+  
+  // Logic Change: Generation Method State
+  const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo');
 
   // --- DATA FILTERING ---
   const currentMatches = state.matches.filter(m => m.round === state.currentRound);
@@ -53,7 +56,7 @@ const ActiveTournament: React.FC = () => {
   // --- HANDLERS ---
 
   const handleStart = async () => {
-      await startTournamentDB();
+      await startTournamentDB(generationMethod);
       resetTimer(); 
       startTimer();
   };
@@ -170,8 +173,8 @@ const ActiveTournament: React.FC = () => {
   if (state.status === 'setup') {
       const canStart = state.pairs.filter(p => !p.isReserve).length === 16;
       return (
-          <div className="flex flex-col items-center justify-center h-[60vh] p-6 text-center space-y-6">
-              <div className="bg-slate-100 p-6 rounded-full">
+          <div className="flex flex-col items-center justify-center h-[70vh] p-6 text-center space-y-8">
+              <div className="bg-slate-100 p-6 rounded-full animate-pulse">
                   <Play size={48} className="text-slate-400 ml-1" />
               </div>
               <div>
@@ -180,12 +183,33 @@ const ActiveTournament: React.FC = () => {
                       Hay {state.pairs.length} parejas registradas. {canStart ? 'Todo listo.' : 'Necesitas 16 parejas titulares.'}
                   </p>
               </div>
+              
+              {canStart && (
+                  <div className="w-full max-w-xs space-y-2">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Configurar Grupos</p>
+                      <div className="grid grid-cols-3 gap-2">
+                          <button onClick={() => setGenerationMethod('arrival')} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm' : 'border-slate-100 text-slate-400 bg-white hover:border-slate-200'}`}>
+                              <Clock size={20} className="mb-1"/>
+                              <span className="text-[10px] font-bold uppercase">Llegada</span>
+                          </button>
+                          <button onClick={() => setGenerationMethod('manual')} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm' : 'border-slate-100 text-slate-400 bg-white hover:border-slate-200'}`}>
+                              <ListOrdered size={20} className="mb-1"/>
+                              <span className="text-[10px] font-bold uppercase">Manual</span>
+                          </button>
+                          <button onClick={() => setGenerationMethod('elo')} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm' : 'border-slate-100 text-slate-400 bg-white hover:border-slate-200'}`}>
+                              <TrendingUp size={20} className="mb-1"/>
+                              <span className="text-[10px] font-bold uppercase">Por ELO</span>
+                          </button>
+                      </div>
+                  </div>
+              )}
+
               <button 
                 onClick={handleStart} 
                 disabled={!canStart}
-                className={`px-8 py-4 rounded-xl font-bold text-lg shadow-lg flex items-center gap-2 transition-all ${canStart ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 shadow-emerald-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                className={`w-full max-w-xs px-8 py-5 rounded-xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${canStart ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white active:scale-95 hover:shadow-2xl' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
               >
-                  <Play size={20} fill="currentColor" /> EMPEZAR TORNEO
+                  <Play size={24} fill="currentColor" /> EMPEZAR TORNEO
               </button>
           </div>
       )
