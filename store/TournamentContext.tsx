@@ -456,20 +456,33 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             dispatch({ type: 'SET_STATE', payload: { status: 'active', currentRound: 1, groups, matches: localMatches } });
             return;
         }
-        if (!state.id) return;
         
-        // CLEAN START
-        await supabase.from('matches').delete().eq('tournament_id', state.id);
+        if (!state.id) {
+            throw new Error("No se encontró ID del torneo. Por favor, recarga la página.");
+        }
+        
+        // CLEAN START - DB Transaction simulation
+        const { error: deleteError } = await supabase.from('matches').delete().eq('tournament_id', state.id);
+        if (deleteError) {
+             throw new Error(`Error limpiando partidos anteriores: ${deleteError.message}`);
+        }
 
         const dbMatches = matches.map(m => ({
             tournament_id: state.id!, round: m.round, court_id: m.courtId,
             pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false, phase: 'group'
         }));
-        const { error } = await supabase.from('matches').insert(dbMatches);
-        if (!error) {
-            await supabase.from('tournaments').update({ status: 'active', current_round: 1 }).eq('id', state.id);
-            loadData();
+        
+        const { error: insertError } = await supabase.from('matches').insert(dbMatches);
+        if (insertError) {
+            throw new Error(`Error guardando partidos: ${insertError.message}`);
         }
+
+        const { error: updateError } = await supabase.from('tournaments').update({ status: 'active', current_round: 1 }).eq('id', state.id);
+        if (updateError) {
+             throw new Error(`Error actualizando estado del torneo: ${updateError.message}`);
+        }
+
+        loadData();
     };
 
     const updateScoreDB = async (matchId: string, sA: number, sB: number) => {

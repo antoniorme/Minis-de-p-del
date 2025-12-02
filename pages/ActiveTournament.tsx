@@ -16,6 +16,7 @@ const ActiveTournament: React.FC = () => {
   const [lastEditedMatchId, setLastEditedMatchId] = useState<string | null>(null);
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Logic Change: Generation Method State
   const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo');
@@ -56,9 +57,13 @@ const ActiveTournament: React.FC = () => {
   // --- HANDLERS ---
 
   const handleStart = async () => {
-      await startTournamentDB(generationMethod);
-      resetTimer(); 
-      startTimer();
+      try {
+          await startTournamentDB(generationMethod);
+          resetTimer(); 
+          startTimer();
+      } catch (e: any) {
+          setErrorMessage(e.message || "Error desconocido al iniciar torneo.");
+      }
   };
 
   const handleSaveScore = () => {
@@ -121,7 +126,7 @@ const ActiveTournament: React.FC = () => {
           await nextRoundDB();
       } catch (e: any) {
           console.error("Error advancing round:", e);
-          alert(`Error al avanzar: ${e.message || e}`);
+          setErrorMessage(`Error al avanzar: ${e.message || e}`);
       }
   };
 
@@ -211,6 +216,20 @@ const ActiveTournament: React.FC = () => {
               >
                   <Play size={24} fill="currentColor" /> EMPEZAR TORNEO
               </button>
+
+               {/* ERROR MESSAGE MODAL FOR SETUP */}
+               {errorMessage && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                              <AlertTriangle size={32} />
+                          </div>
+                          <h3 className="text-xl font-black text-slate-900 mb-2">Error</h3>
+                          <p className="text-slate-500 mb-6 text-sm break-words">{errorMessage}</p>
+                          <button onClick={() => setErrorMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
+                      </div>
+                  </div>
+              )}
           </div>
       )
   }
@@ -349,6 +368,20 @@ const ActiveTournament: React.FC = () => {
                           Cancelar
                       </button>
                   </div>
+              </div>
+          </div>
+      )}
+
+       {/* ERROR MODAL (Reused logic for Active View) */}
+       {errorMessage && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                      <AlertTriangle size={32} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-2">Error</h3>
+                  <p className="text-slate-500 mb-6 text-sm break-words">{errorMessage}</p>
+                  <button onClick={() => setErrorMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
               </div>
           </div>
       )}
