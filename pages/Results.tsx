@@ -140,21 +140,27 @@ const Results: React.FC = () => {
   const qf3 = { ...getMatchData(5, 3), p1: getGroupPosName('B',1), p2: getGroupPosName('D',2) };
   const qf4 = { ...getMatchData(5, 4), p1: getGroupPosName('D',1), p2: getGroupPosName('B',2) };
   
+  // Semifinales Main (Ronda 6)
   const sf1 = getMatchData(6, 1);
   const sf2 = getMatchData(6, 2);
+  
+  // Final Main (Ronda 7)
   const finalMain = getMatchData(7, 1);
 
   // Consolation Bracket
-  // QF Cons Turno 1 (R5)
+  // QF Cons Turno 1 (R5, Pistas 5 y 6)
   const qfC1 = { ...getMatchData(5, 5), p1: getGroupPosName('A',3), p2: getGroupPosName('C',4) };
   const qfC2 = { ...getMatchData(5, 6), p1: getGroupPosName('C',3), p2: getGroupPosName('A',4) };
-  // QF Cons Turno 2 (R6) - We look for matches in R6 with courts 3 & 4
+  
+  // QF Cons Turno 2 (R6, Pistas 3 y 4) - Desplazados desde Pista 0
   const qfC3 = { ...getMatchData(6, 3), p1: getGroupPosName('B',3), p2: getGroupPosName('D',4) };
   const qfC4 = { ...getMatchData(6, 4), p1: getGroupPosName('D',3), p2: getGroupPosName('B',4) };
-  // NOTE: If matches were waiting in R5 court 0, they are now here in R6.
   
+  // Semis Consolación (Ronda 7, Pistas 2 y 3)
   const sfC1 = getMatchData(7, 2);
   const sfC2 = getMatchData(7, 3);
+  
+  // Final Consolación (Ronda 8, Pista 1)
   const finalCons = getMatchData(8, 1);
 
 
