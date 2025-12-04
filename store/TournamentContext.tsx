@@ -1,286 +1,12 @@
-
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { TournamentState, TournamentAction, Player, Pair, Match, Group, TournamentFormat, GenerationMethod } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useHistory } from './HistoryContext'; 
-import { calculateDisplayRanking } from '../utils/Elo';
+import * as Logic from '../utils/TournamentLogic';
 
-const GROUP_NAMES_16 = ['A', 'B', 'C', 'D'];
-const GROUP_NAMES_12 = ['A', 'B', 'C'];
-const GROUP_NAMES_10 = ['A', 'B'];
-const GROUP_NAMES_8 = ['A', 'B'];
 const STORAGE_KEY = 'padelpro_local_db_v3'; 
 export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
-
-export const getPairElo = (pair: Pair, players: Player[]): number => {
-    const p1 = players.find(p => p.id === pair.player1Id);
-    const p2 = players.find(p => p.id === pair.player2Id);
-    const score1 = p1 ? calculateDisplayRanking(p1) : 1200;
-    const score2 = p2 ? calculateDisplayRanking(p2) : 1200;
-    return score1 + score2;
-};
-
-const sortPairsByMethod = (pairs: Pair[], players: Player[], method: GenerationMethod): Pair[] => {
-    let activePairs = pairs; 
-    if (method === 'arrival') {
-        return [...activePairs].sort((a, b) => (a.id > b.id ? 1 : -1)); 
-    } 
-    if (method === 'elo-balanced') {
-        return [...activePairs].sort((a, b) => {
-            const eloA = getPairElo(a, players);
-            const eloB = getPairElo(b, players);
-            return eloB - eloA;
-        });
-    } 
-    if (method === 'elo-mixed') {
-        return [...activePairs].sort((a, b) => {
-            const eloA = getPairElo(a, players);
-            const eloB = getPairElo(b, players);
-            return eloB - eloA;
-        });
-    }
-    return activePairs; 
-};
-
-const generateGroupsHelper = (pairs: Pair[], players: Player[], method: GenerationMethod = 'manual', format: TournamentFormat = '16_mini'): Group[] => {
-  let limit = 16;
-  if (format === '10_mini') limit = 10;
-  if (format === '8_mini') limit = 8;
-  if (format === '12_mini') limit = 12;
-
-  let sortedPairs = sortPairsByMethod(pairs, players, method);
-  const titularPairs = sortedPairs.slice(0, limit);
-  const groups: Group[] = [];
-  
-  if (format === '16_mini') {
-      if (method === 'elo-mixed') {
-        const pot1 = titularPairs.slice(0, 4);   
-        const pot2 = titularPairs.slice(4, 8);   
-        const pot3 = titularPairs.slice(8, 12);  
-        const pot4 = titularPairs.slice(12, 16); 
-        groups.push({ id: 'A', pairIds: [pot1[0], pot2[0], pot3[0], pot4[0]].filter(Boolean).map(p=>p.id) });
-        groups.push({ id: 'B', pairIds: [pot1[1], pot2[1], pot3[1], pot4[1]].filter(Boolean).map(p=>p.id) });
-        groups.push({ id: 'C', pairIds: [pot1[2], pot2[2], pot3[2], pot4[2]].filter(Boolean).map(p=>p.id) });
-        groups.push({ id: 'D', pairIds: [pot1[3], pot2[3], pot3[3], pot4[3]].filter(Boolean).map(p=>p.id) });
-      } else {
-        for (let i = 0; i < 4; i++) {
-            groups.push({ id: GROUP_NAMES_16[i], pairIds: titularPairs.slice(i * 4, (i + 1) * 4).map(p => p.id) });
-        }
-      }
-  } else if (format === '12_mini') {
-      if (method === 'elo-mixed') {
-          const groupA: Pair[] = []; const groupB: Pair[] = []; const groupC: Pair[] = [];
-          titularPairs.forEach((p, idx) => {
-              if (idx % 3 === 0) groupA.push(p); else if (idx % 3 === 1) groupB.push(p); else groupC.push(p);
-          });
-          groups.push({ id: 'A', pairIds: groupA.map(p => p.id) });
-          groups.push({ id: 'B', pairIds: groupB.map(p => p.id) });
-          groups.push({ id: 'C', pairIds: groupC.map(p => p.id) });
-      } else {
-          groups.push({ id: 'A', pairIds: titularPairs.slice(0, 4).map(p => p.id) });
-          groups.push({ id: 'B', pairIds: titularPairs.slice(4, 8).map(p => p.id) });
-          groups.push({ id: 'C', pairIds: titularPairs.slice(8, 12).map(p => p.id) });
-      }
-  } else if (format === '10_mini') {
-      if (method === 'elo-mixed') {
-          const groupA: Pair[] = []; const groupB: Pair[] = [];
-          titularPairs.forEach((p, idx) => { if (idx % 2 === 0) groupA.push(p); else groupB.push(p); });
-          groups.push({ id: 'A', pairIds: groupA.map(p => p.id) });
-          groups.push({ id: 'B', pairIds: groupB.map(p => p.id) });
-      } else {
-          groups.push({ id: 'A', pairIds: titularPairs.slice(0, 5).map(p => p.id) });
-          groups.push({ id: 'B', pairIds: titularPairs.slice(5, 10).map(p => p.id) });
-      }
-  } else if (format === '8_mini') {
-      if (method === 'elo-mixed') {
-          const groupA: Pair[] = []; const groupB: Pair[] = [];
-          titularPairs.forEach((p, idx) => { if (idx % 2 === 0) groupA.push(p); else groupB.push(p); });
-          groups.push({ id: 'A', pairIds: groupA.map(p => p.id) });
-          groups.push({ id: 'B', pairIds: groupB.map(p => p.id) });
-      } else {
-          groups.push({ id: 'A', pairIds: titularPairs.slice(0, 4).map(p => p.id) });
-          groups.push({ id: 'B', pairIds: titularPairs.slice(4, 8).map(p => p.id) });
-      }
-  }
-  return groups;
-};
-
-const createMatches = (groups: Group[], groupId: string, round: number, idxs: number[][], court: number) => {
-      const g = groups.find(x => x.id === groupId);
-      if(!g) return [];
-      return idxs.map((pairIdx, i) => {
-          if (!g.pairIds[pairIdx[0]] || !g.pairIds[pairIdx[1]]) return null;
-          return {
-              round, phase: 'group' as const, bracket: null, courtId: court + i,
-              pairAId: g.pairIds[pairIdx[0]], pairBId: g.pairIds[pairIdx[1]],
-              scoreA: null, scoreB: null, isFinished: false
-          };
-      }).filter(Boolean) as Partial<Match>[];
-};
-
-const generateMatches16 = (groups: Group[], courtCount: number): Partial<Match>[] => {
-  const matches: Partial<Match>[] = [];
-  if (courtCount >= 8) {
-      matches.push(...createMatches(groups, 'A', 1, [[0,1], [2,3]], 1));
-      matches.push(...createMatches(groups, 'B', 1, [[0,1], [2,3]], 3));
-      matches.push(...createMatches(groups, 'C', 1, [[0,1], [2,3]], 5));
-      matches.push(...createMatches(groups, 'D', 1, [[0,1], [2,3]], 7));
-      matches.push(...createMatches(groups, 'A', 2, [[0,2], [1,3]], 1));
-      matches.push(...createMatches(groups, 'B', 2, [[0,2], [1,3]], 3));
-      matches.push(...createMatches(groups, 'C', 2, [[0,2], [1,3]], 5));
-      matches.push(...createMatches(groups, 'D', 2, [[0,2], [1,3]], 7));
-      matches.push(...createMatches(groups, 'A', 3, [[0,3], [1,2]], 1));
-      matches.push(...createMatches(groups, 'B', 3, [[0,3], [1,2]], 3));
-      matches.push(...createMatches(groups, 'C', 3, [[0,3], [1,2]], 5));
-      matches.push(...createMatches(groups, 'D', 3, [[0,3], [1,2]], 7));
-      return matches;
-  }
-  matches.push(...createMatches(groups, 'A', 1, [[0,1], [2,3]], 1));
-  matches.push(...createMatches(groups, 'B', 1, [[0,1], [2,3]], 3));
-  matches.push(...createMatches(groups, 'C', 1, [[0,1], [2,3]], 5));
-  matches.push(...createMatches(groups, 'A', 2, [[0,2], [1,3]], 1));
-  matches.push(...createMatches(groups, 'B', 2, [[0,2], [1,3]], 3));
-  matches.push(...createMatches(groups, 'D', 2, [[0,1], [2,3]], 5));
-  matches.push(...createMatches(groups, 'A', 3, [[0,3], [1,2]], 1));
-  matches.push(...createMatches(groups, 'C', 3, [[0,2], [1,3]], 3));
-  matches.push(...createMatches(groups, 'D', 3, [[0,2], [1,3]], 5));
-  matches.push(...createMatches(groups, 'B', 4, [[0,3], [1,2]], 1));
-  matches.push(...createMatches(groups, 'C', 4, [[0,3], [1,2]], 3));
-  matches.push(...createMatches(groups, 'D', 4, [[0,3], [1,2]], 5));
-  return matches;
-};
-
-const generateMatches12 = (groups: Group[], courtCount: number): Partial<Match>[] => {
-    const matches: Partial<Match>[] = [];
-    const cA = 1; const cB = 3; const cC = courtCount >= 6 ? 5 : 0; 
-    const mk = (gId: string, r: number, p1I: number, p2I: number, c: number) => {
-        const g = groups.find(x => x.id === gId);
-        if(!g) return null;
-        const finalCourt = c === 0 ? 0 : c; 
-        return {
-            round: r, phase: 'group' as const, bracket: null, courtId: finalCourt,
-            pairAId: g.pairIds[p1I], pairBId: g.pairIds[p2I],
-            scoreA: null, scoreB: null, isFinished: false
-        };
-    };
-    matches.push(mk('A', 1, 0, 1, cA)!); matches.push(mk('A', 1, 2, 3, cA+1)!);
-    matches.push(mk('B', 1, 0, 1, cB)!); matches.push(mk('B', 1, 2, 3, cB+1)!);
-    matches.push(mk('C', 1, 0, 1, cC)!); matches.push(mk('C', 1, 2, 3, cC===0 ? 0 : cC+1)!);
-    matches.push(mk('A', 2, 0, 2, cA)!); matches.push(mk('A', 2, 1, 3, cA+1)!);
-    matches.push(mk('B', 2, 0, 2, cB)!); matches.push(mk('B', 2, 1, 3, cB+1)!);
-    matches.push(mk('C', 2, 0, 2, cC)!); matches.push(mk('C', 2, 1, 3, cC===0 ? 0 : cC+1)!);
-    matches.push(mk('A', 3, 0, 3, cA)!); matches.push(mk('A', 3, 1, 2, cA+1)!);
-    matches.push(mk('B', 3, 0, 3, cB)!); matches.push(mk('B', 3, 1, 2, cB+1)!);
-    matches.push(mk('C', 3, 0, 3, cC)!); matches.push(mk('C', 3, 1, 2, cC===0 ? 0 : cC+1)!);
-    return matches;
-};
-
-const generateMatches8 = (groups: Group[]): Partial<Match>[] => {
-    const matches: Partial<Match>[] = [];
-    matches.push(...createMatches(groups, 'A', 1, [[0,1], [2,3]], 1));
-    matches.push(...createMatches(groups, 'B', 1, [[0,1], [2,3]], 3));
-    matches.push(...createMatches(groups, 'A', 2, [[0,2], [1,3]], 1));
-    matches.push(...createMatches(groups, 'B', 2, [[0,2], [1,3]], 3));
-    matches.push(...createMatches(groups, 'A', 3, [[0,3], [1,2]], 1));
-    matches.push(...createMatches(groups, 'B', 3, [[0,3], [1,2]], 3));
-    return matches;
-};
-
-const generateMatches10 = (groups: Group[]): Partial<Match>[] => {
-    const matches: Partial<Match>[] = [];
-    const gA = groups.find(g => g.id === 'A')?.pairIds || [];
-    const gB = groups.find(g => g.id === 'B')?.pairIds || [];
-    if (gA.length !== 5 || gB.length !== 5) return [];
-    const mk = (r: number, c: number, idA: string, idB: string) => ({ round: r, phase: 'group' as const, bracket: null, courtId: c, pairAId: idA, pairBId: idB, scoreA: null, scoreB: null, isFinished: false });
-    matches.push(mk(1, 1, gA[0], gA[1])); matches.push(mk(1, 2, gA[2], gA[3])); matches.push(mk(1, 3, gA[4], gB[0])); matches.push(mk(1, 4, gB[1], gB[2])); matches.push(mk(1, 5, gB[3], gB[4]));
-    matches.push(mk(2, 1, gA[0], gA[2])); matches.push(mk(2, 2, gA[1], gA[4])); matches.push(mk(2, 3, gA[3], gB[1])); matches.push(mk(2, 4, gB[0], gB[2])); matches.push(mk(2, 5, gB[4], gB[3])); 
-    matches.push(mk(3, 1, gA[0], gA[3])); matches.push(mk(3, 2, gA[1], gA[2])); matches.push(mk(3, 3, gA[4], gB[2])); matches.push(mk(3, 4, gB[0], gB[4])); matches.push(mk(3, 5, gB[1], gB[3])); 
-    return matches;
-};
-
-const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], players: Player[], format: TournamentFormat): Group[] => {
-    const groupMap: Record<string, Set<string>> = { 'A': new Set(), 'B': new Set(), 'C': new Set(), 'D': new Set() };
-    if (format === '10_mini') {
-        const round1 = matches.filter(m => m.round === 1);
-        if (round1.length > 0) {
-            round1.forEach(m => {
-                if (m.courtId === 1 || m.courtId === 2) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); } 
-                else if (m.courtId === 4 || m.courtId === 5) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); } 
-                else if (m.courtId === 3) { groupMap['A'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
-            });
-            return GROUP_NAMES_10.map(name => ({ id: name, pairIds: Array.from(groupMap[name]) }));
-        }
-        return generateGroupsHelper(pairs, players, 'elo-balanced', '10_mini');
-    }
-    if (format === '12_mini') {
-        const round1 = matches.filter(m => m.round === 1);
-        if(round1.length > 0) {
-             round1.forEach(m => {
-                 if(m.courtId === 1 || m.courtId === 2) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); }
-                 if(m.courtId === 3 || m.courtId === 4) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
-                 if(m.courtId === 5 || m.courtId === 6 || m.courtId === 0) { groupMap['C'].add(m.pairAId); groupMap['C'].add(m.pairBId); }
-             });
-             return GROUP_NAMES_12.map(name => ({ id: name, pairIds: Array.from(groupMap[name]) }));
-        }
-        return generateGroupsHelper(pairs, players, 'elo-balanced', '12_mini');
-    }
-    if (format === '8_mini') {
-         const round1 = matches.filter(m => m.round === 1);
-         if(round1.length > 0) {
-             round1.forEach(m => {
-                 if(m.courtId === 1 || m.courtId === 2) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); }
-                 if(m.courtId === 3 || m.courtId === 4) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
-             });
-             return GROUP_NAMES_8.map(name => ({ id: name, pairIds: Array.from(groupMap[name]) }));
-         }
-         return generateGroupsHelper(pairs, players, 'elo-balanced', '8_mini');
-    }
-    matches.forEach(m => {
-        if (m.phase !== 'group') return;
-        let targetGroup = '';
-        if (m.round === 1) {
-            if (m.courtId === 1 || m.courtId === 2) targetGroup = 'A';
-            else if (m.courtId === 3 || m.courtId === 4) targetGroup = 'B';
-            else if (m.courtId === 5 || m.courtId === 6) targetGroup = 'C';
-            else if (m.courtId === 7 || m.courtId === 8) targetGroup = 'D'; 
-        } 
-        if (targetGroup && groupMap[targetGroup]) {
-            groupMap[targetGroup].add(m.pairAId);
-            groupMap[targetGroup].add(m.pairBId);
-        }
-    });
-    const groups: Group[] = GROUP_NAMES_16.map(name => ({ id: name, pairIds: Array.from(groupMap[name]) }));
-    if (groups.reduce((acc, g) => acc + g.pairIds.length, 0) < 16 && matches.length === 0) {
-        return generateGroupsHelper(pairs, players, 'elo-balanced', '16_mini');
-    }
-    return groups;
-};
-
-const recalculateStats = (pairs: Pair[], matches: Match[]) => {
-    const statsMap: Record<string, { played: number, won: number, gameDiff: number }> = {};
-    pairs.forEach(p => { statsMap[p.id] = { played: 0, won: 0, gameDiff: 0 }; });
-    matches.forEach(m => {
-        if (!m.isFinished || m.scoreA === null || m.scoreB === null) return;
-        if (!statsMap[m.pairAId]) statsMap[m.pairAId] = { played: 0, won: 0, gameDiff: 0 };
-        if (!statsMap[m.pairBId]) statsMap[m.pairBId] = { played: 0, won: 0, gameDiff: 0 };
-        statsMap[m.pairAId].played += 1; statsMap[m.pairAId].gameDiff += (m.scoreA - m.scoreB);
-        if (m.scoreA > m.scoreB) statsMap[m.pairAId].won += 1;
-        statsMap[m.pairBId].played += 1; statsMap[m.pairBId].gameDiff += (m.scoreB - m.scoreA);
-        if (m.scoreB > m.scoreA) statsMap[m.pairBId].won += 1;
-    });
-    return pairs.map(p => ({ ...p, stats: statsMap[p.id] || { played: 0, won: 0, gameDiff: 0 } }));
-};
-
-const getRankedPairsForGroup = (pairs: Pair[], groups: Group[], groupId: string) => {
-    const group = groups.find(g => g.id === groupId);
-    if (!group) return [];
-    const groupPairs = group.pairIds.map(pid => pairs.find(p => p.id === pid)).filter(Boolean) as Pair[];
-    return groupPairs.sort((a, b) => {
-        if (b.stats.won !== a.stats.won) return b.stats.won - a.stats.won;
-        return b.stats.gameDiff - a.stats.gameDiff;
-    });
-};
 
 const initialState: TournamentState = {
   status: 'setup', currentRound: 0, format: '16_mini', players: [], pairs: [], matches: [], groups: [], courts: [], loading: true
@@ -294,13 +20,15 @@ interface TournamentContextType {
     updateScoreDB: (matchId: string, sA: number, sB: number) => Promise<void>; nextRoundDB: () => Promise<void>;
     deletePairDB: (pairId: string) => Promise<void>; archiveAndResetDB: () => Promise<void>; resetToSetupDB: () => Promise<void>; 
     regenerateMatchesDB: () => Promise<string>; hardResetDB: () => Promise<void>; formatPlayerName: (p?: Player) => string;
+    setTournamentFormat: (fmt: TournamentFormat) => Promise<void>;
+    getPairElo: (pair: Pair, players: Player[]) => number;
 }
 
 const TournamentContext = createContext<TournamentContextType>({
     state: initialState, dispatch: () => null, loadData: async () => {}, addPlayerToDB: async () => null, updatePlayerInDB: async () => {},
     createPairInDB: async () => {}, updatePairDB: async () => {}, startTournamentDB: async () => {}, updateScoreDB: async () => {}, nextRoundDB: async () => {},
     deletePairDB: async () => {}, archiveAndResetDB: async () => {}, resetToSetupDB: async () => {}, regenerateMatchesDB: async () => "", hardResetDB: async () => {},
-    formatPlayerName: () => ''
+    formatPlayerName: () => '', setTournamentFormat: async () => {}, getPairElo: () => 1200
 });
 
 const reducer = (state: TournamentState, action: TournamentAction): TournamentState => {
@@ -374,13 +102,12 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                     scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished
                 }));
 
-                mappedPairs = recalculateStats(mappedPairs, mappedMatches);
-                
+                mappedPairs = Logic.recalculateStats(mappedPairs, mappedMatches);
                 let groups: Group[] = [];
-                if (mappedMatches.length > 0) groups = reconstructGroupsFromMatches(mappedPairs, mappedMatches, players || [], format);
+                if (mappedMatches.length > 0) groups = Logic.reconstructGroupsFromMatches(mappedPairs, mappedMatches, players || [], format);
                 else {
                     const isSetup = activeTournament.status === 'setup';
-                    groups = generateGroupsHelper(mappedPairs, players || [], isSetup ? 'manual' : 'elo-balanced', format);
+                    groups = Logic.generateGroupsHelper(mappedPairs, players || [], isSetup ? 'manual' : 'elo-balanced', format);
                 }
 
                 dispatch({ type: 'SET_STATE', payload: {
@@ -394,52 +121,32 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     useEffect(() => { loadData(); }, [loadData]);
     const saveLocal = (newState: TournamentState) => { if (isOfflineMode) localStorage.setItem(STORAGE_KEY, JSON.stringify(newState)); };
 
-    const addPlayerToDB = async (p: Partial<Player>) => {
-        if (isOfflineMode) {
-             const newPlayer = { ...p, id: `local-${Date.now()}`, created_at: new Date().toISOString() } as Player;
-             const newState = { ...state, players: [...state.players, newPlayer] };
-             dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return newPlayer.id;
+    const setTournamentFormat = async (format: TournamentFormat) => {
+        dispatch({ type: 'SET_FORMAT', payload: format });
+        if (!isOfflineMode && state.id) {
+            await supabase.from('tournaments').update({ format }).eq('id', state.id);
         }
+        if (isOfflineMode) { const newState = { ...state, format }; saveLocal(newState); }
+    };
+
+    // DB ACTIONS
+    const addPlayerToDB = async (p: Partial<Player>) => {
+        if (isOfflineMode) { const newPlayer = { ...p, id: `local-${Date.now()}`, created_at: new Date().toISOString() } as Player; const newState = { ...state, players: [...state.players, newPlayer] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return newPlayer.id; }
         const { data, error } = await supabase.from('players').insert([{ ...p, user_id: user?.id }]).select().single();
-        if (error) { alert(error.message); return null; }
-        await loadData(); return data.id;
+        if (error) { alert(error.message); return null; } await loadData(); return data.id;
     };
     const updatePlayerInDB = async (p: Partial<Player>) => {
         if (isOfflineMode) { const newState = { ...state, players: state.players.map(x => x.id === p.id ? { ...x, ...p } as Player : x) }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; }
         await supabase.from('players').update(p).eq('id', p.id); await loadData();
     };
     const createPairInDB = async (p1: string, p2: string) => {
-        if (isOfflineMode) {
-            const newPair: Pair = { id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false };
-            let limit = 16; if(state.format === '10_mini') limit = 10; if(state.format === '12_mini') limit = 12; if(state.format === '8_mini') limit = 8;
-            newPair.isReserve = state.pairs.length >= limit;
-            const newState = { ...state, pairs: [...state.pairs, newPair] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return;
-        }
-        let tournamentId = state.id;
-        if (!tournamentId) { const { data: t } = await supabase.from('tournaments').insert([{ user_id: user?.id, status: 'setup', format: state.format }]).select().single(); tournamentId = t.id; }
+        if (isOfflineMode) { const newPair: Pair = { id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false }; let limit = 16; if(state.format === '10_mini') limit = 10; if(state.format === '12_mini') limit = 12; if(state.format === '8_mini') limit = 8; newPair.isReserve = state.pairs.length >= limit; const newState = { ...state, pairs: [...state.pairs, newPair] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; }
+        let tournamentId = state.id; if (!tournamentId) { const { data: t } = await supabase.from('tournaments').insert([{ user_id: user?.id, status: 'setup', format: state.format }]).select().single(); tournamentId = t.id; }
         await supabase.from('tournament_pairs').insert([{ tournament_id: tournamentId, player1_id: p1, player2_id: p2 }]); await loadData();
     };
-    const updatePairDB = async (pairId: string, p1: string, p2: string) => {
-        if (isOfflineMode) { const newState = { ...state, pairs: state.pairs.map(p => p.id === pairId ? { ...p, player1Id: p1, player2Id: p2 } : p) }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; }
-        await supabase.from('tournament_pairs').update({ player1_id: p1, player2_id: p2 }).eq('id', pairId); await loadData();
-    };
-    const deletePairDB = async (pairId: string) => {
-        if (isOfflineMode) {
-            const remaining = state.pairs.filter(p => p.id !== pairId);
-            let limit = 16; if(state.format === '10_mini') limit = 10; if(state.format === '12_mini') limit = 12; if(state.format === '8_mini') limit = 8;
-            const reindexed = remaining.map((p, idx) => ({ ...p, isReserve: idx >= limit }));
-            const newState = { ...state, pairs: reindexed }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return;
-        }
-        await supabase.from('tournament_pairs').delete().eq('id', pairId); await loadData();
-    };
-    const updateScoreDB = async (matchId: string, sA: number, sB: number) => {
-        if (isOfflineMode) {
-             const newMatches = state.matches.map(m => m.id === matchId ? { ...m, scoreA: sA, scoreB: sB, isFinished: true } : m);
-             const newPairs = recalculateStats(state.pairs, newMatches);
-             const newState = { ...state, matches: newMatches, pairs: newPairs }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return;
-        }
-        await supabase.from('matches').update({ score_a: sA, score_b: sB, is_finished: true }).eq('id', matchId); await loadData();
-    };
+    const updatePairDB = async (pairId: string, p1: string, p2: string) => { if (isOfflineMode) { const newState = { ...state, pairs: state.pairs.map(p => p.id === pairId ? { ...p, player1Id: p1, player2Id: p2 } : p) }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; } await supabase.from('tournament_pairs').update({ player1_id: p1, player2_id: p2 }).eq('id', pairId); await loadData(); };
+    const deletePairDB = async (pairId: string) => { if (isOfflineMode) { const remaining = state.pairs.filter(p => p.id !== pairId); let limit = 16; if(state.format === '10_mini') limit = 10; if(state.format === '12_mini') limit = 12; if(state.format === '8_mini') limit = 8; const reindexed = remaining.map((p, idx) => ({ ...p, isReserve: idx >= limit })); const newState = { ...state, pairs: reindexed }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; } await supabase.from('tournament_pairs').delete().eq('id', pairId); await loadData(); };
+    const updateScoreDB = async (matchId: string, sA: number, sB: number) => { if (isOfflineMode) { const newMatches = state.matches.map(m => m.id === matchId ? { ...m, scoreA: sA, scoreB: sB, isFinished: true } : m); const newPairs = Logic.recalculateStats(state.pairs, newMatches); const newState = { ...state, matches: newMatches, pairs: newPairs }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; } await supabase.from('matches').update({ score_a: sA, score_b: sB, is_finished: true }).eq('id', matchId); await loadData(); };
 
     const startTournamentDB = async (method: GenerationMethod, customOrderedPairs?: Pair[]) => {
         let limit = 16;
@@ -448,18 +155,18 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if(state.format === '8_mini') limit = 8;
         
         const allPairs = state.pairs; 
-        if (allPairs.length < limit) throw new Error(`Se necesitan al menos ${limit} parejas para este formato.`);
+        if (allPairs.length < limit) throw new Error(`Se necesitan al menos ${limit} parejas.`);
 
         let orderedPairs = customOrderedPairs || allPairs;
-        if (method !== 'manual' && !customOrderedPairs) orderedPairs = sortPairsByMethod(allPairs, state.players, method);
+        if (method !== 'manual' && !customOrderedPairs) orderedPairs = Logic.sortPairsByMethod(allPairs, state.players, method);
 
-        const groups = generateGroupsHelper(orderedPairs, state.players, method, state.format);
+        const groups = Logic.generateGroupsHelper(orderedPairs, state.players, method, state.format);
         
         let matches: Partial<Match>[] = [];
-        if (state.format === '10_mini') matches = generateMatches10(groups);
-        else if (state.format === '8_mini') matches = generateMatches8(groups);
-        else if (state.format === '12_mini') matches = generateMatches12(groups, clubData.courtCount);
-        else matches = generateMatches16(groups, clubData.courtCount);
+        if (state.format === '10_mini') matches = Logic.generateMatches10(groups);
+        else if (state.format === '8_mini') matches = Logic.generateMatches8(groups);
+        else if (state.format === '12_mini') matches = Logic.generateMatches12(groups, clubData.courtCount);
+        else matches = Logic.generateMatches16(groups, clubData.courtCount);
 
         const reindexedPairs = orderedPairs.map((p, idx) => ({ ...p, isReserve: idx >= limit }));
 
@@ -467,16 +174,16 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const newState: TournamentState = { ...state, status: 'active', currentRound: 1, groups, matches: matches as Match[], pairs: reindexedPairs };
             dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return;
         }
-        if (!state.id) throw new Error("ID de torneo perdido. Recarga.");
+        if (!state.id) throw new Error("ID de torneo perdido.");
         await supabase.from('tournaments').update({ status: 'active', current_round: 1, format: state.format }).eq('id', state.id);
         
-        // MAPPING FIX: CAMELCASE TO SNAKE_CASE
+        // --- FIX: MAPPING JS camelCase -> SQL snake_case ---
         const matchesDB = matches.map(m => ({
             tournament_id: state.id,
             round: m.round,
             phase: m.phase,
             bracket: m.bracket,
-            court_id: m.courtId,
+            court_id: m.courtId, // Fixed mapping
             pair_a_id: m.pairAId,
             pair_b_id: m.pairBId,
             score_a: m.scoreA,
@@ -485,196 +192,60 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }));
 
         const { error } = await supabase.from('matches').insert(matchesDB);
-        
         if (error) {
              if (error.message.includes('phase')) {
                  const matchesNoPhase = matchesDB.map(({ phase, ...rest }) => rest);
                  const { error: retryError } = await supabase.from('matches').insert(matchesNoPhase);
                  if (retryError) throw retryError;
-             } else {
-                 throw error;
-             }
+             } else { throw error; }
         }
         await loadData();
     };
 
     const nextRoundDB = async () => {
-        if (state.format === '10_mini') await nextRound10();
-        else if (state.format === '8_mini') await nextRound8();
-        else if (state.format === '12_mini') await nextRound12();
-        else await nextRound16();
+        const nextRound = state.currentRound + 1;
+        const newMatches = Logic.generateNextRoundMatches(state, clubData.courtCount);
+        
+        if (newMatches.length > 0) {
+             if (!isOfflineMode) {
+                 const matchesDB = newMatches.map(m => ({
+                    tournament_id: state.id,
+                    round: m.round,
+                    phase: m.phase,
+                    bracket: m.bracket,
+                    court_id: m.courtId,
+                    pair_a_id: m.pairAId,
+                    pair_b_id: m.pairBId,
+                    score_a: m.scoreA,
+                    score_b: m.scoreB,
+                    is_finished: m.isFinished
+                }));
+                await supabase.from('matches').insert(matchesDB);
+             } 
+        }
+
+        if (!isOfflineMode) {
+            await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
+        } else {
+            const updatedMatches = [...state.matches, ...newMatches as Match[]];
+            const newState = { ...state, currentRound: nextRound, matches: updatedMatches };
+            dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return;
+        }
         await loadData();
     };
 
-    const nextRound16 = async () => {
-        const nextRound = state.currentRound + 1;
-        const isSimultaneous = clubData.courtCount >= 8;
-        const qfStartRound = isSimultaneous ? 4 : 5; 
-        if (state.currentRound < qfStartRound - 1) {
-            if (!isOfflineMode) await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
-            else { const newState = { ...state, currentRound: nextRound }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); }
-            return;
-        }
-        let newMatches: any[] = [];
-        if (state.currentRound === qfStartRound - 1) { 
-            const sortedA = getRankedPairsForGroup(state.pairs, state.groups, 'A'); const sortedB = getRankedPairsForGroup(state.pairs, state.groups, 'B');
-            const sortedC = getRankedPairsForGroup(state.pairs, state.groups, 'C'); const sortedD = getRankedPairsForGroup(state.pairs, state.groups, 'D');
-            const mk = (c: number, p1: string, p2: string, b: string) => ({ tournament_id: state.id, round: nextRound, phase: 'qf', bracket: b, court_id: c, pair_a_id: p1, pair_b_id: p2, is_finished: false });
-            newMatches.push(mk(1, sortedA[0].id, sortedC[1].id, 'main')); newMatches.push(mk(2, sortedC[0].id, sortedA[1].id, 'main')); newMatches.push(mk(3, sortedB[0].id, sortedD[1].id, 'main')); newMatches.push(mk(4, sortedD[0].id, sortedB[1].id, 'main'));
-            newMatches.push(mk(5, sortedA[2].id, sortedC[3].id, 'consolation')); newMatches.push(mk(6, sortedC[2].id, sortedA[3].id, 'consolation')); newMatches.push(mk(0, sortedB[2].id, sortedD[3].id, 'consolation')); newMatches.push(mk(0, sortedD[2].id, sortedB[3].id, 'consolation')); 
-        } 
-        else if (state.currentRound === qfStartRound) { 
-             const qfMain = state.matches.filter(m => m.round === state.currentRound && m.bracket === 'main');
-             const getW = (court: number) => { const m = qfMain.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'sf', bracket: 'main', court_id: 1, pair_a_id: getW(1), pair_b_id: getW(3), is_finished: false });
-             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'sf', bracket: 'main', court_id: 2, pair_a_id: getW(2), pair_b_id: getW(4), is_finished: false });
-             const waitingMatches = state.matches.filter(m => m.round === state.currentRound && m.courtId === 0);
-             waitingMatches.forEach((m, idx) => { newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'qf', bracket: 'consolation', court_id: 3 + idx, pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false }); });
-        }
-        else if (state.currentRound === qfStartRound + 1) { 
-             const sfMain = state.matches.filter(m => m.round === state.currentRound && m.bracket === 'main');
-             const getW = (court: number) => { const m = sfMain.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'final', bracket: 'main', court_id: 1, pair_a_id: getW(1), pair_b_id: getW(2), is_finished: false });
-             const getW_Prev = (court: number) => { const m = state.matches.find(x => x.round === state.currentRound - 1 && x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             const getW_Curr = (court: number) => { const m = state.matches.find(x => x.round === state.currentRound && x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'sf', bracket: 'consolation', court_id: 2, pair_a_id: getW_Prev(5), pair_b_id: getW_Curr(3), is_finished: false });
-             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'sf', bracket: 'consolation', court_id: 3, pair_a_id: getW_Prev(6), pair_b_id: getW_Curr(4), is_finished: false });
-        }
-        else if (state.currentRound === qfStartRound + 2) { 
-             const sfCons = state.matches.filter(m => m.round === state.currentRound && m.bracket === 'consolation');
-             const getW = (court: number) => { const m = sfCons.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'final', bracket: 'consolation', court_id: 1, pair_a_id: getW(2), pair_b_id: getW(3), is_finished: false });
-        }
-        if (newMatches.length > 0 && !isOfflineMode) await supabase.from('matches').insert(newMatches);
-        if (!isOfflineMode) await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
-    };
-
-    const nextRound12 = async () => {
-        const nextRound = state.currentRound + 1;
-        if (state.currentRound < 3) { if (!isOfflineMode) await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id); return; }
-        let newMatches: any[] = [];
-        if (state.currentRound === 3) { 
-             const sA = getRankedPairsForGroup(state.pairs, state.groups, 'A'); const sB = getRankedPairsForGroup(state.pairs, state.groups, 'B'); const sC = getRankedPairsForGroup(state.pairs, state.groups, 'C');
-             const thirds = [sA[2], sB[2], sC[2]].sort((a,b) => { if(b.stats.won !== a.stats.won) return b.stats.won - a.stats.won; return b.stats.gameDiff - a.stats.gameDiff; });
-             const best3rds = [thirds[0].id, thirds[1].id]; const worst3rd = thirds[2].id;
-             const fourths = [sA[3].id, sB[3].id, sC[3].id];
-             const consPool = [worst3rd, ...fourths];
-             const mkM = (c: number, p1: string, p2: string) => ({ tournament_id: state.id, round: 4, phase: 'qf', bracket: 'main', court_id: c, pair_a_id: p1, pair_b_id: p2, is_finished: false });
-             const mkC = (c: number, p1: string, p2: string) => ({ tournament_id: state.id, round: 4, phase: 'sf', bracket: 'consolation', court_id: c, pair_a_id: p1, pair_b_id: p2, is_finished: false });
-             newMatches.push(mkM(1, sA[0].id, best3rds[1])); newMatches.push(mkM(2, sB[0].id, best3rds[0])); newMatches.push(mkM(3, sC[0].id, sA[1].id)); newMatches.push(mkM(4, sB[1].id, sC[1].id));
-             newMatches.push(mkC(5, consPool[0], consPool[1])); newMatches.push(mkC(6, consPool[2], consPool[3]));
-        }
-        else if (state.currentRound === 4) { 
-             const qf = state.matches.filter(m => m.round === 4 && m.bracket === 'main');
-             const sfC = state.matches.filter(m => m.round === 4 && m.bracket === 'consolation');
-             const getW = (arr: Match[], court: number) => { const m = arr.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'main', court_id: 1, pair_a_id: getW(qf, 1), pair_b_id: getW(qf, 3), is_finished: false });
-             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'main', court_id: 2, pair_a_id: getW(qf, 2), pair_b_id: getW(qf, 4), is_finished: false });
-             newMatches.push({ tournament_id: state.id, round: 5, phase: 'final', bracket: 'consolation', court_id: 3, pair_a_id: getW(sfC, 5), pair_b_id: getW(sfC, 6), is_finished: false });
-        }
-        else if (state.currentRound === 5) { 
-             const sf = state.matches.filter(m => m.round === 5 && m.bracket === 'main');
-             const getW = (court: number) => { const m = sf.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             newMatches.push({ tournament_id: state.id, round: 6, phase: 'final', bracket: 'main', court_id: 1, pair_a_id: getW(1), pair_b_id: getW(2), is_finished: false });
-        }
-        if (newMatches.length > 0 && !isOfflineMode) await supabase.from('matches').insert(newMatches);
-        if (!isOfflineMode) await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
-    };
-
-    const nextRound10 = async () => {
-        const nextRound = state.currentRound + 1;
-        if (state.currentRound < 3) { if (!isOfflineMode) await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id); return; }
-        let newMatches: any[] = [];
-        if (state.currentRound === 3) {
-            const sortedA = getRankedPairsForGroup(state.pairs, state.groups, 'A'); const sortedB = getRankedPairsForGroup(state.pairs, state.groups, 'B');
-            const mk = (c: number, p1: string, p2: string, b: string) => ({ tournament_id: state.id, round: 4, phase: b === 'main' ? 'qf' : 'final', bracket: b, court_id: c, pair_a_id: p1, pair_b_id: p2, is_finished: false });
-            newMatches.push(mk(1, sortedA[0].id, sortedB[3].id, 'main')); newMatches.push(mk(2, sortedB[0].id, sortedA[3].id, 'main')); newMatches.push(mk(3, sortedA[1].id, sortedB[2].id, 'main')); newMatches.push(mk(4, sortedB[1].id, sortedA[2].id, 'main'));
-            newMatches.push(mk(5, sortedA[4].id, sortedB[4].id, 'consolation'));
-        }
-        else if (state.currentRound === 4) {
-             const qfMatches = state.matches.filter(m => m.round === 4 && m.bracket === 'main');
-             const getW = (court: number) => { const m = qfMatches.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'main', court_id: 1, pair_a_id: getW(1), pair_b_id: getW(3), is_finished: false });
-             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'main', court_id: 2, pair_a_id: getW(2), pair_b_id: getW(4), is_finished: false });
-        }
-        else if (state.currentRound === 5) {
-             const sfMatches = state.matches.filter(m => m.round === 5 && m.bracket === 'main');
-             const getW = (court: number) => { const m = sfMatches.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             newMatches.push({ tournament_id: state.id, round: 6, phase: 'final', bracket: 'main', court_id: 1, pair_a_id: getW(1), pair_b_id: getW(2), is_finished: false });
-        }
-        if (newMatches.length > 0 && !isOfflineMode) await supabase.from('matches').insert(newMatches);
-        if (!isOfflineMode) await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
-    };
-
-    const nextRound8 = async () => {
-        const nextRound = state.currentRound + 1;
-        if (state.currentRound < 3) { if (!isOfflineMode) await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id); return; }
-        let newMatches: any[] = [];
-        if (state.currentRound === 3) {
-             const sortedA = getRankedPairsForGroup(state.pairs, state.groups, 'A'); const sortedB = getRankedPairsForGroup(state.pairs, state.groups, 'B');
-             const mk = (c: number, p1: string, p2: string) => ({ tournament_id: state.id, round: 4, phase: 'qf', bracket: 'main', court_id: c, pair_a_id: p1, pair_b_id: p2, is_finished: false });
-             newMatches.push(mk(1, sortedA[0].id, sortedB[3].id)); newMatches.push(mk(2, sortedB[0].id, sortedA[3].id)); newMatches.push(mk(3, sortedA[1].id, sortedB[2].id)); newMatches.push(mk(4, sortedB[1].id, sortedA[2].id));
-        }
-        else if (state.currentRound === 4) {
-             const qf = state.matches.filter(m => m.round === 4);
-             const getWinner = (court: number) => { const m = qf.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             const getLoser = (court: number) => { const m = qf.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairBId : m.pairAId) : null; };
-             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'main', court_id: 1, pair_a_id: getWinner(1), pair_b_id: getWinner(3), is_finished: false });
-             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'main', court_id: 2, pair_a_id: getWinner(2), pair_b_id: getWinner(4), is_finished: false });
-             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'consolation', court_id: 3, pair_a_id: getLoser(1), pair_b_id: getLoser(3), is_finished: false });
-             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'consolation', court_id: 4, pair_a_id: getLoser(2), pair_b_id: getLoser(4), is_finished: false });
-        }
-        else if (state.currentRound === 5) {
-             const sfMain = state.matches.filter(m => m.round === 5 && m.bracket === 'main');
-             const sfCons = state.matches.filter(m => m.round === 5 && m.bracket === 'consolation');
-             const getW = (arr: Match[], court: number) => { const m = arr.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
-             newMatches.push({ tournament_id: state.id, round: 6, phase: 'final', bracket: 'main', court_id: 1, pair_a_id: getW(sfMain, 1), pair_b_id: getW(sfMain, 2), is_finished: false });
-             newMatches.push({ tournament_id: state.id, round: 6, phase: 'final', bracket: 'consolation', court_id: 2, pair_a_id: getW(sfCons, 3), pair_b_id: getW(sfCons, 4), is_finished: false });
-        }
-        if (newMatches.length > 0 && !isOfflineMode) await supabase.from('matches').insert(newMatches);
-        if (!isOfflineMode) await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
-    };
-
     const archiveAndResetDB = async () => {
-        let wMain = 'Desconocido';
-        let wCons = 'Desconocido';
-        const getLastWinner = (round: number, bracket: string) => {
-             const m = state.matches.find(x => x.round === round && x.bracket === bracket);
-             if (m && m.isFinished) {
-                 const wid = m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId;
-                 const pair = state.pairs.find(p => p.id === wid);
-                 if (pair) {
-                     const p1 = state.players.find(p => p.id === pair.player1Id);
-                     const p2 = state.players.find(p => p.id === pair.player2Id);
-                     return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
-                 }
-             }
-             return null;
-        };
-        if (state.format === '16_mini') {
-            wMain = getLastWinner(7, 'main') || getLastWinner(6, 'main') || wMain;
-            wCons = getLastWinner(8, 'consolation') || getLastWinner(7, 'consolation') || wCons;
-        } else if (state.format === '10_mini') {
-            wMain = getLastWinner(6, 'main') || wMain;
-            wCons = getLastWinner(4, 'consolation') || wCons;
-        } else if (state.format === '8_mini') {
-            wMain = getLastWinner(6, 'main') || wMain;
-            wCons = getLastWinner(6, 'consolation') || wCons;
-        } else if (state.format === '12_mini') {
-            wMain = getLastWinner(6, 'main') || wMain;
-            wCons = getLastWinner(5, 'consolation') || wCons;
-        }
-        if (!isOfflineMode) {
-            await supabase.from('tournaments').update({ status: 'finished', winner_main: wMain, winner_consolation: wCons }).eq('id', state.id);
-        }
+        const { wMain, wCons } = Logic.calculateChampions(state, (id, p, pair) => {
+             const pp = pair.find(x => x.id === id); if(!pp) return 'Desc.';
+             const p1 = p.find(x => x.id === pp.player1Id); const p2 = p.find(x => x.id === pp.player2Id);
+             return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
+        });
+        if (!isOfflineMode) await supabase.from('tournaments').update({ status: 'finished', winner_main: wMain, winner_consolation: wCons }).eq('id', state.id);
         dispatch({ type: 'RESET_LOCAL' });
     };
 
     const resetToSetupDB = async () => {
-        if (isOfflineMode) {
-             const newState: TournamentState = { ...state, status: 'setup', currentRound: 0, matches: [], groups: [] };
-             dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return;
-        }
+        if (isOfflineMode) { const newState: TournamentState = { ...state, status: 'setup', currentRound: 0, matches: [], groups: [] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; }
         if (!state.id) return;
         await supabase.from('tournaments').update({ status: 'setup', current_round: 0 }).eq('id', state.id);
         await supabase.from('matches').delete().eq('tournament_id', state.id);
@@ -689,7 +260,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             state, dispatch, loadData,
             addPlayerToDB, updatePlayerInDB, createPairInDB, updatePairDB, startTournamentDB,
             updateScoreDB, nextRoundDB, deletePairDB, archiveAndResetDB, resetToSetupDB, regenerateMatchesDB, hardResetDB,
-            formatPlayerName
+            formatPlayerName, setTournamentFormat, getPairElo: Logic.getPairElo
         }}>
             {children}
         </TournamentContext.Provider>

@@ -4,13 +4,12 @@ import { useHistory } from '../store/HistoryContext';
 import { useTournament } from '../store/TournamentContext';
 import { Calendar, Trophy, ChevronDown, ChevronUp, User, Users, Grid, GitMerge, Shield } from 'lucide-react';
 import { Player, Pair, Match } from '../types';
-import { getPairElo } from '../store/TournamentContext';
 
 type TabType = 'participants' | 'main' | 'cons' | 'group';
 
 const History: React.FC = () => {
   const { pastTournaments } = useHistory();
-  const { formatPlayerName } = useTournament(); 
+  const { formatPlayerName, getPairElo } = useTournament(); 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('main');
 

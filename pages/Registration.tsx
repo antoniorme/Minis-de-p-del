@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
-import { useTournament, TOURNAMENT_CATEGORIES, getPairElo } from '../store/TournamentContext';
+import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp } from 'lucide-react';
 
 const Registration: React.FC = () => {
-  const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, formatPlayerName } = useTournament();
+  const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, formatPlayerName, getPairElo } = useTournament();
   
   // MODAL STATES
   const [isPairModalOpen, setIsPairModalOpen] = useState(false);
