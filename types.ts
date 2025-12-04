@@ -59,7 +59,7 @@ export interface Group {
   pairIds: string[];
 }
 
-export type TournamentFormat = '16_mini' | '10_mini';
+export type TournamentFormat = '16_mini' | '10_mini' | '12_mini' | '8_mini';
 
 export type GenerationMethod = 'elo-balanced' | 'elo-mixed' | 'manual' | 'arrival';
 

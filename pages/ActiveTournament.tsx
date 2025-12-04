@@ -21,8 +21,12 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
     const [orderedPairs, setOrderedPairs] = useState<Pair[]>([]);
     
     // Group logic depends on limit
-    const groupNames = limit === 10 ? ['A', 'B'] : ['A', 'B', 'C', 'D'];
-    const groupSize = limit === 10 ? 5 : 4;
+    let groupNames = ['A', 'B', 'C', 'D'];
+    if (limit === 10) groupNames = ['A', 'B'];
+    if (limit === 8) groupNames = ['A', 'B'];
+    if (limit === 12) groupNames = ['A', 'B', 'C'];
+    
+    const effectiveGroupSize = limit === 10 ? 5 : 4;
     
     const currentGroup = groupNames[currentGroupIdx];
     
@@ -35,14 +39,14 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
         if (selectedForGroup.includes(id)) {
             setSelectedForGroup(selectedForGroup.filter(pid => pid !== id));
         } else {
-            if (selectedForGroup.length < groupSize) {
+            if (selectedForGroup.length < effectiveGroupSize) {
                 setSelectedForGroup([...selectedForGroup, id]);
             }
         }
     };
 
     const confirmGroup = () => {
-        if (selectedForGroup.length !== groupSize) return;
+        if (selectedForGroup.length !== effectiveGroupSize) return;
         
         const newGroupPairs = selectedForGroup.map(id => pairs.find(p => p.id === id)!);
         const newOrder = [...orderedPairs, ...newGroupPairs];
@@ -61,7 +65,7 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
             <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl h-[85vh] flex flex-col">
                 <div className="text-center mb-4">
                     <h3 className="text-2xl font-black text-slate-900">Configurar Grupo {currentGroup}</h3>
-                    <p className="text-slate-500 text-sm">Selecciona {groupSize} parejas de la lista</p>
+                    <p className="text-slate-500 text-sm">Selecciona {effectiveGroupSize} parejas de la lista</p>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto pr-2 space-y-2 mb-4 custom-scrollbar">
@@ -90,12 +94,12 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
 
                 <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
                     <div className="text-center font-bold text-emerald-600 mb-2">
-                        Seleccionadas: {selectedForGroup.length} / {groupSize}
+                        Seleccionadas: {selectedForGroup.length} / {effectiveGroupSize}
                     </div>
                     <button 
                         onClick={confirmGroup}
-                        disabled={selectedForGroup.length !== groupSize}
-                        className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === groupSize ? 'bg-emerald-600 text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                        disabled={selectedForGroup.length !== effectiveGroupSize}
+                        className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === effectiveGroupSize ? 'bg-emerald-600 text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                     >
                         {currentGroupIdx === groupNames.length - 1 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}
                     </button>
@@ -234,6 +238,25 @@ const ActiveTournament: React.FC = () => {
         const valA = parseInt(scoreA);
         const valB = parseInt(scoreB);
         if (valA === valB) return alert("El partido no puede terminar en empate.");
+        
+        // Predict logic...
+        const m = state.matches.find(m => m.id === selectedMatchId);
+        if (m && m.phase !== 'group') {
+             // Basic prediction for playoffs
+             const pairA = getPairName(m.pairAId);
+             const pairB = getPairName(m.pairBId);
+             const pAWon = valA > valB;
+             // Calculate logic string based on round... simplified for now
+             let nextStr = 'Siguiente Ronda';
+             if (m.phase === 'qf') nextStr = 'Semis';
+             if (m.phase === 'sf') nextStr = 'Final';
+             
+             setNextMatchInfo({
+                 pA_Name: pairA, pA_Won: pAWon, pA_Status: pAWon ? 'Clasificado' : 'Eliminado', pA_Next: pAWon ? nextStr : '',
+                 pB_Name: pairB, pB_Won: !pAWon, pB_Status: !pAWon ? 'Clasificado' : 'Eliminado', pB_Next: !pAWon ? nextStr : ''
+             });
+        }
+
         updateScoreDB(selectedMatchId, valA, valB);
         setSelectedMatchId(null); setScoreA(''); setScoreB('');
     }
@@ -267,8 +290,17 @@ const ActiveTournament: React.FC = () => {
 
   // --- CHAMPIONS LOGIC ---
   const getChampions = () => {
-      const finalMain = state.matches.find(m => m.round === (state.format === '16_mini' ? 7 : 6) && m.bracket === 'main' && m.courtId === 1);
-      const finalCons = state.matches.find(m => m.round === (state.format === '16_mini' ? 8 : 4) && m.bracket === 'consolation'); // R4 is cons final for 10mini
+      // Logic varies by format
+      let finalMainRound = 7;
+      let finalConsRound = 8;
+      
+      if (state.format === '16_mini') { finalMainRound = 7; finalConsRound = 8; }
+      else if (state.format === '10_mini') { finalMainRound = 6; finalConsRound = 4; }
+      else if (state.format === '8_mini') { finalMainRound = 6; finalConsRound = 6; }
+      else if (state.format === '12_mini') { finalMainRound = 6; finalConsRound = 5; }
+
+      const finalMain = state.matches.find(m => m.round === finalMainRound && m.bracket === 'main' && m.courtId === 1);
+      const finalCons = state.matches.find(m => m.round === finalConsRound && m.bracket === 'consolation');
 
       const getWinnerName = (m?: any) => {
           if(!m || !m.isFinished) return 'Pendiente';
@@ -320,8 +352,11 @@ const ActiveTournament: React.FC = () => {
 
   // --- VIEW: SETUP (3 BLOCKS) ---
   if (state.status === 'setup') {
-      const limit = selectedFormat === '10_mini' ? 10 : 16;
-      // We check TOTAL pairs, not filtered by isReserve, because reserves are decided at start
+      let limit = 16;
+      if (selectedFormat === '10_mini') limit = 10;
+      if (selectedFormat === '12_mini') limit = 12;
+      if (selectedFormat === '8_mini') limit = 8;
+
       const totalPairs = state.pairs.length;
       const canStart = totalPairs >= limit;
       const reservesCount = Math.max(0, totalPairs - limit);
@@ -358,13 +393,23 @@ const ActiveTournament: React.FC = () => {
                           16
                       </button>
                       <button 
+                           onClick={() => handleFormatChange('12_mini')}
+                           className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '12_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}
+                      >
+                          12
+                      </button>
+                      <button 
                            onClick={() => handleFormatChange('10_mini')}
                            className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '10_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}
                       >
                           10
                       </button>
-                      <button disabled className="py-3 rounded-xl font-bold border-2 border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed">12</button>
-                      <button disabled className="py-3 rounded-xl font-bold border-2 border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed">8</button>
+                      <button 
+                           onClick={() => handleFormatChange('8_mini')}
+                           className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '8_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}
+                      >
+                          8
+                      </button>
                   </div>
               </div>
 
@@ -472,7 +517,7 @@ const ActiveTournament: React.FC = () => {
           <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-slate-900">Ronda {state.currentRound}</h2>
               <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold uppercase tracking-wider">
-                  {state.currentRound <= 4 ? 'Fase de Grupos' : 'Playoffs'}
+                  {state.currentRound <= (state.format === '16_mini' ? 4 : 3) ? 'Fase de Grupos' : 'Playoffs'}
               </span>
           </div>
           <button onClick={() => setShowResetConfirm(true)} className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200">
@@ -690,9 +735,7 @@ const ActiveTournament: React.FC = () => {
                   </div>
                   <h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3>
                   <p className="text-slate-500 mb-8">
-                      {state.currentRound === (state.format === '16_mini' ? 5 : 4)
-                        ? "Se activarán las Semifinales del Principal y los partidos de Consolación pendientes."
-                        : "Se generarán los siguientes partidos. Asegúrate de que todos los resultados estén correctos."}
+                       Se generarán los partidos de la siguiente fase. Asegúrate de que todos los resultados actuales estén correctos.
                   </p>
                   <div className="grid grid-cols-1 gap-3">
                       <button onClick={confirmNextRound} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95">
