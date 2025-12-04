@@ -2,30 +2,24 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES, getPairElo } from '../store/TournamentContext';
 import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp } from 'lucide-react';
-import { TournamentFormat } from '../types';
-
-type ViewMode = 'menu' | 'pair-form';
 
 const Registration: React.FC = () => {
   const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, formatPlayerName } = useTournament();
-  const [viewMode, setViewMode] = useState<ViewMode>('menu');
-
+  
+  // MODAL STATES
+  const [isPairModalOpen, setIsPairModalOpen] = useState(false);
   const [isEditingPairId, setIsEditingPairId] = useState<string | null>(null);
+  
   const [selectedP1, setSelectedP1] = useState('');
   const [selectedP2, setSelectedP2] = useState('');
   
-  // MODAL STATES
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   
-  // Usamos el formato del estado para visualizar las reservas, pero no lo cambiamos aquí.
   const currentFormat = state.format || '16_mini';
-
   const activePairs = state.pairs || [];
   const limit = currentFormat === '10_mini' ? 10 : 16;
   
-  // En Registration mostramos todas como "inscritas", la distinción titular/reserva se hace mejor en Directo
-  // Pero para visualizar el orden, las mostramos todas.
   const totalRegistered = activePairs.length;
 
   const assignedPlayerIds = activePairs.reduce((acc, pair) => {
@@ -80,7 +74,7 @@ const Registration: React.FC = () => {
                       {tab === 'search' ? (
                           <div className="animate-fade-in">
                               <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Escribe para buscar..." className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg mb-2 focus:border-blue-500 outline-none text-slate-800 placeholder:text-slate-400 shadow-inner" autoFocus />
-                              <div className="max-h-40 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                              <div className="max-h-32 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                                   {filteredPlayers.slice(0, 50).map(p => (
                                       <button key={p.id} onClick={() => onSelect(p.id)} className="w-full text-left p-2 hover:bg-blue-50 rounded flex items-center justify-between text-sm text-slate-700 border border-transparent hover:border-blue-100 transition-colors">
                                           <span className="font-medium">{formatPlayerName(p)}</span>
@@ -122,20 +116,11 @@ const Registration: React.FC = () => {
       );
   };
 
-  const handleSavePair = async () => {
-      if (!selectedP1 || !selectedP2) return setAlertMessage("Selecciona dos jugadores.");
-      if (selectedP1 === selectedP2) return setAlertMessage("Los jugadores deben ser distintos.");
-
-      if (isEditingPairId) {
-          await updatePairDB(isEditingPairId, selectedP1, selectedP2);
-      } else {
-          // Límite amplio para permitir reservas
-          if (state.pairs.length >= 32) return setAlertMessage("Límite de parejas alcanzado.");
-          await createPairInDB(selectedP1, selectedP2);
-      }
-      
-      setSelectedP1(''); setSelectedP2(''); setIsEditingPairId(null);
-      setViewMode('menu');
+  const openNewPairModal = () => {
+    setIsEditingPairId(null);
+    setSelectedP1('');
+    setSelectedP2('');
+    setIsPairModalOpen(true);
   };
 
   const startEditPair = (pairId: string) => {
@@ -144,7 +129,28 @@ const Registration: React.FC = () => {
       setSelectedP1(pair.player1Id);
       setSelectedP2(pair.player2Id);
       setIsEditingPairId(pairId);
-      setViewMode('pair-form');
+      setIsPairModalOpen(true);
+  };
+
+  const closePairModal = () => {
+      setIsPairModalOpen(false);
+      setIsEditingPairId(null);
+      setSelectedP1('');
+      setSelectedP2('');
+  };
+
+  const handleSavePair = async () => {
+      if (!selectedP1 || !selectedP2) return setAlertMessage("Selecciona dos jugadores.");
+      if (selectedP1 === selectedP2) return setAlertMessage("Los jugadores deben ser distintos.");
+
+      if (isEditingPairId) {
+          await updatePairDB(isEditingPairId, selectedP1, selectedP2);
+      } else {
+          if (state.pairs.length >= 32) return setAlertMessage("Límite de parejas alcanzado.");
+          await createPairInDB(selectedP1, selectedP2);
+      }
+      
+      closePairModal();
   };
 
   const deletePairHandler = async () => {
@@ -202,40 +208,51 @@ const Registration: React.FC = () => {
         <div className={`flex flex-col items-end text-blue-600`}><span className="text-4xl font-bold">{totalRegistered}</span></div>
       </div>
 
-      {viewMode === 'menu' && (
-          <>
-            <button onClick={() => { setIsEditingPairId(null); setSelectedP1(''); setSelectedP2(''); setViewMode('pair-form'); }} className="w-full bg-white hover:bg-emerald-50 border-2 border-emerald-100 hover:border-emerald-300 p-6 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shadow-sm active:scale-95 group">
-                <div className="bg-emerald-100 p-3 rounded-full text-emerald-600 group-hover:bg-emerald-200 transition-colors"><Users size={32} /></div>
-                <span className="font-black text-emerald-800 text-lg">AÑADIR NUEVA PAREJA</span>
-            </button>
-            
-            <PairList pairs={activePairs} title="Parejas Inscritas" colorClass="text-slate-600" />
-          </>
-      )}
+      <button onClick={openNewPairModal} className="w-full bg-white hover:bg-emerald-50 border-2 border-emerald-100 hover:border-emerald-300 p-6 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shadow-sm active:scale-95 group">
+          <div className="bg-emerald-100 p-3 rounded-full text-emerald-600 group-hover:bg-emerald-200 transition-colors"><Users size={32} /></div>
+          <span className="font-black text-emerald-800 text-lg">AÑADIR NUEVA PAREJA</span>
+      </button>
+      
+      <PairList pairs={activePairs} title="Parejas Inscritas" colorClass="text-slate-600" />
 
-      {viewMode === 'pair-form' && (
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-lg animate-slide-up">
-              <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2"><Users className="text-emerald-600"/>{isEditingPairId ? 'Editar Pareja' : 'Nueva Pareja'}</h3>
-              <PlayerSelector 
-                label="JUGADOR 1" 
-                selectedId={selectedP1} 
-                onSelect={setSelectedP1} 
-                otherSelectedId={selectedP2}
-              />
-              <div className="flex justify-center items-center gap-4 my-6">
-                  <div className="h-px bg-slate-200 flex-1"></div>
-                  <span className="bg-slate-100 text-slate-400 text-xs px-3 py-1 rounded-full font-bold border border-slate-200">&</span>
-                  <div className="h-px bg-slate-200 flex-1"></div>
-              </div>
-              <PlayerSelector 
-                label="JUGADOR 2" 
-                selectedId={selectedP2} 
-                onSelect={setSelectedP2} 
-                otherSelectedId={selectedP1}
-              />
-              <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
-                  <button onClick={() => setViewMode('menu')} className="flex-1 py-4 bg-slate-100 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
-                  <button onClick={handleSavePair} className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95"><Save size={20} /> Guardar Pareja</button>
+      {/* PAIR MODAL */}
+      {isPairModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
+              <div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-slide-up h-[90vh] sm:h-[85vh] flex flex-col">
+                  <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                      <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                          <Users className="text-emerald-600"/>
+                          {isEditingPairId ? 'Editar Pareja' : 'Nueva Pareja'}
+                      </h3>
+                      <button onClick={closePairModal} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors">
+                          <X size={20}/>
+                      </button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                      <PlayerSelector 
+                        label="JUGADOR 1" 
+                        selectedId={selectedP1} 
+                        onSelect={setSelectedP1} 
+                        otherSelectedId={selectedP2}
+                      />
+                      <div className="flex justify-center items-center gap-4 my-6">
+                          <div className="h-px bg-slate-200 flex-1"></div>
+                          <span className="bg-slate-100 text-slate-400 text-xs px-3 py-1 rounded-full font-bold border border-slate-200">&</span>
+                          <div className="h-px bg-slate-200 flex-1"></div>
+                      </div>
+                      <PlayerSelector 
+                        label="JUGADOR 2" 
+                        selectedId={selectedP2} 
+                        onSelect={setSelectedP2} 
+                        otherSelectedId={selectedP1}
+                      />
+                  </div>
+                  
+                  <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
+                      <button onClick={closePairModal} className="flex-1 py-4 bg-slate-100 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
+                      <button onClick={handleSavePair} className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95"><Save size={20} /> Guardar</button>
+                  </div>
               </div>
           </div>
       )}

@@ -22,7 +22,7 @@ const ClubProfile: React.FC = () => {
               <Building size={32} className="text-slate-400" />
               <div>
                   <h3 className="font-bold text-slate-800">Configuración General</h3>
-                  <p className="text-xs text-slate-500">Esta información aparecerá en la cabecera.</p>
+                  <p className="text-xs text-slate-500">Esta información es vital para la lógica del torneo.</p>
               </div>
           </div>
 
@@ -36,6 +36,23 @@ const ClubProfile: React.FC = () => {
                     className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-emerald-500 font-bold text-lg" 
                   />
               </div>
+              
+              <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Número de Pistas</label>
+                  <input 
+                    type="number"
+                    min="1"
+                    max="50"
+                    required
+                    value={form.courtCount} 
+                    onChange={e => setForm({...form, courtCount: parseInt(e.target.value) || 0})}
+                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-emerald-500 font-bold text-lg text-center" 
+                  />
+                  <div className="mt-2 p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100">
+                      <strong>Nota Importante:</strong> Si el club tiene <strong>8 pistas o más</strong>, los torneos de 16 parejas se jugarán en modo "Simultáneo" (sin descansos). Con menos de 8 pistas, se aplicará el sistema de rotación con descansos.
+                  </div>
+              </div>
+
               <div>
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Dirección</label>
                   <input 
