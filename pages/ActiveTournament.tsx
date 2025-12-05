@@ -404,13 +404,74 @@ const ActiveTournament: React.FC = () => {
         {sortedMatchesPriority.length === 0 ? (<div className="text-center py-10 text-slate-400 italic">Cargando partidos...</div>) : (
             sortedMatchesPriority.map(match => {
                 const isWaiting = match.courtId === 0; const isPlayable = playableMatchIds.has(match.id); const isTechnicalRest = !isPlayable && !isWaiting;
+                
+                // Determine Card Styling
+                const cardClasses = isWaiting 
+                    ? 'bg-slate-50 border-slate-300' 
+                    : isTechnicalRest 
+                        ? 'bg-slate-100 opacity-60' 
+                        : match.isFinished 
+                            ? 'bg-white border-emerald-200'
+                            : 'bg-white border-slate-200 shadow-sm';
+                
+                // Determine Header Styling
+                const headerBg = isWaiting ? 'bg-slate-200' : isTechnicalRest ? 'bg-slate-200' : 'bg-white';
+
                 return (
-                <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${isWaiting ? 'bg-slate-50 border-slate-300' : isTechnicalRest ? 'bg-slate-100 opacity-60' : match.isFinished ? 'border-emerald-200 bg-emerald-50/30' : 'bg-white border-slate-200 shadow-sm'}`}>
-                    <div className={`${isWaiting ? 'bg-slate-200' : 'bg-slate-100'} px-4 py-2 flex justify-between items-center border-b border-slate-200`}><span className={`font-bold text-xs uppercase flex gap-2 items-center ${isWaiting ? 'text-slate-600' : 'text-slate-700'}`}>{isWaiting ? (<span className="flex items-center gap-1"><Coffee size={14}/> EN ESPERA (Siguiente Turno)</span>) : isTechnicalRest ? (<span className="flex items-center gap-1"><Coffee size={14}/> DESCANSO (Pista {match.courtId})</span>) : (`Pista ${match.courtId}`)}{getPhaseLabel(match) && <span className="text-slate-400">- {getPhaseLabel(match)}</span>}{match.bracket === 'consolation' && <span className="text-blue-500">(Consolación)</span>}</span>{match.isFinished && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1 text-slate-400 hover:text-blue-500"><Edit2 size={14} /></button>)}</div>
+                <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${cardClasses}`}>
+                    <div className={`${headerBg} px-5 py-4 flex justify-between items-center border-b ${isWaiting ? 'border-slate-300' : 'border-slate-100'}`}>
+                        
+                        {/* Status / Court Badge */}
+                        <div className="flex items-center gap-3">
+                             {isWaiting ? (
+                                 <span className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase">
+                                     <Coffee size={16}/> EN ESPERA
+                                 </span>
+                             ) : isTechnicalRest ? (
+                                 <span className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase">
+                                     <Coffee size={16}/> DESCANSO (Pista {match.courtId})
+                                 </span>
+                             ) : (
+                                 // THEMED ACTIVE COURT BADGE
+                                 <span 
+                                    className="px-3 py-1 rounded-lg text-xs font-black tracking-wider uppercase border"
+                                    style={{ 
+                                        color: themeColor, 
+                                        backgroundColor: `${themeColor}15`, 
+                                        borderColor: `${themeColor}20`
+                                    }}
+                                 >
+                                     PISTA {match.courtId}
+                                 </span>
+                             )}
+                             
+                             {/* Phase Indicators */}
+                             {getPhaseLabel(match) && <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">{getPhaseLabel(match)}</span>}
+                             {match.bracket === 'consolation' && <span className="text-blue-500 text-[10px] font-bold uppercase tracking-wider">Cons.</span>}
+                        </div>
+                        
+                        {match.isFinished && (
+                             <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">Finalizado</span>
+                                <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1.5 text-slate-400 hover:text-blue-500 bg-slate-50 rounded-lg transition-colors"><Edit2 size={14} /></button>
+                             </div>
+                        )}
+                    </div>
+                    
                     <div className="p-5">
                         <div className="flex items-center justify-between mb-3 cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairAId)}><span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>{getPairName(match.pairAId)} <Info size={14} className="text-slate-300"/></span><span className="text-3xl font-black text-slate-900">{match.scoreA ?? '-'}</span></div>
                         <div className="flex items-center justify-between cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairBId)}><span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>{getPairName(match.pairBId)} <Info size={14} className="text-slate-300"/></span><span className="text-3xl font-black text-slate-900">{match.scoreB ?? '-'}</span></div>
-                        {!match.isFinished && !isTechnicalRest && !isWaiting && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} style={{ backgroundColor: THEME.cta }} className={`w-full mt-6 py-4 rounded-xl text-base font-bold text-white shadow-md touch-manipulation hover:opacity-90`}>Introducir Resultado</button>)}
+                        
+                        {!match.isFinished && !isTechnicalRest && !isWaiting && (
+                            <button 
+                                onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} 
+                                style={{ backgroundColor: THEME.cta }} 
+                                className={`w-full mt-6 py-4 rounded-xl text-base font-bold text-white shadow-md touch-manipulation hover:opacity-90 active:scale-98 transition-transform`}
+                            >
+                                Introducir Resultado
+                            </button>
+                        )}
+                        
                         {isWaiting && !match.isFinished && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className={`w-full mt-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-center text-xs font-bold text-slate-500 uppercase transition-colors`}>Forzar Resultado (Opcional)</button>)}
                         {isTechnicalRest && (<div className="w-full mt-4 py-2 bg-slate-200 rounded-lg text-center text-xs font-bold text-slate-400 uppercase">Pista Ocupada</div>)}
                     </div>
@@ -433,8 +494,7 @@ const ActiveTournament: React.FC = () => {
             ) : (
                 <button 
                     onClick={handleNextRoundClick} 
-                    style={{ backgroundColor: THEME.cta }}
-                    className={`inline-flex items-center gap-2 px-8 py-4 rounded-full shadow-2xl font-black text-lg transition-all text-white hover:opacity-90`}
+                    className={`inline-flex items-center gap-2 px-8 py-4 rounded-full shadow-2xl font-black text-lg transition-all text-white bg-slate-900 hover:bg-slate-800 active:scale-95`}
                 >
                     Siguiente Ronda <ChevronRight size={24} />
                 </button>
