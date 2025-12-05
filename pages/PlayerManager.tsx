@@ -1,17 +1,22 @@
+
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
-import { Search, Filter, Edit2, Save, User, Eye, Trophy, Activity } from 'lucide-react';
+import { Search, Filter, Edit2, Save, User, Eye, Trophy, Activity, Plus, Check, X } from 'lucide-react';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 // FIX: Use correct exported function name
 import { calculateDisplayRanking, manualToElo } from '../utils/Elo'; 
 
 const PlayerManager: React.FC = () => {
-  const { state, updatePlayerInDB, formatPlayerName } = useTournament();
+  const { state, updatePlayerInDB, addPlayerToDB, formatPlayerName } = useTournament();
   const navigate = useNavigate();
   const [filterCat, setFilterCat] = useState('all');
   const [search, setSearch] = useState('');
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  
+  // State for Creating New Player
+  const [isCreating, setIsCreating] = useState(false);
+  const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], manual_rating: 5, email: '', phone: '' });
 
   const filteredPlayers = state.players.filter(p => {
       const matchesCat = filterCat === 'all' || (p.categories && p.categories.includes(filterCat));
@@ -30,6 +35,13 @@ const PlayerManager: React.FC = () => {
       }
   };
   
+  const handleCreate = async () => {
+      if (!newPlayer.name) return alert("El nombre es obligatorio");
+      await addPlayerToDB(newPlayer);
+      setIsCreating(false);
+      setNewPlayer({ name: '', nickname: '', categories: [], manual_rating: 5, email: '', phone: '' });
+  };
+  
   const toggleEditCategory = (cat: string) => {
       if (!editingPlayer) return;
       setEditingPlayer(prev => {
@@ -43,14 +55,31 @@ const PlayerManager: React.FC = () => {
       });
   };
 
+  const toggleNewCategory = (cat: string) => {
+      setNewPlayer(prev => {
+          const cats = prev.categories || [];
+          const exists = cats.includes(cat);
+          return {
+              ...prev,
+              categories: exists ? cats.filter(c => c !== cat) : [...cats, cat]
+          };
+      });
+  };
+
   // Helper para previsualizar el ranking en el modal
-  const getPreviewRanking = (p: Player) => {
-      return calculateDisplayRanking(p);
+  const getPreviewRanking = (p: Partial<Player>) => {
+      // Mock player object for calculation
+      return calculateDisplayRanking({ ...p, global_rating: 1200 } as Player);
   };
 
   return (
     <div className="space-y-6 pb-20">
-      <h2 className="text-3xl font-bold text-slate-900">Gestión Jugadores</h2>
+      <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold text-slate-900">Gestión Jugadores</h2>
+          <button onClick={() => setIsCreating(true)} className="p-3 bg-emerald-600 text-white rounded-xl shadow-lg hover:bg-emerald-700 transition-all active:scale-95">
+              <Plus size={24} />
+          </button>
+      </div>
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -74,6 +103,7 @@ const PlayerManager: React.FC = () => {
 
       {/* List */}
       <div className="space-y-3">
+          {filteredPlayers.length === 0 && <div className="text-center py-10 text-slate-400">No se encontraron jugadores.</div>}
           {filteredPlayers.map((player, idx) => {
               const rankingScore = calculateDisplayRanking(player);
               return (
@@ -101,6 +131,42 @@ const PlayerManager: React.FC = () => {
               );
           })}
       </div>
+
+      {/* Create Modal */}
+      {isCreating && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-slate-900">Nuevo Jugador</h3>
+                      <button onClick={() => setIsCreating(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                  </div>
+                  <div className="space-y-4">
+                      <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre Completo</label><input autoFocus value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" placeholder="Ej. Juan Pérez" /></div>
+                      <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo (Opcional)</label><input value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" placeholder="Ej. Juanito" /></div>
+                      
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          <label className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1 mb-2"><Trophy size={12}/> Valoración Inicial (1-10)</label>
+                          <div className="flex items-center gap-4">
+                              <input type="range" min="1" max="10" step="0.5" value={newPlayer.manual_rating} onChange={e => setNewPlayer({...newPlayer, manual_rating: parseFloat(e.target.value)})} className="w-full accent-amber-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                              <span className="font-bold text-xl text-amber-700 w-10 text-center">{newPlayer.manual_rating}</span>
+                          </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías</label>
+                        <div className="flex flex-wrap gap-2">
+                            {TOURNAMENT_CATEGORIES.map(cat => (
+                                <button key={cat} onClick={() => toggleNewCategory(cat)} className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${newPlayer.categories?.includes(cat) ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-500 border-slate-300'}`}>{cat}</button>
+                            ))}
+                        </div>
+                      </div>
+                  </div>
+                  <div className="mt-8">
+                      <button onClick={handleCreate} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2"><Check size={18}/> Crear Jugador</button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* Edit Modal */}
       {editingPlayer && (

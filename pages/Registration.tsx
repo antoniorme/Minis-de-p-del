@@ -32,7 +32,7 @@ const Registration: React.FC = () => {
   const PlayerSelector = ({ label, selectedId, onSelect, otherSelectedId }: any) => {
       const [tab, setTab] = useState<'search' | 'new'>('search');
       const [searchQuery, setSearchQuery] = useState('');
-      const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], saveRecord: false, manual_rating: 5 });
+      const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], saveRecord: true, manual_rating: 5 });
       
       const selectedPlayer = state.players.find(p => p.id === selectedId);
       
@@ -48,7 +48,7 @@ const Registration: React.FC = () => {
       const handleCreatePlayer = async () => {
           if(!newPlayer.name) return;
           const newId = await addPlayerToDB(newPlayer);
-          if(newId) { onSelect(newId); setNewPlayer({ name: '', nickname: '', categories: [], saveRecord: false, manual_rating: 5 }); setTab('search'); }
+          if(newId) { onSelect(newId); setNewPlayer({ name: '', nickname: '', categories: [], saveRecord: true, manual_rating: 5 }); setTab('search'); }
       };
       const toggleNewCat = (cat: string) => { setNewPlayer(prev => { const exists = prev.categories.includes(cat); return { ...prev, categories: exists ? prev.categories.filter(c => c !== cat) : [...prev.categories, cat] }; }); };
 
@@ -103,11 +103,8 @@ const Registration: React.FC = () => {
                               </div>
 
                               <div className="flex flex-wrap gap-1.5">{TOURNAMENT_CATEGORIES.map(c => (<button key={c} onClick={() => toggleNewCat(c)} className={`px-2.5 py-1.5 text-[10px] font-bold rounded-md border transition-all ${newPlayer.categories.includes(c) ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-200'}`}>{c}</button>))}</div>
-                              <div onClick={() => setNewPlayer(p => ({...p, saveRecord: !p.saveRecord}))} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${newPlayer.saveRecord ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
-                                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${newPlayer.saveRecord ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300'}`}>{newPlayer.saveRecord && <Check size={14} className="text-white" strokeWidth={3} />}</div>
-                                  <span className={`text-xs font-bold ${newPlayer.saveRecord ? 'text-emerald-700' : 'text-slate-500'}`}>Guardar en Base de Datos</span>
-                              </div>
-                              <button onClick={handleCreatePlayer} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2"><Check size={16}/> Usar Jugador</button>
+                              
+                              <button onClick={handleCreatePlayer} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2"><Check size={16}/> Crear y Usar Jugador</button>
                           </div>
                       )}
                   </>
@@ -264,7 +261,10 @@ const Registration: React.FC = () => {
                       <Trash2 size={32} />
                   </div>
                   <h3 className="text-xl font-black text-slate-900 mb-2">¿Eliminar Pareja?</h3>
-                  <p className="text-slate-500 mb-6">Esta acción no se puede deshacer.</p>
+                  <p className="text-slate-500 mb-6 text-sm">
+                      Se borrará la inscripción de esta pareja. <br/>
+                      <span className="font-bold text-slate-700">Los jugadores NO se borrarán</span> de la base de datos del club.
+                  </p>
                   <div className="flex gap-3">
                       <button onClick={() => setShowDeleteModal(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button>
                       <button onClick={deletePairHandler} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold shadow-lg">Eliminar</button>

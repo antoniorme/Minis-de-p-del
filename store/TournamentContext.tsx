@@ -121,8 +121,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 }
 
                 // CORRECTLY IDENTIFY RESERVES
-                // If tournament is active (groups exist), reserves are those NOT in a group.
-                // If tournament is setup, reserves are those beyond the limit (by index/arrival).
                 if (groups.length > 0) {
                      const activeIds = new Set(groups.flatMap(g => g.pairIds));
                      mappedPairs = mappedPairs.map(p => ({ ...p, isReserve: !activeIds.has(p.id) }));
@@ -320,7 +318,10 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
              return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
         });
         if (!isOfflineMode) await supabase.from('tournaments').update({ status: 'finished', winner_main: wMain, winner_consolation: wCons }).eq('id', state.id);
+        
         dispatch({ type: 'RESET_LOCAL' });
+        // CRITICAL: Reload Global Players after resetting tournament state
+        await loadData();
     };
 
     const resetToSetupDB = async () => {
