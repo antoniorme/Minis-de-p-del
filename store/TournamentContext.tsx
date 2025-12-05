@@ -9,6 +9,26 @@ import * as Logic from '../utils/TournamentLogic';
 const STORAGE_KEY = 'padelpro_local_db_v3'; 
 export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
 
+// --- THEME SYSTEM ---
+export const THEME = {
+    primary: '#2B2DBF',         // Corporate Blue
+    primaryDark: '#14169C',     // Darker
+    primaryVeryDark: '#171852', // Very Dark
+    primaryLight: '#575AF9',    // CTA / Light Blue
+    secondary: '#EEFF00',       // Yellow Accent
+};
+
+export const getFormatColor = (format: TournamentFormat) => {
+    switch (format) {
+        case '16_mini': return THEME.primaryVeryDark; // #171852
+        case '12_mini': return THEME.primaryDark;     // #14169C
+        case '10_mini': return THEME.primary;         // #2B2DBF
+        case '8_mini': return THEME.primaryLight;     // #575AF9
+        default: return THEME.primary;
+    }
+};
+// --------------------
+
 const initialState: TournamentState = {
   status: 'setup', currentRound: 0, format: '16_mini', players: [], pairs: [], matches: [], groups: [], courts: [], loading: true
 };

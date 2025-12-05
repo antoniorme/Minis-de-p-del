@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useTournament } from '../store/TournamentContext';
+import { useTournament, getFormatColor } from '../store/TournamentContext';
 import { Trophy, Grid, GitMerge, ArrowLeft, Edit2 } from 'lucide-react';
 
 const Results: React.FC = () => {
@@ -11,6 +11,9 @@ const Results: React.FC = () => {
   const isMini8 = state.format === '8_mini';
   const isMini12 = state.format === '12_mini';
   
+  // Dynamic Theme Color
+  const themeColor = getFormatColor(state.format);
+
   let playoffStartRound = 5; // Default 16
   if (isMini10) playoffStartRound = 4;
   if (isMini8) playoffStartRound = 4;
@@ -202,8 +205,8 @@ const Results: React.FC = () => {
             </div>
           </div>
           <div className="flex bg-slate-200 p-1 rounded-lg">
-              <button onClick={() => setTab('groups')} className={`p-2 rounded-md transition-all ${tab === 'groups' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}><Grid size={20}/></button>
-              <button onClick={() => setTab('bracket')} className={`p-2 rounded-md transition-all ${tab === 'bracket' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}><GitMerge size={20}/></button>
+              <button onClick={() => setTab('groups')} style={{ color: tab === 'groups' ? themeColor : undefined }} className={`p-2 rounded-md transition-all ${tab === 'groups' ? 'bg-white shadow' : 'text-slate-500'}`}><Grid size={20}/></button>
+              <button onClick={() => setTab('bracket')} style={{ color: tab === 'bracket' ? themeColor : undefined }} className={`p-2 rounded-md transition-all ${tab === 'bracket' ? 'bg-white shadow' : 'text-slate-500'}`}><GitMerge size={20}/></button>
           </div>
       </div>
 

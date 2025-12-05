@@ -76,7 +76,7 @@ const PlayerManager: React.FC = () => {
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
           <h2 className="text-3xl font-bold text-slate-900">Gestión Jugadores</h2>
-          <button onClick={() => setIsCreating(true)} className="p-3 bg-emerald-600 text-white rounded-xl shadow-lg hover:bg-emerald-700 transition-all active:scale-95">
+          <button onClick={() => setIsCreating(true)} className="p-3 bg-[#575AF9] text-white rounded-xl shadow-lg hover:bg-[#2B2DBF] transition-all active:scale-95">
               <Plus size={24} />
           </button>
       </div>
@@ -88,7 +88,7 @@ const PlayerManager: React.FC = () => {
               <input 
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 text-slate-900"
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#575AF9] text-slate-900"
                 placeholder="Buscar por nombre..."
               />
           </div>
@@ -96,7 +96,7 @@ const PlayerManager: React.FC = () => {
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
               <button onClick={() => setFilterCat('all')} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${filterCat === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>Todos</button>
               {TOURNAMENT_CATEGORIES.map(cat => (
-                  <button key={cat} onClick={() => setFilterCat(cat)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors uppercase ${filterCat === cat ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{cat}</button>
+                  <button key={cat} onClick={() => setFilterCat(cat)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors uppercase ${filterCat === cat ? 'bg-[#575AF9] text-white' : 'bg-slate-100 text-slate-500'}`}>{cat}</button>
               ))}
           </div>
       </div>
@@ -124,7 +124,7 @@ const PlayerManager: React.FC = () => {
                       </div>
                   </div>
                   <div className="flex items-center gap-2">
-                      <button onClick={() => navigate(`/players/${player.id}`)} className="p-2 text-slate-400 hover:text-emerald-600 bg-slate-50 rounded-lg border border-slate-100 transition-colors"><Eye size={20} /></button>
+                      <button onClick={() => navigate(`/players/${player.id}`)} className="p-2 text-slate-400 hover:text-[#575AF9] bg-slate-50 rounded-lg border border-slate-100 transition-colors"><Eye size={20} /></button>
                       <button onClick={() => setEditingPlayer(player)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg border border-slate-100 transition-colors"><Edit2 size={20} /></button>
                   </div>
               </div>
@@ -156,13 +156,13 @@ const PlayerManager: React.FC = () => {
                         <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías</label>
                         <div className="flex flex-wrap gap-2">
                             {TOURNAMENT_CATEGORIES.map(cat => (
-                                <button key={cat} onClick={() => toggleNewCategory(cat)} className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${newPlayer.categories?.includes(cat) ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-500 border-slate-300'}`}>{cat}</button>
+                                <button key={cat} onClick={() => toggleNewCategory(cat)} className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${newPlayer.categories?.includes(cat) ? 'bg-[#575AF9] text-white border-[#575AF9]' : 'bg-white text-slate-500 border-slate-300'}`}>{cat}</button>
                             ))}
                         </div>
                       </div>
                   </div>
                   <div className="mt-8">
-                      <button onClick={handleCreate} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2"><Check size={18}/> Crear Jugador</button>
+                      <button onClick={handleCreate} className="w-full py-3 bg-[#575AF9] hover:bg-[#2B2DBF] text-white rounded-xl font-bold flex items-center justify-center gap-2"><Check size={18}/> Crear Jugador</button>
                   </div>
               </div>
           </div>
@@ -197,7 +197,7 @@ const PlayerManager: React.FC = () => {
                                 </div>
                                 <div className="text-right">
                                     <span className="block text-slate-400 uppercase">Ranking Final</span>
-                                    <span className="font-black text-emerald-600 text-lg transition-all">{getPreviewRanking(editingPlayer)} pts</span>
+                                    <span className="font-black text-[#575AF9] text-lg transition-all">{getPreviewRanking(editingPlayer)} pts</span>
                                 </div>
                           </div>
                       </div>
@@ -206,7 +206,7 @@ const PlayerManager: React.FC = () => {
                         <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías</label>
                         <div className="flex flex-wrap gap-2">
                             {TOURNAMENT_CATEGORIES.map(cat => (
-                                <button key={cat} onClick={() => toggleEditCategory(cat)} className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${editingPlayer.categories?.includes(cat) ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-500 border-slate-300'}`}>{cat}</button>
+                                <button key={cat} onClick={() => toggleEditCategory(cat)} className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${editingPlayer.categories?.includes(cat) ? 'bg-[#575AF9] text-white border-[#575AF9]' : 'bg-white text-slate-500 border-slate-300'}`}>{cat}</button>
                             ))}
                         </div>
                       </div>
@@ -215,7 +215,7 @@ const PlayerManager: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-4 mt-8">
                       <button onClick={() => setEditingPlayer(null)} className="py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
-                      <button onClick={handleSave} className="py-3 bg-emerald-600 text-white rounded-xl font-bold"><Save size={18} className="inline mr-2"/> Guardar</button>
+                      <button onClick={handleSave} className="py-3 bg-[#575AF9] text-white rounded-xl font-bold"><Save size={18} className="inline mr-2"/> Guardar</button>
                   </div>
               </div>
           </div>

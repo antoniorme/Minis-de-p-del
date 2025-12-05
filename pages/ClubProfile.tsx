@@ -64,7 +64,7 @@ const ClubProfile: React.FC = () => {
                     required
                     value={form.name} 
                     onChange={e => setForm({...form, name: e.target.value})}
-                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-emerald-500 font-bold text-lg" 
+                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-[#575AF9] font-bold text-lg" 
                   />
               </div>
               
@@ -77,7 +77,7 @@ const ClubProfile: React.FC = () => {
                     required
                     value={form.courtCount} 
                     onChange={e => setForm({...form, courtCount: parseInt(e.target.value) || 0})}
-                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-emerald-500 font-bold text-lg text-center" 
+                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-[#575AF9] font-bold text-lg text-center" 
                   />
                   <div className="mt-2 p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100">
                       <strong>Nota Importante:</strong> Si el club tiene <strong>8 pistas o más</strong>, los torneos de 16 parejas se jugarán en modo "Simultáneo" (sin descansos). Con menos de 8 pistas, se aplicará el sistema de rotación con descansos.
@@ -89,7 +89,7 @@ const ClubProfile: React.FC = () => {
                   <input 
                     value={form.address || ''} 
                     onChange={e => setForm({...form, address: e.target.value})}
-                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-emerald-500" 
+                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-[#575AF9]" 
                   />
               </div>
               <div>
@@ -97,11 +97,11 @@ const ClubProfile: React.FC = () => {
                   <input 
                     value={form.phone || ''} 
                     onChange={e => setForm({...form, phone: e.target.value})}
-                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-emerald-500" 
+                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-[#575AF9]" 
                   />
               </div>
 
-              <button type="submit" className="w-full bg-emerald-600 py-4 rounded-xl font-bold text-white text-lg shadow-lg mt-6 flex items-center justify-center gap-2">
+              <button type="submit" className="w-full bg-[#575AF9] py-4 rounded-xl font-bold text-white text-lg shadow-lg mt-6 flex items-center justify-center gap-2">
                   <Save size={20}/> Guardar Cambios
               </button>
           </form>

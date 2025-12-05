@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useTournament } from '../store/TournamentContext';
+import { useTournament, THEME } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
 import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +26,7 @@ const Dashboard: React.FC = () => {
   const StatCard = ({ title, value, subValue, icon: Icon, color, onClick }: any) => (
     <div 
       onClick={onClick}
-      className="bg-white p-5 rounded-2xl border border-slate-200 cursor-pointer hover:border-emerald-300 transition-all hover:shadow-md shadow-sm h-full flex flex-col justify-between group"
+      className="bg-white p-5 rounded-2xl border border-slate-200 cursor-pointer hover:border-blue-300 transition-all hover:shadow-md shadow-sm h-full flex flex-col justify-between group"
     >
       <div className="flex items-start justify-between mb-3">
         <div className={`p-2.5 rounded-xl ${color.replace('text-', 'bg-').replace('400', '50')} ${color.replace('400', '600')}`}>
@@ -127,7 +127,8 @@ const Dashboard: React.FC = () => {
           {state.status === 'setup' && (
              <button 
              onClick={() => navigate('/active')}
-             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-md shadow-emerald-200 text-lg flex items-center justify-center gap-3 active:scale-[0.98]"
+             style={{ backgroundColor: THEME.primary }}
+             className="w-full py-4 text-white rounded-xl font-bold transition-all shadow-md text-lg flex items-center justify-center gap-3 active:scale-[0.98] hover:opacity-90"
            >
              <div className="bg-white/20 p-1.5 rounded-full"><Play size={20} fill="currentColor"/></div>
              CONFIGURAR Y EMPEZAR
@@ -197,7 +198,8 @@ const Dashboard: React.FC = () => {
                   <div className="grid grid-cols-1 gap-3">
                       <button 
                         onClick={performAction}
-                        className={`w-full py-4 rounded-xl font-bold text-white shadow-lg bg-blue-600 hover:bg-blue-700 active:scale-95 transition-transform`}
+                        style={{ backgroundColor: THEME.primary }}
+                        className={`w-full py-4 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-transform`}
                       >
                           Confirmar Acción
                       </button>

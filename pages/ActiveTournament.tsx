@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { useTournament } from '../store/TournamentContext';
+import { useTournament, getFormatColor, THEME } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
 import { TournamentFormat, Player, Pair, GenerationMethod } from '../types';
 import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Settings, RotateCcw, Check, ArrowRight, Archive } from 'lucide-react';
@@ -53,16 +54,16 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
                         const p2 = players.find(p => p.id === pair.player2Id);
                         const isSelected = selectedForGroup.includes(pair.id);
                         return (
-                            <div key={pair.id} onClick={() => toggleSelection(pair.id)} className={`p-3 rounded-xl border-2 flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-300'}`}>
+                            <div key={pair.id} onClick={() => toggleSelection(pair.id)} className={`p-3 rounded-xl border-2 flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-300'}`}>
                                 <div><div className="font-bold text-slate-800 text-sm">{formatName(p1)}</div><div className="font-bold text-slate-800 text-sm">& {formatName(p2)}</div></div>
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>{isSelected && <Check size={14} className="text-white" strokeWidth={3}/>}</div>
+                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-[#575AF9] border-[#575AF9]' : 'border-slate-300'}`}>{isSelected && <Check size={14} className="text-white" strokeWidth={3}/>}</div>
                             </div>
                         )
                     })}
                 </div>
                 <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
-                    <div className="text-center font-bold text-emerald-600 mb-2">Seleccionadas: {selectedForGroup.length} / {effectiveGroupSize}</div>
-                    <button onClick={confirmGroup} disabled={selectedForGroup.length !== effectiveGroupSize} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === effectiveGroupSize ? 'bg-emerald-600 text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>{currentGroupIdx === groupNames.length - 1 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}</button>
+                    <div className="text-center font-bold text-[#575AF9] mb-2">Seleccionadas: {selectedForGroup.length} / {effectiveGroupSize}</div>
+                    <button onClick={confirmGroup} disabled={selectedForGroup.length !== effectiveGroupSize} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === effectiveGroupSize ? 'bg-[#575AF9] text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>{currentGroupIdx === groupNames.length - 1 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}</button>
                     <button onClick={onCancel} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
                 </div>
             </div>
@@ -99,6 +100,9 @@ const ActiveTournament: React.FC = () => {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
 
   useEffect(() => { if(state.format) setSelectedFormat(state.format); }, [state.format]);
+
+  // Dynamic Theme Color
+  const themeColor = getFormatColor(state.format);
 
   const handleFormatChange = (fmt: TournamentFormat) => {
       setSelectedFormat(fmt);
@@ -296,7 +300,7 @@ const ActiveTournament: React.FC = () => {
   const PairDetailContent = ({ pairId }: { pairId: string }) => {
       const matches = getPairMatches(pairId); const pairName = getPairName(pairId);
       return (
-          <div className="space-y-4"><div className="text-center mb-6"><div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2 text-emerald-600"><User size={32} /></div><h3 className="text-xl font-black text-slate-900">{pairName}</h3><p className="text-slate-500 text-xs uppercase font-bold">Calendario de Partidos</p></div><div className="space-y-2 max-h-60 overflow-y-auto pr-1">{matches.map(m => { const isPairA = m.pairAId === pairId; const opponentId = isPairA ? m.pairBId : m.pairAId; const opponentName = getPairName(opponentId); const myScore = isPairA ? m.scoreA : m.scoreB; const oppScore = isPairA ? m.scoreB : m.scoreA; const resultClass = !m.isFinished ? 'bg-slate-50 border-slate-200' : (myScore || 0) > (oppScore || 0) ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'; return (<div key={m.id} className={`p-3 rounded-xl border ${resultClass} flex justify-between items-center`}><div><div className="text-[10px] font-bold text-slate-400 uppercase mb-1">R{m.round} - P{m.courtId}</div><div className="font-bold text-slate-800 text-sm">vs {opponentName}</div></div><div className="text-lg font-black text-slate-900">{m.isFinished ? `${myScore} - ${oppScore}` : 'Pendiente'}</div></div>)})}</div></div>
+          <div className="space-y-4"><div className="text-center mb-6"><div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-2 text-[#575AF9]"><User size={32} /></div><h3 className="text-xl font-black text-slate-900">{pairName}</h3><p className="text-slate-500 text-xs uppercase font-bold">Calendario de Partidos</p></div><div className="space-y-2 max-h-60 overflow-y-auto pr-1">{matches.map(m => { const isPairA = m.pairAId === pairId; const opponentId = isPairA ? m.pairBId : m.pairAId; const opponentName = getPairName(opponentId); const myScore = isPairA ? m.scoreA : m.scoreB; const oppScore = isPairA ? m.scoreB : m.scoreA; const resultClass = !m.isFinished ? 'bg-slate-50 border-slate-200' : (myScore || 0) > (oppScore || 0) ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'; return (<div key={m.id} className={`p-3 rounded-xl border ${resultClass} flex justify-between items-center`}><div><div className="text-[10px] font-bold text-slate-400 uppercase mb-1">R{m.round} - P{m.courtId}</div><div className="font-bold text-slate-800 text-sm">vs {opponentName}</div></div><div className="text-lg font-black text-slate-900">{m.isFinished ? `${myScore} - ${oppScore}` : 'Pendiente'}</div></div>)})}</div></div>
       );
   };
 
@@ -310,9 +314,9 @@ const ActiveTournament: React.FC = () => {
                   <p className="text-slate-500">Ajusta los parámetros finales</p>
               </div>
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between"><div><h3 className="text-sm font-bold text-slate-400 uppercase">Parejas Inscritas</h3><p className="text-xs text-slate-400">Titulares: {limit} {reservesCount > 0 && `(+${reservesCount} Reservas)`}</p></div><div className={`text-4xl font-black ${canStart ? 'text-emerald-500' : 'text-orange-500'}`}>{totalPairs}<span className="text-xl text-slate-300">/{limit}</span></div></div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Tipo de Mini</h3><div className="grid grid-cols-4 gap-2"><button onClick={() => handleFormatChange('16_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '16_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>16</button><button onClick={() => handleFormatChange('12_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '12_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>12</button><button onClick={() => handleFormatChange('10_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '10_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>10</button><button onClick={() => handleFormatChange('8_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '8_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>8</button></div></div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Generación de Grupos</h3><div className="grid grid-cols-2 gap-3"><button onClick={() => setGenerationMethod('arrival')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}><Clock size={18}/> <span className="text-xs font-bold uppercase">Llegada</span></button><button onClick={() => setGenerationMethod('manual')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}><ListOrdered size={18}/> <span className="text-xs font-bold uppercase">Manual</span></button><button onClick={() => setGenerationMethod('elo-balanced')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}><TrendingUp size={18}/> <span className="text-xs font-bold uppercase">Nivel</span></button><button onClick={() => setGenerationMethod('elo-mixed')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}><Shuffle size={18}/> <span className="text-xs font-bold uppercase">Mix</span></button></div></div>
-              <button onClick={handleStart} disabled={!canStart} className={`w-full py-5 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${canStart ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white active:scale-95 hover:shadow-2xl' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}><Play size={24} fill="currentColor" /> EMPEZAR TORNEO</button>
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Tipo de Mini</h3><div className="grid grid-cols-4 gap-2"><button onClick={() => handleFormatChange('16_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '16_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>16</button><button onClick={() => handleFormatChange('12_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '12_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>12</button><button onClick={() => handleFormatChange('10_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '10_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>10</button><button onClick={() => handleFormatChange('8_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '8_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>8</button></div></div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Generación de Grupos</h3><div className="grid grid-cols-2 gap-3"><button onClick={() => setGenerationMethod('arrival')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><Clock size={18}/> <span className="text-xs font-bold uppercase">Llegada</span></button><button onClick={() => setGenerationMethod('manual')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><ListOrdered size={18}/> <span className="text-xs font-bold uppercase">Manual</span></button><button onClick={() => setGenerationMethod('elo-balanced')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><TrendingUp size={18}/> <span className="text-xs font-bold uppercase">Nivel</span></button><button onClick={() => setGenerationMethod('elo-mixed')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><Shuffle size={18}/> <span className="text-xs font-bold uppercase">Mix</span></button></div></div>
+              <button onClick={handleStart} disabled={!canStart} style={{ backgroundColor: canStart ? THEME.primary : '#e2e8f0' }} className={`w-full py-5 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${canStart ? 'text-white active:scale-95 hover:shadow-2xl hover:opacity-90' : 'text-slate-400 cursor-not-allowed'}`}><Play size={24} fill="currentColor" /> EMPEZAR TORNEO</button>
                {errorMessage && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center"><div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 mb-2">Error</h3><p className="text-slate-500 mb-6 text-sm break-words">{errorMessage}</p><button onClick={() => setErrorMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button></div></div>)}
               {showManualWizard && (<ManualGroupingWizard pairs={state.pairs.filter(p => !p.isReserve).slice(0, limit)} players={state.players} onCancel={() => setShowManualWizard(false)} onComplete={handleManualWizardComplete} formatName={formatPlayerName} limit={limit} />)}
           </div>
@@ -327,7 +331,7 @@ const ActiveTournament: React.FC = () => {
               <p className="text-slate-500 max-w-xs mx-auto mb-10">Enhorabuena a todos los participantes. Aquí están los resultados finales.</p>
               
               <div className="grid grid-cols-1 gap-6 max-w-md mx-auto">
-                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-xl transform hover:scale-105 transition-transform">
+                <div style={{ backgroundColor: themeColor }} className="rounded-2xl p-6 text-white shadow-xl transform hover:scale-105 transition-transform">
                     <div className="flex justify-center mb-4"><Trophy size={32} className="text-yellow-300"/></div>
                     <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-100 mb-2">Campeones Principales</h3>
                     <div className="text-2xl font-black">{champions.main}</div>
@@ -377,13 +381,22 @@ const ActiveTournament: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-32">
-      {/* Header with adjusted sticky top to prevent overlap and margin to separate from content */}
-      <div className="sticky top-0 z-30 mb-6 -mx-4 -mt-4 px-4 py-3 md:-mx-6 md:-mt-6 md:px-6 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 shadow-sm flex items-center justify-between">
-          <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-900">Ronda {state.currentRound}</h2>
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold uppercase tracking-wider">{state.currentRound <= (state.format === '16_mini' ? 4 : 3) ? 'Fase de Grupos' : 'Playoffs'}</span>
-          </div>
-          <button onClick={() => setShowResetConfirm(true)} className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200"><Settings size={20}/></button>
+      {/* Floating Sticky Header (Boxed) */}
+      <div className="sticky top-2 z-30">
+        <div style={{ backgroundColor: themeColor }} className="rounded-2xl shadow-lg p-4 flex items-center justify-between text-white transition-colors duration-300">
+            <div className="flex items-center gap-2">
+                <h2 className="text-xl font-black tracking-tight">Ronda {state.currentRound}</h2>
+                <span className="px-3 py-1 bg-white/20 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm border border-white/10">
+                    {state.currentRound <= (state.format === '16_mini' ? 4 : 3) ? 'Fase de Grupos' : 'Playoffs'}
+                </span>
+            </div>
+            <button 
+                onClick={() => setShowResetConfirm(true)} 
+                className="p-2 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors"
+            >
+                <Settings size={20}/>
+            </button>
+        </div>
       </div>
       
       <div className="space-y-4">
@@ -396,7 +409,7 @@ const ActiveTournament: React.FC = () => {
                     <div className="p-5">
                         <div className="flex items-center justify-between mb-3 cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairAId)}><span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>{getPairName(match.pairAId)} <Info size={14} className="text-slate-300"/></span><span className="text-3xl font-black text-slate-900">{match.scoreA ?? '-'}</span></div>
                         <div className="flex items-center justify-between cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairBId)}><span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>{getPairName(match.pairBId)} <Info size={14} className="text-slate-300"/></span><span className="text-3xl font-black text-slate-900">{match.scoreB ?? '-'}</span></div>
-                        {!match.isFinished && !isTechnicalRest && !isWaiting && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className={`w-full mt-6 py-4 rounded-xl text-base font-bold text-white shadow-md touch-manipulation bg-blue-600 active:bg-blue-700`}>Introducir Resultado</button>)}
+                        {!match.isFinished && !isTechnicalRest && !isWaiting && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} style={{ backgroundColor: themeColor }} className={`w-full mt-6 py-4 rounded-xl text-base font-bold text-white shadow-md touch-manipulation hover:opacity-90`}>Introducir Resultado</button>)}
                         {isWaiting && !match.isFinished && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className={`w-full mt-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-center text-xs font-bold text-slate-500 uppercase transition-colors`}>Forzar Resultado (Opcional)</button>)}
                         {isTechnicalRest && (<div className="w-full mt-4 py-2 bg-slate-200 rounded-lg text-center text-xs font-bold text-slate-400 uppercase">Pista Ocupada</div>)}
                     </div>
@@ -419,7 +432,8 @@ const ActiveTournament: React.FC = () => {
             ) : (
                 <button 
                     onClick={handleNextRoundClick} 
-                    className={`inline-flex items-center gap-2 px-8 py-4 rounded-full shadow-2xl font-black text-lg transition-all ${allMatchesFinished ? 'bg-emerald-600 text-white hover:bg-emerald-500 animate-bounce' : 'bg-slate-800 text-slate-400 opacity-90'}`}
+                    style={{ backgroundColor: themeColor }}
+                    className={`inline-flex items-center gap-2 px-8 py-4 rounded-full shadow-2xl font-black text-lg transition-all text-white hover:opacity-90`}
                 >
                     Siguiente Ronda <ChevronRight size={24} />
                 </button>
@@ -481,7 +495,7 @@ const ActiveTournament: React.FC = () => {
                   
                   <div className="flex gap-3">
                       <button onClick={() => setSelectedMatchId(null)} className="flex-1 py-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">Cancelar</button>
-                      <button onClick={handleSaveScore} className="flex-1 py-4 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg transition-colors">Guardar</button>
+                      <button onClick={handleSaveScore} style={{ backgroundColor: themeColor }} className="flex-1 py-4 rounded-xl font-bold text-white shadow-lg transition-colors hover:opacity-90">Guardar</button>
                   </div>
               </div>
           </div>
@@ -530,7 +544,7 @@ const ActiveTournament: React.FC = () => {
       )}
 
       {showResetConfirm && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center"><div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><RotateCcw size={32} /></div><h3 className="text-xl font-black text-slate-900 mb-2">¿Reiniciar Configuración?</h3><p className="text-slate-500 mb-6 text-sm">Se borrarán todos los partidos generados y volverás a la pantalla de configuración. <strong className="block mt-2 text-slate-800">Las parejas inscritas NO se borrarán.</strong></p><div className="flex gap-3"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button><button onClick={handleResetToSetup} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg">Reiniciar</button></div></div></div>)}
-      {showRoundConfirm && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center"><div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 animate-pulse"><Play size={40} fill="currentColor" /></div><h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3><p className="text-slate-500 mb-8">Se generarán los partidos de la siguiente fase. Asegúrate de que todos los resultados actuales estén correctos.</p><div className="grid grid-cols-1 gap-3"><button onClick={confirmNextRound} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95">Confirmar y Avanzar</button><button onClick={() => setShowRoundConfirm(false)} className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">Revisar Resultados</button></div></div></div>)}
+      {showRoundConfirm && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center"><div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 animate-pulse"><Play size={40} fill="currentColor" /></div><h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3><p className="text-slate-500 mb-8">Se generarán los partidos de la siguiente fase. Asegúrate de que todos los resultados actuales estén correctos.</p><div className="grid grid-cols-1 gap-3"><button onClick={confirmNextRound} className="w-full py-4 bg-[#575AF9] hover:bg-[#2B2DBF] text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95">Confirmar y Avanzar</button><button onClick={() => setShowRoundConfirm(false)} className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">Revisar Resultados</button></div></div></div>)}
       {selectedPairId && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4"><div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-md shadow-2xl animate-slide-up h-[80vh] sm:h-auto flex flex-col"><div className="flex justify-end mb-2"><button onClick={() => setSelectedPairId(null)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button></div><PairDetailContent pairId={selectedPairId} /></div></div>)}
     </div>
   );

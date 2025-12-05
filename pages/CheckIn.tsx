@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { useTournament } from '../store/TournamentContext';
+import { useTournament, getFormatColor, THEME } from '../store/TournamentContext';
 import { DollarSign, Droplets, Circle, Users, Check, RefreshCw, X, AlertTriangle, ArrowRight, UserPlus } from 'lucide-react';
 import { Pair, Player } from '../types';
 
@@ -13,6 +13,9 @@ const CheckIn: React.FC = () => {
   const [confirmingReserve, setConfirmingReserve] = useState<Pair | null>(null);
 
   const getPlayer = (id: string) => state.players.find(p => p.id === id);
+
+  // Dynamic Theme Color
+  const themeColor = getFormatColor(state.format);
 
   // Helper: Simulate R1 matches
   const firstRoundSchedule = useMemo(() => {
@@ -127,12 +130,12 @@ const CheckIn: React.FC = () => {
             
             return (
                 <div key={court.id} className="relative">
-                    {/* Clean Header */}
-                    <div className="flex items-center justify-between mb-4 bg-slate-800 text-white p-4 rounded-xl shadow-md">
+                    {/* Clean Header with Dynamic Color */}
+                    <div style={{ backgroundColor: themeColor }} className="flex items-center justify-between mb-4 text-white p-4 rounded-xl shadow-md transition-colors duration-300">
                         <span className="text-xl font-black tracking-tight">PISTA {court.id}</span>
                         <button 
                             onClick={() => dispatch({ type: 'TOGGLE_BALLS', payload: court.id })}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors border active:scale-95 ${court.ballsGiven ? 'bg-white text-emerald-700 border-white' : 'bg-slate-700 text-slate-300 border-slate-600'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors border active:scale-95 ${court.ballsGiven ? 'bg-white text-slate-800 border-white' : 'bg-white/20 text-white border-white/20 hover:bg-white/30'}`}
                         >
                             <Circle size={16} fill={court.ballsGiven ? "currentColor" : "none"} />
                             {court.ballsGiven ? 'Bolas OK' : 'Dar Bolas'}

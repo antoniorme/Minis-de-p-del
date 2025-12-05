@@ -19,6 +19,15 @@ const History: React.FC = () => {
       });
   };
 
+  const getFormatLabel = (fmt?: string) => {
+      if (!fmt) return 'MINI';
+      if (fmt === '16_mini') return 'MINI 16 PAREJAS';
+      if (fmt === '12_mini') return 'MINI 12 PAREJAS';
+      if (fmt === '10_mini') return 'MINI 10 PAREJAS';
+      if (fmt === '8_mini') return 'MINI 8 PAREJAS';
+      return fmt.toUpperCase();
+  };
+
   const getPairName = (pairId: string, players: Player[], pairs: Pair[]) => {
       const pair = pairs.find(p => p.id === pairId);
       if (!pair) return 'Desconocido';
@@ -71,10 +80,13 @@ const History: React.FC = () => {
                         className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
                       >
                           <div>
-                              <div className="flex items-center gap-2 text-slate-500 text-xs uppercase font-bold mb-1">
-                                  <Calendar size={14}/> {formatDate(t.date)}
+                              <div className="flex items-center gap-2 text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-wider">
+                                  {getFormatLabel(t.format)}
                               </div>
-                              <div className="text-lg font-bold text-slate-900">Mini {t.playerCount} Jugadores</div>
+                              <div className="text-xl font-black text-slate-900 capitalize flex items-center gap-2">
+                                  <Calendar size={18} className="text-slate-400"/>
+                                  {formatDate(t.date)}
+                              </div>
                           </div>
                           <div className="bg-slate-100 p-2 rounded-full text-slate-500">
                               {expandedId === t.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}

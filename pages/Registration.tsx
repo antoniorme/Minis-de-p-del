@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
+import { useTournament, TOURNAMENT_CATEGORIES, THEME } from '../store/TournamentContext';
 import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp } from 'lucide-react';
 
 const Registration: React.FC = () => {
@@ -56,9 +56,9 @@ const Registration: React.FC = () => {
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 shadow-sm">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">{label}</label>
               {selectedId ? (
-                  <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-emerald-200 shadow-sm animate-fade-in">
+                  <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-indigo-200 shadow-sm animate-fade-in">
                       <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 border border-emerald-200"><User size={16} /></div>
+                          <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-[#575AF9] border border-indigo-200"><User size={16} /></div>
                           <div>
                               <div className="font-bold text-slate-800 text-sm">{formatPlayerName(selectedPlayer)}</div>
                           </div>
@@ -73,7 +73,7 @@ const Registration: React.FC = () => {
                       </div>
                       {tab === 'search' ? (
                           <div className="animate-fade-in">
-                              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Escribe para buscar..." className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg mb-2 focus:border-blue-500 outline-none text-slate-800 placeholder:text-slate-400 shadow-inner" autoFocus />
+                              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Escribe para buscar..." className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg mb-2 focus:border-[#575AF9] outline-none text-slate-800 placeholder:text-slate-400 shadow-inner" autoFocus />
                               <div className="max-h-32 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                                   {filteredPlayers.slice(0, 50).map(p => (
                                       <button key={p.id} onClick={() => onSelect(p.id)} className="w-full text-left p-2 hover:bg-blue-50 rounded flex items-center justify-between text-sm text-slate-700 border border-transparent hover:border-blue-100 transition-colors">
@@ -86,25 +86,25 @@ const Registration: React.FC = () => {
                           </div>
                       ) : (
                           <div className="space-y-3 animate-fade-in">
-                              <input placeholder="Nombre completo" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-emerald-500 text-slate-800 placeholder:text-slate-400" autoFocus />
-                              <input placeholder="Apodo (opcional)" value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-emerald-500 text-slate-800 placeholder:text-slate-400" />
+                              <input placeholder="Nombre completo" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" autoFocus />
+                              <input placeholder="Apodo (opcional)" value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
                               
                               <div className="bg-slate-100 p-3 rounded-lg border border-slate-200">
                                   <div className="flex justify-between items-center mb-1">
                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Nivel (ELO Manual)</label>
-                                    <span className="text-sm font-black text-emerald-600">{newPlayer.manual_rating}</span>
+                                    <span className="text-sm font-black text-[#575AF9]">{newPlayer.manual_rating}</span>
                                   </div>
                                   <input 
                                     type="range" min="1" max="10" step="0.5" 
                                     value={newPlayer.manual_rating} 
                                     onChange={e => setNewPlayer({...newPlayer, manual_rating: parseFloat(e.target.value)})}
-                                    className="w-full accent-emerald-600 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
+                                    className="w-full accent-[#575AF9] h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
                                   />
                               </div>
 
-                              <div className="flex flex-wrap gap-1.5">{TOURNAMENT_CATEGORIES.map(c => (<button key={c} onClick={() => toggleNewCat(c)} className={`px-2.5 py-1.5 text-[10px] font-bold rounded-md border transition-all ${newPlayer.categories.includes(c) ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-200'}`}>{c}</button>))}</div>
+                              <div className="flex flex-wrap gap-1.5">{TOURNAMENT_CATEGORIES.map(c => (<button key={c} onClick={() => toggleNewCat(c)} className={`px-2.5 py-1.5 text-[10px] font-bold rounded-md border transition-all ${newPlayer.categories.includes(c) ? 'bg-[#575AF9] text-white border-[#575AF9] shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200'}`}>{c}</button>))}</div>
                               
-                              <button onClick={handleCreatePlayer} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2"><Check size={16}/> Crear y Usar Jugador</button>
+                              <button onClick={handleCreatePlayer} className="w-full py-3 bg-[#575AF9] hover:bg-[#2B2DBF] text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2"><Check size={16}/> Crear y Usar Jugador</button>
                           </div>
                       )}
                   </>
@@ -173,7 +173,7 @@ const Registration: React.FC = () => {
                                 <div className="flex flex-col w-full">
                                     <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(p1)}</div>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-emerald-500 text-xs font-black">&</span>
+                                        <span className="text-[#575AF9] text-xs font-black">&</span>
                                         <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(p2)}</div>
                                     </div>
                                 </div>
@@ -205,9 +205,9 @@ const Registration: React.FC = () => {
         <div className={`flex flex-col items-end text-blue-600`}><span className="text-4xl font-bold">{totalRegistered}</span></div>
       </div>
 
-      <button onClick={openNewPairModal} className="w-full bg-white hover:bg-emerald-50 border-2 border-emerald-100 hover:border-emerald-300 p-6 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shadow-sm active:scale-95 group">
-          <div className="bg-emerald-100 p-3 rounded-full text-emerald-600 group-hover:bg-emerald-200 transition-colors"><Users size={32} /></div>
-          <span className="font-black text-emerald-800 text-lg">AÑADIR NUEVA PAREJA</span>
+      <button onClick={openNewPairModal} className="w-full bg-white hover:bg-indigo-50 border-2 border-indigo-100 hover:border-[#575AF9] p-6 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shadow-sm active:scale-95 group">
+          <div className="bg-indigo-100 p-3 rounded-full text-[#575AF9] group-hover:bg-indigo-200 transition-colors"><Users size={32} /></div>
+          <span className="font-black text-indigo-900 text-lg">AÑADIR NUEVA PAREJA</span>
       </button>
       
       <PairList pairs={activePairs} title="Parejas Inscritas" colorClass="text-slate-600" />
@@ -218,7 +218,7 @@ const Registration: React.FC = () => {
               <div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-slide-up h-[90vh] sm:h-[85vh] flex flex-col">
                   <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                       <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                          <Users className="text-emerald-600"/>
+                          <Users className="text-[#575AF9]"/>
                           {isEditingPairId ? 'Editar Pareja' : 'Nueva Pareja'}
                       </h3>
                       <button onClick={closePairModal} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors">
@@ -248,7 +248,7 @@ const Registration: React.FC = () => {
                   
                   <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
                       <button onClick={closePairModal} className="flex-1 py-4 bg-slate-100 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
-                      <button onClick={handleSavePair} className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95"><Save size={20} /> Guardar</button>
+                      <button onClick={handleSavePair} className="flex-1 py-4 bg-[#575AF9] hover:bg-[#2B2DBF] text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95"><Save size={20} /> Guardar</button>
                   </div>
               </div>
           </div>

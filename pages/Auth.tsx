@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -54,7 +55,7 @@ const AuthPage: React.FC = () => {
       <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
         <div className="text-center mb-8">
           <div className="inline-block p-4 bg-white rounded-full mb-4 shadow-sm border border-slate-100">
-             <Trophy size={40} className="text-emerald-600" />
+             <Trophy size={40} className="text-[#575AF9]" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900">
             {isLogin ? 'Bienvenido de nuevo' : 'Crear una cuenta'}
@@ -75,7 +76,7 @@ const AuthPage: React.FC = () => {
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
             <input
               type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-xl p-4 text-slate-900 focus:border-emerald-500 outline-none shadow-sm"
+              className="w-full bg-white border border-slate-300 rounded-xl p-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm"
               placeholder="nombre@ejemplo.com"
             />
           </div>
@@ -83,14 +84,14 @@ const AuthPage: React.FC = () => {
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contraseña</label>
             <input
               type="password" required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6}
-              className="w-full bg-white border border-slate-300 rounded-xl p-4 text-slate-900 focus:border-emerald-500 outline-none shadow-sm"
+              className="w-full bg-white border border-slate-300 rounded-xl p-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm"
               placeholder="******"
             />
           </div>
 
           <button
             type="submit" disabled={loading}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 py-4 rounded-xl font-bold text-white shadow-lg transition-all mt-4 flex justify-center items-center text-lg"
+            className="w-full bg-[#575AF9] hover:bg-[#2B2DBF] disabled:opacity-50 py-4 rounded-xl font-bold text-white shadow-lg transition-all mt-4 flex justify-center items-center text-lg"
           >
             {loading ? <Loader2 className="animate-spin" /> : (isLogin ? 'Entrar' : 'Registrarse')}
           </button>
@@ -99,7 +100,7 @@ const AuthPage: React.FC = () => {
         <div className="mt-8 text-center">
           <p className="text-slate-500 text-sm">
             {isLogin ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}
-            <button onClick={() => setIsLogin(!isLogin)} className="text-emerald-600 font-bold ml-2 hover:underline">
+            <button onClick={() => setIsLogin(!isLogin)} className="text-[#575AF9] font-bold ml-2 hover:underline">
               {isLogin ? 'Regístrate' : 'Inicia Sesión'}
             </button>
           </p>

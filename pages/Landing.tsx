@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy } from 'lucide-react';
@@ -8,10 +9,10 @@ const Landing: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900 items-center justify-center p-6 text-center">
       <div className="mb-8 animate-bounce p-6 bg-white rounded-full shadow-lg">
-        <Trophy size={80} className="text-emerald-600" />
+        <Trophy size={80} className="text-[#575AF9]" />
       </div>
       
-      <h1 className="text-4xl font-black mb-4 bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+      <h1 className="text-4xl font-black mb-4 bg-gradient-to-r from-[#2B2DBF] to-[#575AF9] bg-clip-text text-transparent">
         PadelPro Manager
       </h1>
       
@@ -22,7 +23,7 @@ const Landing: React.FC = () => {
       <div className="flex flex-col gap-4 w-full max-w-xs">
         <button 
           onClick={() => navigate('/auth?mode=login')}
-          className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2"
+          className="w-full py-4 bg-[#575AF9] hover:bg-[#2B2DBF] text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2"
         >
           Iniciar Sesión
         </button>
