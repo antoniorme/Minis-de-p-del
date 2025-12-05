@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
@@ -379,7 +378,7 @@ const ActiveTournament: React.FC = () => {
   return (
     <div className="space-y-6 pb-32">
       {/* Header with adjusted sticky top to prevent overlap and margin to separate from content */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between sticky top-20 z-20 mb-6">
+      <div className="sticky top-0 z-30 mb-6 -mx-4 -mt-4 px-4 py-3 md:-mx-6 md:-mt-6 md:px-6 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-slate-900">Ronda {state.currentRound}</h2>
               <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold uppercase tracking-wider">{state.currentRound <= (state.format === '16_mini' ? 4 : 3) ? 'Fase de Grupos' : 'Playoffs'}</span>
