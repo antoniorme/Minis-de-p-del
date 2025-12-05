@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { useHistory } from '../store/HistoryContext';
+import { THEME } from '../utils/theme';
 import { Save, Building, Image as ImageIcon, Upload } from 'lucide-react';
 
 const ClubProfile: React.FC = () => {
@@ -101,7 +102,7 @@ const ClubProfile: React.FC = () => {
                   />
               </div>
 
-              <button type="submit" className="w-full bg-[#575AF9] py-4 rounded-xl font-bold text-white text-lg shadow-lg mt-6 flex items-center justify-center gap-2">
+              <button type="submit" style={{ backgroundColor: THEME.cta }} className="w-full py-4 rounded-xl font-bold text-white text-lg shadow-lg mt-6 flex items-center justify-center gap-2 hover:opacity-90">
                   <Save size={20}/> Guardar Cambios
               </button>
           </form>

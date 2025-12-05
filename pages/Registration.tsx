@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { useTournament, TOURNAMENT_CATEGORIES, THEME } from '../store/TournamentContext';
+import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
+import { THEME } from '../utils/theme';
 import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp } from 'lucide-react';
 
 const Registration: React.FC = () => {
@@ -58,7 +59,7 @@ const Registration: React.FC = () => {
               {selectedId ? (
                   <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-indigo-200 shadow-sm animate-fade-in">
                       <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-[#575AF9] border border-indigo-200"><User size={16} /></div>
+                          <div style={{ color: THEME.cta }} className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center border border-indigo-200"><User size={16} /></div>
                           <div>
                               <div className="font-bold text-slate-800 text-sm">{formatPlayerName(selectedPlayer)}</div>
                           </div>
@@ -92,7 +93,7 @@ const Registration: React.FC = () => {
                               <div className="bg-slate-100 p-3 rounded-lg border border-slate-200">
                                   <div className="flex justify-between items-center mb-1">
                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Nivel (ELO Manual)</label>
-                                    <span className="text-sm font-black text-[#575AF9]">{newPlayer.manual_rating}</span>
+                                    <span style={{ color: THEME.cta }} className="text-sm font-black">{newPlayer.manual_rating}</span>
                                   </div>
                                   <input 
                                     type="range" min="1" max="10" step="0.5" 
@@ -104,7 +105,7 @@ const Registration: React.FC = () => {
 
                               <div className="flex flex-wrap gap-1.5">{TOURNAMENT_CATEGORIES.map(c => (<button key={c} onClick={() => toggleNewCat(c)} className={`px-2.5 py-1.5 text-[10px] font-bold rounded-md border transition-all ${newPlayer.categories.includes(c) ? 'bg-[#575AF9] text-white border-[#575AF9] shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200'}`}>{c}</button>))}</div>
                               
-                              <button onClick={handleCreatePlayer} className="w-full py-3 bg-[#575AF9] hover:bg-[#2B2DBF] text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2"><Check size={16}/> Crear y Usar Jugador</button>
+                              <button onClick={handleCreatePlayer} style={{ backgroundColor: THEME.cta }} className="w-full py-3 text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2 hover:opacity-90"><Check size={16}/> Crear y Usar Jugador</button>
                           </div>
                       )}
                   </>
@@ -173,7 +174,7 @@ const Registration: React.FC = () => {
                                 <div className="flex flex-col w-full">
                                     <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(p1)}</div>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-[#575AF9] text-xs font-black">&</span>
+                                        <span style={{ color: THEME.cta }} className="text-xs font-black">&</span>
                                         <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(p2)}</div>
                                     </div>
                                 </div>
@@ -206,7 +207,7 @@ const Registration: React.FC = () => {
       </div>
 
       <button onClick={openNewPairModal} className="w-full bg-white hover:bg-indigo-50 border-2 border-indigo-100 hover:border-[#575AF9] p-6 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shadow-sm active:scale-95 group">
-          <div className="bg-indigo-100 p-3 rounded-full text-[#575AF9] group-hover:bg-indigo-200 transition-colors"><Users size={32} /></div>
+          <div style={{ color: THEME.cta }} className="bg-indigo-100 p-3 rounded-full group-hover:bg-indigo-200 transition-colors"><Users size={32} /></div>
           <span className="font-black text-indigo-900 text-lg">AÑADIR NUEVA PAREJA</span>
       </button>
       
@@ -218,7 +219,7 @@ const Registration: React.FC = () => {
               <div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-slide-up h-[90vh] sm:h-[85vh] flex flex-col">
                   <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                       <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                          <Users className="text-[#575AF9]"/>
+                          <Users style={{ color: THEME.cta }}/>
                           {isEditingPairId ? 'Editar Pareja' : 'Nueva Pareja'}
                       </h3>
                       <button onClick={closePairModal} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors">
@@ -248,7 +249,7 @@ const Registration: React.FC = () => {
                   
                   <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
                       <button onClick={closePairModal} className="flex-1 py-4 bg-slate-100 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
-                      <button onClick={handleSavePair} className="flex-1 py-4 bg-[#575AF9] hover:bg-[#2B2DBF] text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95"><Save size={20} /> Guardar</button>
+                      <button onClick={handleSavePair} style={{ backgroundColor: THEME.cta }} className="flex-1 py-4 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95 hover:opacity-90"><Save size={20} /> Guardar</button>
                   </div>
               </div>
           </div>

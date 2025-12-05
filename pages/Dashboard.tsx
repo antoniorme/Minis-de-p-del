@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { useTournament, THEME } from '../store/TournamentContext';
+import { useTournament } from '../store/TournamentContext';
+import { THEME } from '../utils/theme';
 import { useHistory } from '../store/HistoryContext';
 import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -127,7 +128,7 @@ const Dashboard: React.FC = () => {
           {state.status === 'setup' && (
              <button 
              onClick={() => navigate('/active')}
-             style={{ backgroundColor: THEME.primary }}
+             style={{ backgroundColor: THEME.cta }}
              className="w-full py-4 text-white rounded-xl font-bold transition-all shadow-md text-lg flex items-center justify-center gap-3 active:scale-[0.98] hover:opacity-90"
            >
              <div className="bg-white/20 p-1.5 rounded-full"><Play size={20} fill="currentColor"/></div>
@@ -198,7 +199,7 @@ const Dashboard: React.FC = () => {
                   <div className="grid grid-cols-1 gap-3">
                       <button 
                         onClick={performAction}
-                        style={{ backgroundColor: THEME.primary }}
+                        style={{ backgroundColor: THEME.cta }}
                         className={`w-full py-4 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-transform`}
                       >
                           Confirmar Acción

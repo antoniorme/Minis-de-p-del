@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
-import { useTournament, getFormatColor, THEME } from '../store/TournamentContext';
+import { useTournament } from '../store/TournamentContext';
+import { getFormatColor } from '../utils/theme';
 import { DollarSign, Droplets, Circle, Users, Check, RefreshCw, X, AlertTriangle, ArrowRight, UserPlus } from 'lucide-react';
 import { Pair, Player } from '../types';
 

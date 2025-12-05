@@ -54,17 +54,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       
       {/* Main Header (Boxed) - Sticky */}
       <div className="bg-slate-50 pt-2 px-2 md:pt-4 sticky top-0 z-40">
-          <header className="max-w-3xl mx-auto bg-white p-4 flex justify-between items-center border border-slate-200 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-3 overflow-hidden">
+          <header className="max-w-3xl mx-auto bg-white px-4 py-3 flex justify-between items-center border border-slate-200 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-4 overflow-hidden">
                 {clubData.logoUrl && (
-                    <img src={clubData.logoUrl} alt="Club Logo" className="w-8 h-8 object-contain" />
+                    <img 
+                      src={clubData.logoUrl} 
+                      alt="Club Logo" 
+                      className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border-2 border-slate-100 shadow-sm shrink-0" 
+                    />
                 )}
-                <h1 className="text-lg font-bold bg-gradient-to-r from-[#2B2DBF] to-[#575AF9] bg-clip-text text-transparent truncate">
+                <h1 className="text-xl md:text-2xl font-black bg-gradient-to-r from-[#2B2DBF] to-[#575AF9] bg-clip-text text-transparent truncate leading-tight">
                     {clubData.name || 'PadelPro'}
                 </h1>
             </div>
             <button onClick={() => setIsMenuOpen(true)} className="text-slate-700 hover:text-[#575AF9] p-2 rounded-full hover:bg-slate-100 transition-colors">
-              <Menu size={24} />
+              <Menu size={28} />
             </button>
           </header>
       </div>

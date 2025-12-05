@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
@@ -44,28 +43,36 @@ const AppRoutes = () => {
   const { user } = useAuth();
 
   return (
-    <Layout>
-      <Routes>
+    <Routes>
+        {/* Public Routes */}
         <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
         <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
         
+        {/* Fullscreen Onboarding (No Layout) */}
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
-        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/registration" element={<ProtectedRoute><Registration /></ProtectedRoute>} />
-        <Route path="/checkin" element={<ProtectedRoute><CheckIn /></ProtectedRoute>} />
-        <Route path="/active" element={<ProtectedRoute><ActiveTournament /></ProtectedRoute>} />
-        <Route path="/results" element={<ProtectedRoute><Results /></ProtectedRoute>} />
-        
-        <Route path="/players" element={<ProtectedRoute><PlayerManager /></ProtectedRoute>} />
-        <Route path="/players/:playerId" element={<ProtectedRoute><PlayerProfile /></ProtectedRoute>} />
-        <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-        <Route path="/club" element={<ProtectedRoute><ClubProfile /></ProtectedRoute>} />
-        <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
+        {/* Protected App Routes (With Layout) */}
+        <Route path="/*" element={
+            <Layout>
+                <Routes>
+                    <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                    <Route path="/registration" element={<ProtectedRoute><Registration /></ProtectedRoute>} />
+                    <Route path="/checkin" element={<ProtectedRoute><CheckIn /></ProtectedRoute>} />
+                    <Route path="/active" element={<ProtectedRoute><ActiveTournament /></ProtectedRoute>} />
+                    <Route path="/results" element={<ProtectedRoute><Results /></ProtectedRoute>} />
+                    
+                    <Route path="/players" element={<ProtectedRoute><PlayerManager /></ProtectedRoute>} />
+                    <Route path="/players/:playerId" element={<ProtectedRoute><PlayerProfile /></ProtectedRoute>} />
+                    <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+                    <Route path="/club" element={<ProtectedRoute><ClubProfile /></ProtectedRoute>} />
+                    <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+                    {/* Catch all redirect to dashboard */}
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+            </Layout>
+        } />
+    </Routes>
   );
 }
 

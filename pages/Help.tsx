@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, TrendingUp, BookOpen, Settings, Users } from 'lucide-react';
+import { ChevronDown, ChevronUp, TrendingUp, BookOpen, Settings, Users, RefreshCw } from 'lucide-react';
 
 const Help: React.FC = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -11,20 +10,20 @@ const Help: React.FC = () => {
         a: "El proceso es simple: \n1. Ve a la pestaña 'Registro' y añade a las parejas (mínimo 10 o 16).\n2. Cuando estés listo, pulsa 'Empezar' o ve a la pestaña 'Directo'.\n3. Allí verás el panel de configuración: verifica que están todos, elige el formato y el método de mezcla.\n4. ¡Pulsa 'Empezar Torneo' y a jugar!"
       },
       {
-        q: "2. Métodos de Generación: ¿Cuál elijo?",
+        q: "2. Jugadores vs Parejas: ¿Cuál es la diferencia?",
+        a: "Esta es una distinción clave:\n• **Jugadores:** Se guardan en la base de datos de tu club para siempre. Tienen su historial, ELO y estadísticas acumuladas. Los gestionas en 'Gestión Jugadores'.\n• **Parejas:** Son temporales y existen solo para el torneo actual. Al archivar un torneo, la pareja se disuelve, pero los jugadores siguen existiendo. \n\n*Nota:* Si eliminas una pareja del registro, los jugadores NO se borran."
+      },
+      {
+          q: "3. Sustitución de Parejas (Reservas)",
+          a: "Si una pareja titular no puede jugar o se lesiona, puedes sustituirla por una reserva sin alterar el calendario:\n1. Ve a la pestaña 'Control'.\n2. En la tarjeta de la pareja titular, pulsa el icono de refrescar (🔄).\n3. Selecciona qué pareja reserva entrará en su lugar.\n\nLa nueva pareja heredará los partidos ya jugados, los puntos y la posición en el grupo."
+      },
+      {
+        q: "4. Métodos de Generación: ¿Cuál elijo?",
         a: "• NIVEL (Equilibrado): Ordena a las parejas por ELO. Las mejores van al Grupo A (Champions) y las de menor nivel al Grupo D (Europa). Ideal si quieres niveles homogéneos dentro de cada grupo.\n\n• MIX (Mezclado): Usa un sistema de 'bombos' o cremallera. Reparte a los mejores equitativamente entre todos los grupos (1º al A, 2º al B, 3º al C...). Ideal para que todos los grupos tengan una dificultad similar.\n\n• LLEGADA: Orden estricto de inscripción.\n\n• MANUAL: Se abrirá un asistente para que tú elijas dedo a dedo quién va a cada grupo."
       },
       { 
-        q: "3. Mini 16: Lógica y Descansos", 
-        a: "El sistema es inteligente y se adapta a tu club:\n• Si tienes MENOS de 8 pistas: Se juega el formato 'Rotativo'. Son 4 rondas de grupos. En cada ronda juegan 12 parejas y descansan 4. Todos juegan 3 partidos garantizados antes de Playoffs.\n• Si tienes 8 o MÁS pistas: Se activa el formato 'Simultáneo'. Son 3 rondas de grupos intensivas donde juegan las 16 parejas a la vez. No hay descansos." 
-      },
-      { 
-        q: "4. Mini 10: Lógica Especial", 
-        a: "Este formato está diseñado para 5 pistas. Se crean 2 grupos de 5 parejas (A y B). \n• Fase de Grupos: Juegan TODOS a la vez (5 partidos). Para lograr esto, en cada ronda hay un 'Partido Cruzado' entre una pareja del Grupo A y una del B.\n• Playoffs: Los 4 mejores de cada grupo van a Cuartos de Final cruzados (1ºA vs 4ºB...). Los 5º de cada grupo juegan directamente la Final de Consolación." 
-      },
-      { 
-        q: "5. ¿Qué pasa si tengo reservas?", 
-        a: "Si seleccionas el formato 'Mini 10' pero tienes 16 parejas inscritas, el sistema tomará a las 10 primeras según el criterio que elijas (ej. las 10 con mejor ELO) y dejará a las otras 6 marcadas como reservas en la base de datos, por si necesitas hacer cambios manuales luego." 
+        q: "5. Formatos y Lógica", 
+        a: "• **Mini 16:** 4 Grupos de 4. Si tienes <8 pistas, es rotativo con descansos (4 rondas). Si tienes >=8 pistas, es simultáneo (3 rondas).\n• **Mini 12:** 3 Grupos de 4. Pasan a cuartos los 2 primeros de cada grupo y los 2 mejores terceros.\n• **Mini 10:** 2 Grupos de 5. Juegan todos contra todos (5 partidos). Los cruces de cuartos son A vs B." 
       },
       { 
         q: "6. Botón de Pánico (Reiniciar)", 

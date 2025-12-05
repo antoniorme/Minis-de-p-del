@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { useTournament, getFormatColor } from '../store/TournamentContext';
+import { useTournament } from '../store/TournamentContext';
+import { getFormatColor } from '../utils/theme';
 import { Trophy, Grid, GitMerge, ArrowLeft, Edit2 } from 'lucide-react';
 
 const Results: React.FC = () => {
