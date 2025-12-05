@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { TournamentState, TournamentAction, Player, Pair, Match, Group, TournamentFormat, GenerationMethod } from '../types';
 import { supabase } from '../lib/supabase';
@@ -175,6 +176,10 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return;
         }
         if (!state.id) throw new Error("ID de torneo perdido.");
+        
+        // --- CLEAN UP OLD MATCHES (Crucial Fix for Dirty DB) ---
+        await supabase.from('matches').delete().eq('tournament_id', state.id);
+
         await supabase.from('tournaments').update({ status: 'active', current_round: 1, format: state.format }).eq('id', state.id);
         
         // --- FIX: MAPPING JS camelCase -> SQL snake_case ---
