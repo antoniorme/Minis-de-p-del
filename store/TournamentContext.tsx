@@ -23,13 +23,14 @@ interface TournamentContextType {
     regenerateMatchesDB: () => Promise<string>; hardResetDB: () => Promise<void>; formatPlayerName: (p?: Player) => string;
     setTournamentFormat: (fmt: TournamentFormat) => Promise<void>;
     getPairElo: (pair: Pair, players: Player[]) => number;
+    substitutePairDB: (activePairId: string, reservePairId: string) => Promise<void>;
 }
 
 const TournamentContext = createContext<TournamentContextType>({
     state: initialState, dispatch: () => null, loadData: async () => {}, addPlayerToDB: async () => null, updatePlayerInDB: async () => {},
     createPairInDB: async () => {}, updatePairDB: async () => {}, startTournamentDB: async () => {}, updateScoreDB: async () => {}, nextRoundDB: async () => {},
     deletePairDB: async () => {}, archiveAndResetDB: async () => {}, resetToSetupDB: async () => {}, regenerateMatchesDB: async () => "", hardResetDB: async () => {},
-    formatPlayerName: () => '', setTournamentFormat: async () => {}, getPairElo: () => 1200
+    formatPlayerName: () => '', setTournamentFormat: async () => {}, getPairElo: () => 1200, substitutePairDB: async () => {}
 });
 
 const reducer = (state: TournamentState, action: TournamentAction): TournamentState => {
@@ -94,21 +95,37 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                     name: p.name || 'Pareja', waterReceived: p.water_received, paidP1: p.paid_p1, paidP2: p.paid_p2,
                     stats: { played: 0, won: 0, gameDiff: 0 }, isReserve: false 
                 }));
-                mappedPairs = mappedPairs.map((p, idx) => ({ ...p, isReserve: idx >= limit }));
 
-                const mappedMatches: Match[] = (matches || []).map(m => ({
-                    id: m.id, round: m.round, 
-                    phase: m.phase || (m.round <= 4 ? 'group' : 'playoff'), bracket: m.bracket as any,
-                    courtId: m.court_id, pairAId: m.pair_a_id, pairBId: m.pair_b_id,
-                    scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished
-                }));
+                const mappedMatches: Match[] = (matches || []).map(m => {
+                    const isGroupStage = (format === '16_mini' && m.round <= 4) || (format !== '16_mini' && m.round <= 3);
+                    return {
+                        id: m.id, round: m.round, 
+                        phase: m.phase || (isGroupStage ? 'group' : 'qf'),
+                        bracket: m.bracket as any,
+                        courtId: m.court_id, pairAId: m.pair_a_id, pairBId: m.pair_b_id,
+                        scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished
+                    };
+                });
 
+                // RECONSTRUCT GROUPS & STATS
                 mappedPairs = Logic.recalculateStats(mappedPairs, mappedMatches);
                 let groups: Group[] = [];
-                if (mappedMatches.length > 0) groups = Logic.reconstructGroupsFromMatches(mappedPairs, mappedMatches, players || [], format);
-                else {
+                
+                if (mappedMatches.length > 0) {
+                     groups = Logic.reconstructGroupsFromMatches(mappedPairs, mappedMatches, players || [], format);
+                } else {
                     const isSetup = activeTournament.status === 'setup';
-                    groups = Logic.generateGroupsHelper(mappedPairs, players || [], isSetup ? 'manual' : 'elo-balanced', format);
+                    if (!isSetup) groups = Logic.generateGroupsHelper(mappedPairs, players || [], 'elo-balanced', format); 
+                }
+
+                // CORRECTLY IDENTIFY RESERVES
+                // If tournament is active (groups exist), reserves are those NOT in a group.
+                // If tournament is setup, reserves are those beyond the limit (by index/arrival).
+                if (groups.length > 0) {
+                     const activeIds = new Set(groups.flatMap(g => g.pairIds));
+                     mappedPairs = mappedPairs.map(p => ({ ...p, isReserve: !activeIds.has(p.id) }));
+                } else {
+                     mappedPairs = mappedPairs.map((p, idx) => ({ ...p, isReserve: idx >= limit }));
                 }
 
                 dispatch({ type: 'SET_STATE', payload: {
@@ -149,6 +166,49 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const deletePairDB = async (pairId: string) => { if (isOfflineMode) { const remaining = state.pairs.filter(p => p.id !== pairId); let limit = 16; if(state.format === '10_mini') limit = 10; if(state.format === '12_mini') limit = 12; if(state.format === '8_mini') limit = 8; const reindexed = remaining.map((p, idx) => ({ ...p, isReserve: idx >= limit })); const newState = { ...state, pairs: reindexed }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; } await supabase.from('tournament_pairs').delete().eq('id', pairId); await loadData(); };
     const updateScoreDB = async (matchId: string, sA: number, sB: number) => { if (isOfflineMode) { const newMatches = state.matches.map(m => m.id === matchId ? { ...m, scoreA: sA, scoreB: sB, isFinished: true } : m); const newPairs = Logic.recalculateStats(state.pairs, newMatches); const newState = { ...state, matches: newMatches, pairs: newPairs }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; } await supabase.from('matches').update({ score_a: sA, score_b: sB, is_finished: true }).eq('id', matchId); await loadData(); };
 
+    // --- NEW: Substitute Pair Function ---
+    const substitutePairDB = async (activePairId: string, reservePairId: string) => {
+        const activePair = state.pairs.find(p => p.id === activePairId);
+        const reservePair = state.pairs.find(p => p.id === reservePairId);
+        
+        if (!activePair || !reservePair) throw new Error("No se encontraron las parejas.");
+
+        // We swap contents (Players, Payments) but keep the ID constant for the active slot so matches/history are preserved.
+        
+        const newActiveContent = {
+            player1_id: reservePair.player1Id,
+            player2_id: reservePair.player2Id,
+            paid_p1: reservePair.paidP1,
+            paid_p2: reservePair.paidP2,
+            water_received: false // Reset water for new entrant
+        };
+
+        const newReserveContent = {
+            player1_id: activePair.player1Id,
+            player2_id: activePair.player2Id,
+            paid_p1: activePair.paidP1,
+            paid_p2: activePair.paidP2,
+            water_received: activePair.waterReceived
+        };
+
+        if (isOfflineMode) {
+             const updatedPairs = state.pairs.map(p => {
+                 if (p.id === activePairId) return { ...p, player1Id: newActiveContent.player1_id, player2Id: newActiveContent.player2_id, paidP1: newActiveContent.paid_p1, paidP2: newActiveContent.paid_p2, waterReceived: newActiveContent.water_received };
+                 if (p.id === reservePairId) return { ...p, player1Id: newReserveContent.player1_id, player2Id: newReserveContent.player2_id, paidP1: newReserveContent.paid_p1, paidP2: newReserveContent.paid_p2, waterReceived: newReserveContent.water_received };
+                 return p;
+             });
+             const newState = { ...state, pairs: updatedPairs };
+             dispatch({ type: 'SET_STATE', payload: newState });
+             saveLocal(newState);
+             return;
+        }
+
+        // Supabase Swap
+        await supabase.from('tournament_pairs').update(newActiveContent).eq('id', activePairId);
+        await supabase.from('tournament_pairs').update(newReserveContent).eq('id', reservePairId);
+        await loadData();
+    };
+
     const startTournamentDB = async (method: GenerationMethod, customOrderedPairs?: Pair[]) => {
         let limit = 16;
         if(state.format === '10_mini') limit = 10;
@@ -169,7 +229,9 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         else if (state.format === '12_mini') matches = Logic.generateMatches12(groups, clubData.courtCount);
         else matches = Logic.generateMatches16(groups, clubData.courtCount);
 
-        const reindexedPairs = orderedPairs.map((p, idx) => ({ ...p, isReserve: idx >= limit }));
+        // Calculate Reserve status based on Group assignment immediately
+        const activeIds = new Set(groups.flatMap(g => g.pairIds));
+        const reindexedPairs = orderedPairs.map(p => ({ ...p, isReserve: !activeIds.has(p.id) }));
 
         if (isOfflineMode) {
             const newState: TournamentState = { ...state, status: 'active', currentRound: 1, groups, matches: matches as Match[], pairs: reindexedPairs };
@@ -177,18 +239,17 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
         if (!state.id) throw new Error("ID de torneo perdido.");
         
-        // --- CLEAN UP OLD MATCHES (Crucial Fix for Dirty DB) ---
+        // --- CLEAN UP OLD MATCHES ---
         await supabase.from('matches').delete().eq('tournament_id', state.id);
 
         await supabase.from('tournaments').update({ status: 'active', current_round: 1, format: state.format }).eq('id', state.id);
         
-        // --- FIX: MAPPING JS camelCase -> SQL snake_case ---
         const matchesDB = matches.map(m => ({
             tournament_id: state.id,
             round: m.round,
             phase: m.phase,
             bracket: m.bracket,
-            court_id: m.courtId, // Fixed mapping
+            court_id: m.courtId,
             pair_a_id: m.pairAId,
             pair_b_id: m.pairBId,
             score_a: m.scoreA,
@@ -265,7 +326,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             state, dispatch, loadData,
             addPlayerToDB, updatePlayerInDB, createPairInDB, updatePairDB, startTournamentDB,
             updateScoreDB, nextRoundDB, deletePairDB, archiveAndResetDB, resetToSetupDB, regenerateMatchesDB, hardResetDB,
-            formatPlayerName, setTournamentFormat, getPairElo: Logic.getPairElo
+            formatPlayerName, setTournamentFormat, getPairElo: Logic.getPairElo, substitutePairDB
         }}>
             {children}
         </TournamentContext.Provider>
