@@ -58,7 +58,7 @@ const History: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-20">
-      <h2 className="text-3xl font-bold text-slate-900">Historial de Minis</h2>
+      <h2 className="text-2xl font-bold text-slate-900">Historial de Minis</h2>
       
       {pastTournaments.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">

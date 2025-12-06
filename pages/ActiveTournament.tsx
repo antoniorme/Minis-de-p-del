@@ -310,9 +310,8 @@ const ActiveTournament: React.FC = () => {
       const totalPairs = state.pairs.length; const canStart = totalPairs >= limit; const reservesCount = Math.max(0, totalPairs - limit);
       return (
           <div className="flex flex-col h-full space-y-6 pb-20">
-              <div className="text-center mb-4">
-                  <h2 className="text-3xl font-black text-slate-900">Configuración de Torneo</h2>
-                  <p className="text-slate-500">Ajusta los parámetros finales</p>
+              <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Configuración de Torneo</h2>
               </div>
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between"><div><h3 className="text-sm font-bold text-slate-400 uppercase">Parejas Inscritas</h3><p className="text-xs text-slate-400">Titulares: {limit} {reservesCount > 0 && `(+${reservesCount} Reservas)`}</p></div><div className={`text-4xl font-black ${canStart ? 'text-emerald-500' : 'text-orange-500'}`}>{totalPairs}<span className="text-xl text-slate-300">/{limit}</span></div></div>
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Tipo de Mini</h3><div className="grid grid-cols-4 gap-2"><button onClick={() => handleFormatChange('16_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '16_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>16</button><button onClick={() => handleFormatChange('12_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '12_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>12</button><button onClick={() => handleFormatChange('10_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '10_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>10</button><button onClick={() => handleFormatChange('8_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '8_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>8</button></div></div>
@@ -383,7 +382,7 @@ const ActiveTournament: React.FC = () => {
   return (
     <div className="space-y-6 pb-32">
       {/* Floating Sticky Header (Boxed) */}
-      <div className="sticky top-2 z-30">
+      <div className="sticky top-24 z-30">
         <div style={{ backgroundColor: themeColor }} className="rounded-2xl shadow-lg p-4 flex items-center justify-between text-white transition-colors duration-300">
             <div className="flex items-center gap-2">
                 <h2 className="text-xl font-black tracking-tight">Ronda {state.currentRound}</h2>

@@ -76,7 +76,7 @@ const PlayerManager: React.FC = () => {
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-bold text-slate-900">Gestión Jugadores</h2>
+          <h2 className="text-2xl font-bold text-slate-900">Gestión Jugadores</h2>
           <button onClick={() => setIsCreating(true)} style={{ backgroundColor: THEME.cta }} className="p-3 text-white rounded-xl shadow-lg transition-all active:scale-95 hover:opacity-90">
               <Plus size={24} />
           </button>

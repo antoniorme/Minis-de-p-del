@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, UserCog, History, Settings, HelpCircle, X, Clock, Play, Square } from 'lucide-react';
@@ -64,7 +63,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     />
                 )}
                 <h1 className="text-xl md:text-2xl font-black bg-gradient-to-r from-[#2B2DBF] to-[#575AF9] bg-clip-text text-transparent truncate leading-tight">
-                    {clubData.name || 'PadelPro'}
+                    {clubData.name || 'Minis de Padel'}
                 </h1>
             </div>
             <button onClick={() => setIsMenuOpen(true)} className="text-slate-700 hover:text-[#575AF9] p-2 rounded-full hover:bg-slate-100 transition-colors">

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -57,6 +56,7 @@ const AuthPage: React.FC = () => {
           <div className="inline-block p-4 bg-white rounded-full mb-4 shadow-sm border border-slate-100">
              <Trophy size={40} className="text-[#575AF9]" />
           </div>
+          <h1 className="text-3xl font-black text-[#2B2DBF] mb-6">Minis de Padel</h1>
           <h2 className="text-2xl font-bold text-slate-900">
             {isLogin ? 'Bienvenido de nuevo' : 'Crear una cuenta'}
           </h2>

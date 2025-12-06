@@ -74,7 +74,7 @@ const Registration: React.FC = () => {
                       </div>
                       {tab === 'search' ? (
                           <div className="animate-fade-in">
-                              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Escribe para buscar..." className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg mb-2 focus:border-[#575AF9] outline-none text-slate-800 placeholder:text-slate-400 shadow-inner" autoFocus />
+                              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Escribe para buscar..." className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg mb-2 focus:border-[#575AF9] outline-none text-slate-800 placeholder:text-slate-400 shadow-inner" />
                               <div className="max-h-32 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                                   {filteredPlayers.slice(0, 50).map(p => (
                                       <button key={p.id} onClick={() => onSelect(p.id)} className="w-full text-left p-2 hover:bg-blue-50 rounded flex items-center justify-between text-sm text-slate-700 border border-transparent hover:border-blue-100 transition-colors">
@@ -87,7 +87,7 @@ const Registration: React.FC = () => {
                           </div>
                       ) : (
                           <div className="space-y-3 animate-fade-in">
-                              <input placeholder="Nombre completo" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" autoFocus />
+                              <input placeholder="Nombre completo" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
                               <input placeholder="Apodo (opcional)" value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
                               
                               <div className="bg-slate-100 p-3 rounded-lg border border-slate-200">
@@ -216,10 +216,11 @@ const Registration: React.FC = () => {
       {/* PAIR MODAL */}
       {isPairModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
-              <div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-slide-up h-[90vh] sm:h-[85vh] flex flex-col">
-                  <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                      <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                          <Users style={{ color: THEME.cta }}/>
+              <div className="bg-white w-full h-full sm:h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col">
+                  {/* Compact Header */}
+                  <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
+                      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                          <Users style={{ color: THEME.cta }} size={20}/>
                           {isEditingPairId ? 'Editar Pareja' : 'Nueva Pareja'}
                       </h3>
                       <button onClick={closePairModal} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors">
@@ -227,14 +228,15 @@ const Registration: React.FC = () => {
                       </button>
                   </div>
                   
-                  <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                  {/* Scrollable Body containing inputs AND buttons */}
+                  <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                       <PlayerSelector 
                         label="JUGADOR 1" 
                         selectedId={selectedP1} 
                         onSelect={setSelectedP1} 
                         otherSelectedId={selectedP2}
                       />
-                      <div className="flex justify-center items-center gap-4 my-6">
+                      <div className="flex justify-center items-center gap-4 my-4">
                           <div className="h-px bg-slate-200 flex-1"></div>
                           <span className="bg-slate-100 text-slate-400 text-xs px-3 py-1 rounded-full font-bold border border-slate-200">&</span>
                           <div className="h-px bg-slate-200 flex-1"></div>
@@ -245,11 +247,12 @@ const Registration: React.FC = () => {
                         onSelect={setSelectedP2} 
                         otherSelectedId={selectedP1}
                       />
-                  </div>
-                  
-                  <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
-                      <button onClick={closePairModal} className="flex-1 py-4 bg-slate-100 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
-                      <button onClick={handleSavePair} style={{ backgroundColor: THEME.cta }} className="flex-1 py-4 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95 hover:opacity-90"><Save size={20} /> Guardar</button>
+                      
+                      {/* Buttons at the end of content */}
+                      <div className="flex gap-3 mt-8 pb-8 sm:pb-0">
+                          <button onClick={closePairModal} className="flex-1 py-4 bg-slate-100 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
+                          <button onClick={handleSavePair} style={{ backgroundColor: THEME.cta }} className="flex-1 py-4 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95 hover:opacity-90"><Save size={20} /> Guardar</button>
+                      </div>
                   </div>
               </div>
           </div>

@@ -122,7 +122,7 @@ const CheckIn: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-32">
-      <h2 className="text-3xl font-bold text-slate-900">Control y Pistas</h2>
+      <h2 className="text-2xl font-bold text-slate-900">Control y Pistas</h2>
 
       {/* Courts List */}
       <div className="space-y-10">

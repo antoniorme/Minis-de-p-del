@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy } from 'lucide-react';
@@ -13,7 +12,7 @@ const Landing: React.FC = () => {
       </div>
       
       <h1 className="text-4xl font-black mb-4 bg-gradient-to-r from-[#2B2DBF] to-[#575AF9] bg-clip-text text-transparent">
-        PadelPro Manager
+        Minis de Padel
       </h1>
       
       <p className="text-slate-500 mb-12 max-w-xs mx-auto leading-relaxed">

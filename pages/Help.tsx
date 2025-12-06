@@ -38,7 +38,7 @@ const Help: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-20">
-      <h2 className="text-3xl font-bold text-slate-900">Ayuda & Lógica</h2>
+      <h2 className="text-2xl font-bold text-slate-900">Ayuda & Lógica</h2>
       
       {/* Introduction */}
       <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex gap-4 items-start">

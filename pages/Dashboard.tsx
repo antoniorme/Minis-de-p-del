@@ -78,7 +78,7 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6 pb-10">
       {/* Header with Format Badge */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800 tracking-tight">Panel de Control</h2>
+        <h2 className="text-2xl font-bold text-slate-900">Panel de Control</h2>
         <div className="flex items-center gap-2">
             <span className="text-[10px] font-black px-3 py-1 bg-slate-800 text-white rounded-lg tracking-wider border border-slate-800 shadow-sm">
                 MINI {formatLabel.toUpperCase()}
