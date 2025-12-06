@@ -2,11 +2,10 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Search, Filter, Edit2, Save, User, Eye, Trophy, Activity, Plus, Check, X } from 'lucide-react';
+import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X } from 'lucide-react';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
-// FIX: Use correct exported function name
-import { calculateDisplayRanking, manualToElo } from '../utils/Elo'; 
+import { calculateDisplayRanking, calculateInitialElo, manualToElo } from '../utils/Elo';
 
 const PlayerManager: React.FC = () => {
   const { state, updatePlayerInDB, addPlayerToDB, formatPlayerName } = useTournament();
@@ -15,7 +14,6 @@ const PlayerManager: React.FC = () => {
   const [search, setSearch] = useState('');
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   
-  // State for Creating New Player
   const [isCreating, setIsCreating] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], manual_rating: 5, email: '', phone: '' });
 
@@ -26,19 +24,27 @@ const PlayerManager: React.FC = () => {
       return matchesCat && matchesSearch;
   });
 
-  // LOGIC CHANGE: Ordenar alfabéticamente por nombre
   filteredPlayers.sort((a, b) => a.name.localeCompare(b.name));
 
   const handleSave = () => {
       if (editingPlayer) {
-          updatePlayerInDB(editingPlayer);
+          // Recalcular el ELO base si cambian las categorías o el slider
+          const newElo = calculateInitialElo(editingPlayer.categories || [], editingPlayer.manual_rating || 5);
+          // Actualizamos global_rating para reiniciar al jugador en su nueva ancla
+          updatePlayerInDB({ ...editingPlayer, global_rating: newElo });
           setEditingPlayer(null);
       }
   };
   
   const handleCreate = async () => {
       if (!newPlayer.name) return alert("El nombre es obligatorio");
-      await addPlayerToDB(newPlayer);
+      // Calcular ELO inicial basado en anclas
+      const initialElo = calculateInitialElo(newPlayer.categories, newPlayer.manual_rating);
+      
+      await addPlayerToDB({
+          ...newPlayer,
+          global_rating: initialElo
+      });
       setIsCreating(false);
       setNewPlayer({ name: '', nickname: '', categories: [], manual_rating: 5, email: '', phone: '' });
   };
@@ -67,12 +73,6 @@ const PlayerManager: React.FC = () => {
       });
   };
 
-  // Helper para previsualizar el ranking en el modal
-  const getPreviewRanking = (p: Partial<Player>) => {
-      // Mock player object for calculation
-      return calculateDisplayRanking({ ...p, global_rating: 1200 } as Player);
-  };
-
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
@@ -82,7 +82,6 @@ const PlayerManager: React.FC = () => {
           </button>
       </div>
 
-      {/* Filters */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="relative">
               <Search className="absolute left-3 top-3 text-slate-400" size={20}/>
@@ -102,10 +101,9 @@ const PlayerManager: React.FC = () => {
           </div>
       </div>
 
-      {/* List */}
       <div className="space-y-3">
           {filteredPlayers.length === 0 && <div className="text-center py-10 text-slate-400">No se encontraron jugadores.</div>}
-          {filteredPlayers.map((player, idx) => {
+          {filteredPlayers.map((player) => {
               const rankingScore = calculateDisplayRanking(player);
               return (
               <div key={player.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
@@ -116,7 +114,6 @@ const PlayerManager: React.FC = () => {
                       <div>
                           <div className="font-bold text-slate-800 text-lg flex items-center gap-2">
                               {formatPlayerName(player)}
-                              {player.rankingPoints ? <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1"><Trophy size={8}/> {player.rankingPoints}</span> : null}
                           </div>
                           <div className="flex items-center gap-3 mt-1">
                               <span className="text-xs text-slate-500 bg-slate-100 px-1.5 rounded">{player.categories?.[0] || 'Sin Cat'}</span>
@@ -133,7 +130,7 @@ const PlayerManager: React.FC = () => {
           })}
       </div>
 
-      {/* Create Modal */}
+      {/* CREATE MODAL */}
       {isCreating && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
               <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
@@ -145,21 +142,33 @@ const PlayerManager: React.FC = () => {
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre Completo</label><input autoFocus value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" placeholder="Ej. Juan Pérez" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo (Opcional)</label><input value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" placeholder="Ej. Juanito" /></div>
                       
-                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                          <label className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1 mb-2"><Trophy size={12}/> Valoración Inicial (1-10)</label>
-                          <div className="flex items-center gap-4">
-                              <input type="range" min="1" max="10" step="0.5" value={newPlayer.manual_rating} onChange={e => setNewPlayer({...newPlayer, manual_rating: parseFloat(e.target.value)})} className="w-full accent-amber-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
-                              <span className="font-bold text-xl text-amber-700 w-10 text-center">{newPlayer.manual_rating}</span>
-                          </div>
-                      </div>
-
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías</label>
-                        <div className="flex flex-wrap gap-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías (Base ELO)</label>
+                        <div className="flex flex-wrap gap-2 mb-2">
                             {TOURNAMENT_CATEGORIES.map(cat => (
                                 <button key={cat} onClick={() => toggleNewCategory(cat)} style={{ backgroundColor: newPlayer.categories?.includes(cat) ? THEME.cta : undefined, borderColor: newPlayer.categories?.includes(cat) ? THEME.cta : undefined, color: newPlayer.categories?.includes(cat) ? 'white' : undefined }} className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${newPlayer.categories?.includes(cat) ? '' : 'bg-white text-slate-500 border-slate-300'}`}>{cat}</button>
                             ))}
                         </div>
+                      </div>
+
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          <label className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1 mb-2"><Trophy size={12}/> Ajuste Manual (1-10)</label>
+                          <div className="flex items-center gap-4">
+                              <input type="range" min="1" max="10" step="0.5" value={newPlayer.manual_rating} onChange={e => setNewPlayer({...newPlayer, manual_rating: parseFloat(e.target.value)})} className="w-full accent-amber-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                              <span className="font-bold text-xl text-amber-700 w-10 text-center">{newPlayer.manual_rating}</span>
+                          </div>
+                          <div className="mt-3 flex justify-between items-center text-xs">
+                                <div>
+                                    <span className="block text-slate-400 uppercase">Ajuste</span>
+                                    <span className="font-bold text-amber-600">{manualToElo(newPlayer.manual_rating) > 0 ? '+' : ''}{manualToElo(newPlayer.manual_rating)} pts</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-slate-400 uppercase">ELO Final</span>
+                                    <span style={{ color: THEME.cta }} className="font-black text-lg">
+                                        {calculateInitialElo(newPlayer.categories, newPlayer.manual_rating)}
+                                    </span>
+                                </div>
+                          </div>
                       </div>
                   </div>
                   <div className="mt-8">
@@ -169,7 +178,7 @@ const PlayerManager: React.FC = () => {
           </div>
       )}
 
-      {/* Edit Modal */}
+      {/* EDIT MODAL */}
       {editingPlayer && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
               <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
@@ -178,9 +187,17 @@ const PlayerManager: React.FC = () => {
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre Real</label><input value={editingPlayer.name} onChange={e => setEditingPlayer({...editingPlayer, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo</label><input value={editingPlayer.nickname || ''} onChange={e => setEditingPlayer({...editingPlayer, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       
-                      {/* MANUAL RATING SLIDER WITH REAL-TIME PREVIEW */}
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías (Base ELO)</label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {TOURNAMENT_CATEGORIES.map(cat => (
+                                <button key={cat} onClick={() => toggleEditCategory(cat)} style={{ backgroundColor: editingPlayer.categories?.includes(cat) ? THEME.cta : undefined, borderColor: editingPlayer.categories?.includes(cat) ? THEME.cta : undefined, color: editingPlayer.categories?.includes(cat) ? 'white' : undefined }} className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${editingPlayer.categories?.includes(cat) ? '' : 'bg-white text-slate-500 border-slate-300'}`}>{cat}</button>
+                            ))}
+                        </div>
+                      </div>
+
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                          <label className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1 mb-2"><Trophy size={12}/> Valoración Manual (1-10)</label>
+                          <label className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1 mb-2"><Trophy size={12}/> Ajuste Manual (1-10)</label>
                           <div className="flex items-center gap-4">
                               <input 
                                 type="range" min="1" max="10" step="0.5"
@@ -193,24 +210,19 @@ const PlayerManager: React.FC = () => {
                           
                           <div className="mt-4 flex justify-between items-center text-xs">
                                 <div>
-                                    <span className="block text-slate-400 uppercase">ELO Estadístico</span>
-                                    <span className="font-bold text-slate-700">{Math.round(editingPlayer.global_rating || 1200)}</span>
+                                    <span className="block text-slate-400 uppercase">Ajuste</span>
+                                    <span className="font-bold text-amber-600">{manualToElo(editingPlayer.manual_rating || 5) > 0 ? '+' : ''}{manualToElo(editingPlayer.manual_rating || 5)} pts</span>
                                 </div>
                                 <div className="text-right">
-                                    <span className="block text-slate-400 uppercase">Ranking Final</span>
-                                    <span style={{ color: THEME.cta }} className="font-black text-lg transition-all">{getPreviewRanking(editingPlayer)} pts</span>
+                                    <span className="block text-slate-400 uppercase">Nuevo ELO Base</span>
+                                    <span style={{ color: THEME.cta }} className="font-black text-lg transition-all">
+                                        {calculateInitialElo(editingPlayer.categories || [], editingPlayer.manual_rating || 5)} pts
+                                    </span>
                                 </div>
                           </div>
+                          <p className="text-[10px] text-slate-400 mt-2 italic">* Guardar recalculará el ELO base.</p>
                       </div>
 
-                      <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías</label>
-                        <div className="flex flex-wrap gap-2">
-                            {TOURNAMENT_CATEGORIES.map(cat => (
-                                <button key={cat} onClick={() => toggleEditCategory(cat)} style={{ backgroundColor: editingPlayer.categories?.includes(cat) ? THEME.cta : undefined, borderColor: editingPlayer.categories?.includes(cat) ? THEME.cta : undefined, color: editingPlayer.categories?.includes(cat) ? 'white' : undefined }} className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${editingPlayer.categories?.includes(cat) ? '' : 'bg-white text-slate-500 border-slate-300'}`}>{cat}</button>
-                            ))}
-                        </div>
-                      </div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Email</label><input value={editingPlayer.email || ''} onChange={e => setEditingPlayer({...editingPlayer, email: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Teléfono</label><input value={editingPlayer.phone || ''} onChange={e => setEditingPlayer({...editingPlayer, phone: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                   </div>

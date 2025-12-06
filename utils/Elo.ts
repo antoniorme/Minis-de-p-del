@@ -1,37 +1,107 @@
-import { Player } from '../types';
 
-const K_BASE = 32; 
-export const BASE_ELO_BY_CATEGORY: Record<string, number> = {
-    'Iniciación': 1100, '5ª CAT': 1250, '4ª CAT': 1400,
-    '3ª CAT': 1550, '2ª CAT': 1700, '1ª CAT': 1850
+import { Player, Pair } from '../types';
+
+// CONFIGURACIÓN ELO
+const K_FACTOR = 20; // Reducido de 32 a 20 para mayor estabilidad
+const MAX_POINTS_CAP = 25; // Nadie puede ganar/perder más de 25 ptos en un partido
+
+// 1. TABLA DE ANCLAS (Puntos Base por Categoría)
+export const CATEGORY_ANCHORS: Record<string, number> = {
+    'Iniciación': 800,
+    '5ª CAT': 1000,
+    '4ª CAT': 1200,
+    '3ª CAT': 1400,
+    '2ª CAT': 1600,
+    '1ª CAT': 1800
 };
 
-export const manualToElo = (rating: number = 5): number => 900 + (rating * 100);
+// HELPER: Convert Manual Rating (1-10) to ELO Adjustment
+// 5 es neutro. Cada punto del slider son 30 puntos de ELO.
+// Rango: 1 (-120 pts) a 10 (+150 pts)
+export const manualToElo = (manualRating: number): number => {
+    return (manualRating - 5) * 30;
+};
 
-export const getMatchRating = (player: Player, matchCategory: string): number => {
-    if (player.category_ratings && player.category_ratings[matchCategory]) {
-        return player.category_ratings[matchCategory];
+// 2. CALCULAR ELO INICIAL (Al crear/editar jugador)
+export const calculateInitialElo = (categories: string[], manualRating: number): number => {
+    // A. Base por Categoría (Promedio si tiene varias)
+    let basePoints = 1200; // Fallback
+    
+    if (categories && categories.length > 0) {
+        let sum = 0;
+        let count = 0;
+        categories.forEach(cat => {
+            if (CATEGORY_ANCHORS[cat]) {
+                sum += CATEGORY_ANCHORS[cat];
+                count++;
+            }
+        });
+        if (count > 0) basePoints = sum / count;
     }
-    const global = player.global_rating || 1200;
-    const base = BASE_ELO_BY_CATEGORY[matchCategory] || 1200;
-    return Math.round((0.7 * global) + (0.3 * base));
+
+    // B. Ajuste Manual (Slider 1-10)
+    const adjustment = manualToElo(manualRating);
+
+    return Math.round(basePoints + adjustment);
 };
 
-const getExpectedScore = (ratingA: number, ratingB: number): number => 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+// 3. CALCULAR EXPECTATIVA DE VICTORIA (0 a 1)
+const getExpectedScore = (ratingA: number, ratingB: number): number => {
+    return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+};
 
-const getDynamicK = (scoreA: number, scoreB: number): number => {
+// 4. FACTOR DE CONTUNDENCIA (Multiplicador por diferencia de juegos)
+const getMarginMultiplier = (scoreA: number, scoreB: number): number => {
     const diff = Math.abs(scoreA - scoreB);
-    return Math.min(K_BASE * (1 + (diff / 3)), K_BASE * 2);
+    const total = scoreA + scoreB;
+    
+    // Si es un partido muy corto (ej. retirada), factor bajo
+    if (total < 4) return 0.5;
+
+    // Diferencia de juegos (Suavizado)
+    if (diff >= 5) return 1.2;  // 6-0, 6-1 (Paliza suave)
+    if (diff >= 3) return 1.1; // 6-2, 6-3 (Cómoda)
+    return 1.0;                 // 6-4, 6-5, 7-6 (Ajustada)
 };
 
-export const calculateEloDelta = (avgEloA: number, avgEloB: number, scoreA: number, scoreB: number): number => {
-    const actualScoreA = scoreA > scoreB ? 1 : scoreA < scoreB ? 0 : 0.5;
-    const expectedA = getExpectedScore(avgEloA, avgEloB);
-    return getDynamicK(scoreA, scoreB) * (actualScoreA - expectedA);
+// 5. CALCULAR INTERCAMBIO DE PUNTOS (DELTA)
+export const calculateMatchDelta = (
+    pairAElo: number, 
+    pairBElo: number, 
+    scoreA: number, 
+    scoreB: number
+): number => {
+    // Determinar ganador real (1 o 0)
+    const actualScoreA = scoreA > scoreB ? 1 : 0;
+    
+    // Calcular expectativa
+    const expectedA = getExpectedScore(pairAElo, pairBElo);
+    
+    // Obtener multiplicador por paliza
+    const marginMult = getMarginMultiplier(scoreA, scoreB);
+
+    // Fórmula Maestra: K * Multiplicador * (Real - Esperado)
+    let delta = K_FACTOR * marginMult * (actualScoreA - expectedA);
+
+    // Aplicar Hard Cap (Límite máximo de puntos)
+    if (delta > MAX_POINTS_CAP) delta = MAX_POINTS_CAP;
+    if (delta < -MAX_POINTS_CAP) delta = -MAX_POINTS_CAP;
+
+    return Math.round(delta);
 };
 
+// HELPER: Obtener ELO visual para la UI
 export const calculateDisplayRanking = (player: Player): number => {
-    const globalStatsElo = player.global_rating || 1200;
-    const manualElo = manualToElo(player.manual_rating || 5);
-    return Math.round((0.7 * globalStatsElo) + (0.3 * manualElo));
+    // Si ya tiene un ELO calculado real, usamos ese.
+    if (player.global_rating) return Math.round(player.global_rating);
+    
+    // Si es legacy o nuevo sin procesar, lo calculamos al vuelo
+    return calculateInitialElo(player.categories || [], player.manual_rating || 5);
+};
+
+// HELPER: Obtener ELO promedio de una pareja
+export const getPairTeamElo = (p1: Player, p2: Player): number => {
+    const elo1 = calculateDisplayRanking(p1);
+    const elo2 = calculateDisplayRanking(p2);
+    return Math.round((elo1 + elo2) / 2);
 };

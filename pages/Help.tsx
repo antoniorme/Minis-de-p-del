@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, TrendingUp, BookOpen, Settings, Users, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, TrendingUp, BookOpen, Settings, Users, RefreshCw, Table, Sliders, Calculator, ShieldAlert } from 'lucide-react';
 
 const Help: React.FC = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -30,8 +31,8 @@ const Help: React.FC = () => {
         a: "Si te has equivocado al crear el torneo (ej. elegiste 'Nivel' y querías 'Mix'), ve a la pantalla de Directo y pulsa el icono de engranaje ⚙️. Allí verás 'Reiniciar Configuración'. Esto borrará los partidos generados y te dejará configurar de nuevo sin borrar a los jugadores." 
       },
       { 
-        q: "7. Cálculo del ELO", 
-        a: "Nuestro algoritmo combina un 70% de rendimiento real (partidos ganados y diferencia de juegos) con un 30% de valoración manual. Esto permite que el organizador ajuste el nivel de un jugador si considera que su ranking no refleja la realidad." 
+        q: "7. ¿Cómo funcionan los Puntos (ELO)?", 
+        a: "Hemos diseñado un sistema que premia el mérito pero protege al jugador. Se basa en tres pilares: su Categoría (Puntos Base), tu valoración Manual y los resultados de sus partidos. \n\nConsulta la tarjeta detallada 'Cómo funcionan los Puntos' al final de esta página para ver la tabla exacta." 
       },
   ];
 
@@ -68,36 +69,95 @@ const Help: React.FC = () => {
           ))}
       </div>
 
-      {/* ELO Explanation Card */}
-      <div className="bg-white rounded-2xl border border-blue-100 shadow-md overflow-hidden mt-8">
-          <div className="bg-blue-50 p-4 border-b border-blue-100 flex items-center gap-3">
-              <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
+      {/* DETAILED ELO EXPLANATION CARD */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden mt-8">
+          <div className="bg-slate-900 p-5 text-white flex items-center gap-3">
+              <div className="bg-white/10 p-2 rounded-lg text-blue-300">
                   <TrendingUp size={24} />
               </div>
               <div>
-                  <h3 className="font-bold text-blue-800">Detalle del Sistema ELO</h3>
-                  <p className="text-xs text-blue-600">Cómo puntuamos a los jugadores</p>
+                  <h3 className="font-bold text-lg">Cómo funcionan los Puntos</h3>
+                  <p className="text-xs text-slate-400">Guía rápida para dueños de club</p>
               </div>
           </div>
-          <div className="p-5 space-y-4 text-sm text-slate-600">
-              <p>
-                  El sistema utiliza un algoritmo dinámico que premia la competitividad y corrige desajustes.
-              </p>
+          
+          <div className="p-6 space-y-8">
               
-              <div className="space-y-3">
-                  <div className="flex gap-3">
-                      <span className="font-bold text-blue-600 whitespace-nowrap">Expectativa:</span>
-                      <p>Calculamos la probabilidad de victoria antes de jugar. Si ganas a favoritos, sumas más puntos.</p>
+              {/* SECCIÓN 1: TABLA DE CATEGORÍAS */}
+              <div>
+                  <div className="flex items-center gap-2 mb-3 text-blue-600 font-bold uppercase text-xs tracking-wider">
+                      <Table size={16}/> 1. Puntos de Salida (La Base)
                   </div>
-                  <div className="flex gap-3">
-                      <span className="font-bold text-blue-600 whitespace-nowrap">K-Factor:</span>
-                      <p>La diferencia de juegos importa. Un 6-0 tiene mucho más impacto en el ranking que un 7-6.</p>
+                  <p className="text-sm text-slate-600 mb-4 leading-relaxed">
+                      Cuando creas un jugador, el sistema le asigna unos puntos iniciales según su categoría teórica. Este es su "suelo".
+                  </p>
+                  <div className="overflow-hidden rounded-xl border border-slate-200">
+                      <table className="w-full text-sm text-left">
+                          <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
+                              <tr>
+                                  <th className="px-4 py-3">Categoría</th>
+                                  <th className="px-4 py-3 text-right">Puntos ELO</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-slate-700">
+                              <tr><td className="px-4 py-2 font-medium">Iniciación</td><td className="px-4 py-2 text-right font-bold">800</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">5ª Categoría</td><td className="px-4 py-2 text-right font-bold">1000</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">4ª Categoría</td><td className="px-4 py-2 text-right font-bold">1200</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">3ª Categoría</td><td className="px-4 py-2 text-right font-bold">1400</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">2ª Categoría</td><td className="px-4 py-2 text-right font-bold">1600</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">1ª Categoría</td><td className="px-4 py-2 text-right font-bold">1800+</td></tr>
+                          </tbody>
+                      </table>
                   </div>
-                  <div className="flex gap-3">
-                      <span className="font-bold text-blue-600 whitespace-nowrap">Corrección:</span>
-                      <p>El Ranking final es: <strong>70% Estadístico</strong> + <strong>30% Manual</strong>.</p>
+                  <div className="mt-3 bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800 flex items-start gap-2">
+                      <Calculator size={14} className="shrink-0 mt-0.5"/>
+                      <span><strong>¿Juega en dos categorías?</strong> Si seleccionas, por ejemplo, 4ª y 3ª, el sistema hace la media automática (1300 pts).</span>
                   </div>
               </div>
+
+              {/* SECCIÓN 2: AJUSTE MANUAL */}
+              <div>
+                  <div className="flex items-center gap-2 mb-3 text-amber-600 font-bold uppercase text-xs tracking-wider">
+                      <Sliders size={16}/> 2. El "Afinador" (Ajuste Manual)
+                  </div>
+                  <p className="text-sm text-slate-600 leading-relaxed">
+                      Dentro de una categoría hay niveles muy distintos. El slider del <strong>1 al 10</strong> te permite afinar esa base.
+                  </p>
+                  <ul className="mt-3 space-y-2 text-sm text-slate-600 list-disc pl-5">
+                      <li><strong>Nivel 5 (Neutro):</strong> Se queda con los puntos de la tabla.</li>
+                      <li><strong>Nivel 8-10 (Fuerte):</strong> Sumamos puntos extra (es un jugador puntero en su categoría).</li>
+                      <li><strong>Nivel 1-3 (Flojo):</strong> Restamos puntos (acaba de subir o es el más débil).</li>
+                  </ul>
+              </div>
+
+              {/* SECCIÓN 3: PARTIDOS */}
+              <div>
+                  <div className="flex items-center gap-2 mb-3 text-emerald-600 font-bold uppercase text-xs tracking-wider">
+                      <RefreshCw size={16}/> 3. Ganar y Perder (Partidos)
+                  </div>
+                  <p className="text-sm text-slate-600 mb-4 leading-relaxed">
+                      Una vez empieza a jugar, los puntos suben y bajan automáticamente.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                          <span className="font-bold text-slate-800 block mb-1">Premios por ganar</span>
+                          <p className="text-xs text-slate-500">
+                              Ganar a alguien mejor que tú da <strong>muchos puntos</strong> (ej. +20). Ganar a alguien peor da <strong>pocos puntos</strong> (ej. +2).
+                          </p>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                          <span className="font-bold text-slate-800 block mb-1">Bonus por Paliza</span>
+                          <p className="text-xs text-slate-500">
+                              No es lo mismo ganar 6-5 que 6-0. Si ganas con mucha diferencia, el sistema te da un pequeño bonus extra.
+                          </p>
+                      </div>
+                  </div>
+                  <div className="mt-3 bg-rose-50 p-3 rounded-lg border border-rose-100 text-xs text-rose-800 flex items-start gap-2">
+                      <ShieldAlert size={14} className="shrink-0 mt-0.5"/>
+                      <span><strong>Límite de Seguridad:</strong> Para evitar locuras, nadie puede ganar ni perder más de <strong>25 puntos</strong> en un solo partido.</span>
+                  </div>
+              </div>
+
           </div>
       </div>
     </div>

@@ -5,12 +5,13 @@ import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext
 import { useHistory } from '../store/HistoryContext';
 import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2, Hash } from 'lucide-react';
 import { TournamentState, Match } from '../types';
-import { calculateDisplayRanking, manualToElo } from '../utils/Elo';
+import { calculateDisplayRanking, manualToElo, calculateInitialElo, getPairTeamElo, calculateMatchDelta } from '../utils/Elo';
+import { THEME } from '../utils/theme';
 
 const PlayerProfile: React.FC = () => {
   const { playerId } = useParams<{ playerId: string }>();
   const navigate = useNavigate();
-  const { state, updatePlayerInDB, formatPlayerName } = useTournament(); // Use helper
+  const { state, updatePlayerInDB, formatPlayerName } = useTournament(); 
   const { pastTournaments } = useHistory();
   
   const [isEditing, setIsEditing] = useState(false);
@@ -19,7 +20,7 @@ const PlayerProfile: React.FC = () => {
   const [editForm, setEditForm] = useState(player || { name: '', nickname: '', categories: [] as string[], email: '', phone: '', id: '', manual_rating: 5 });
 
   const stats = useMemo(() => {
-      if (!playerId) return null;
+      if (!playerId || !player) return null;
       const result = { matchesPlayed: 0, wins: 0, losses: 0, mainTitles: 0, consTitles: 0, matchHistory: [] as any[] };
 
       const getRoundLabel = (m: Match) => {
@@ -36,10 +37,14 @@ const PlayerProfile: React.FC = () => {
 
       const processTournamentData = (tData: TournamentState, date: string) => {
           const playerPairs = tData.pairs.filter(p => p.player1Id === playerId || p.player2Id === playerId);
+          
           playerPairs.forEach(pair => {
                const partnerId = pair.player1Id === playerId ? pair.player2Id : pair.player1Id;
                const partner = tData.players.find(p => p.id === partnerId);
                const partnerName = formatPlayerName(partner);
+               
+               // Estimate My Team ELO for delta calc
+               const myTeamElo = partner ? getPairTeamElo(player, partner) : 1200;
 
                const matches = tData.matches.filter(m => m.pairAId === pair.id || m.pairBId === pair.id);
                matches.forEach(m => {
@@ -56,17 +61,31 @@ const PlayerProfile: React.FC = () => {
                    } else {
                        result.losses++;
                    }
+                   
                    const opponentPairId = isPairA ? m.pairBId : m.pairAId;
                    const oppPair = tData.pairs.find(p => p.id === opponentPairId);
                    let oppNames = 'Desconocido';
+                   let oppTeamElo = 1200;
+
                    if (oppPair) {
                        const p1 = tData.players.find(p => p.id === oppPair.player1Id);
                        const p2 = tData.players.find(p => p.id === oppPair.player2Id);
+                       if (p1 && p2) oppTeamElo = getPairTeamElo(p1, p2);
                        oppNames = `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
                    }
+                   
+                   // Calculate ELO Delta (Estimated)
+                   // If I am Pair A, use normal delta. If I am Pair B, use inverse? 
+                   // calculateMatchDelta gives change for A.
+                   // If A wins, delta > 0. If B wins, delta < 0.
+                   // If I am B, my change is -delta.
+                   const rawDelta = calculateMatchDelta(myTeamElo, oppTeamElo, m.scoreA || 0, m.scoreB || 0);
+                   const myDelta = isPairA ? rawDelta : -rawDelta;
+
                    result.matchHistory.push({
                        id: m.id, date: date, roundLabel: getRoundLabel(m),
-                       partner: partnerName, opponent: oppNames, score: `${m.scoreA}-${m.scoreB}`, result: won ? 'W' : 'L'
+                       partner: partnerName, opponent: oppNames, score: `${m.scoreA}-${m.scoreB}`, result: won ? 'W' : 'L',
+                       eloDelta: myDelta
                    });
                });
           });
@@ -157,8 +176,8 @@ const PlayerProfile: React.FC = () => {
           </div>
 
           <div className="flex justify-between items-center text-xs text-slate-400 border-t border-slate-700 pt-3">
-              <span>Estadístico: <span className="text-white font-bold">{rawStatsElo}</span> (70%)</span>
-              <span>Manual: <span className="text-white font-bold">{manualToElo(manualVal)}</span> (30%)</span>
+              <span>Estadístico: <span className="text-white font-bold">{rawStatsElo}</span> (Base)</span>
+              <span>Ajuste: <span className="text-white font-bold">{manualToElo(manualVal)} pts</span></span>
           </div>
       </div>
 
@@ -196,7 +215,14 @@ const PlayerProfile: React.FC = () => {
                           </div>
                           <div className="text-sm font-bold text-slate-800 mt-1"><span className="text-slate-400 font-normal">con</span> {match.partner} <span className="text-slate-400 font-normal">vs</span> {match.opponent}</div>
                       </div>
-                      <div className="text-xl font-black text-slate-900 tracking-tight">{match.score}</div>
+                      <div className="flex flex-col items-end">
+                          <div className="text-xl font-black text-slate-900 tracking-tight">{match.score}</div>
+                          {match.eloDelta !== 0 && (
+                              <div className={`text-xs font-bold px-1.5 rounded flex items-center ${match.eloDelta > 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-500 bg-rose-50'}`}>
+                                  {match.eloDelta > 0 ? '+' : ''}{match.eloDelta} ELO
+                              </div>
+                          )}
+                      </div>
                   </div>
               ))}
               {stats?.matchHistory.length === 0 && (
@@ -227,7 +253,19 @@ const PlayerProfile: React.FC = () => {
                               />
                               <span className="font-bold text-xl text-amber-700">{editForm.manual_rating || 5}</span>
                           </div>
-                          <p className="text-[10px] text-slate-400 mt-1">Afecta al 30% del Ranking PadelPro.</p>
+                          
+                          <div className="mt-3 flex justify-between items-center text-xs">
+                                <div>
+                                    <span className="block text-slate-400 uppercase">Ajuste</span>
+                                    <span className="font-bold text-amber-600">{manualToElo(editForm.manual_rating || 5) > 0 ? '+' : ''}{manualToElo(editForm.manual_rating || 5)} pts</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-slate-400 uppercase">ELO Final</span>
+                                    <span style={{ color: THEME.cta }} className="font-black text-lg transition-all">
+                                        {calculateInitialElo(editForm.categories || [], editForm.manual_rating || 5)} pts
+                                    </span>
+                                </div>
+                          </div>
                       </div>
 
                       <div>
@@ -243,7 +281,7 @@ const PlayerProfile: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-4 mt-8">
                       <button onClick={() => setIsEditing(false)} className="py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
-                      <button onClick={handleSave} className="py-3 bg-emerald-600 text-white rounded-xl font-bold"><Save size={18} className="inline mr-2"/> Guardar</button>
+                      <button onClick={handleSave} style={{ backgroundColor: THEME.cta }} className="py-3 text-white rounded-xl font-bold"><Save size={18} className="inline mr-2"/> Guardar</button>
                   </div>
               </div>
           </div>
