@@ -20,7 +20,7 @@ import PlayerManager from './pages/PlayerManager';
 import History from './pages/History';
 import ClubProfile from './pages/ClubProfile';
 import Help from './pages/Help';
-import PlayerProfile from './pages/PlayerProfile';
+import AdminPlayerProfile from './pages/PlayerProfile'; // Renamed to avoid conflict
 import Onboarding from './pages/Onboarding'; 
 import JoinTournament from './pages/public/JoinTournament';
 import TournamentSetup from './pages/TournamentSetup';
@@ -30,6 +30,7 @@ import SuperAdmin from './pages/SuperAdmin'; // NEW
 import PlayerDashboard from './pages/player/PlayerDashboard';
 import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
+import PlayerAppProfile from './pages/player/PlayerProfile'; // NEW
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
@@ -95,7 +96,7 @@ const AppRoutes = () => {
                         <Route path="dashboard" element={<PlayerDashboard />} />
                         <Route path="explore" element={<TournamentBrowser />} />
                         <Route path="tournaments" element={<PlayerTournaments />} />
-                        <Route path="profile" element={<div className="p-6 text-center text-slate-400">Próximamente: Perfil</div>} />
+                        <Route path="profile" element={<PlayerAppProfile />} />
                         <Route path="*" element={<Navigate to="dashboard" replace />} />
                     </Routes>
                 </PlayerLayout>
@@ -123,7 +124,7 @@ const AppRoutes = () => {
                     <Route path="/results" element={<ProtectedRoute requireAdmin><Results /></ProtectedRoute>} />
                     
                     <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
-                    <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><PlayerProfile /></ProtectedRoute>} />
+                    <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><AdminPlayerProfile /></ProtectedRoute>} />
                     <Route path="/history" element={<ProtectedRoute requireAdmin><History /></ProtectedRoute>} />
                     <Route path="/club" element={<ProtectedRoute requireAdmin><ClubProfile /></ProtectedRoute>} />
                     <Route path="/help" element={<ProtectedRoute requireAdmin><Help /></ProtectedRoute>} />

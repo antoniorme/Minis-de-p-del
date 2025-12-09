@@ -160,7 +160,10 @@ const PlayerDashboard: React.FC = () => {
                     </div>
                     <span className="text-xs font-bold text-slate-700">Ver Torneos</span>
                 </button>
-                <button className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform">
+                <button 
+                    onClick={() => navigate('/p/profile')}
+                    className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform"
+                >
                     <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
                         <Award size={20} />
                     </div>
@@ -171,12 +174,22 @@ const PlayerDashboard: React.FC = () => {
             {/* Recent Activity Placeholder */}
             <div>
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Última Actividad</h3>
-                <div className="bg-slate-50 rounded-2xl p-6 text-center border border-slate-200 border-dashed">
-                    <p className="text-slate-400 text-sm italic">No hay partidos recientes</p>
-                    <button onClick={() => navigate('/p/tournaments')} style={{ color: THEME.cta }} className="mt-2 text-sm font-bold flex items-center justify-center gap-1 mx-auto">
-                        Apuntarse a un Mini <ChevronRight size={16}/>
-                    </button>
-                </div>
+                {stats && stats.matches > 0 ? (
+                    <div onClick={() => navigate('/p/profile')} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex justify-between items-center cursor-pointer hover:border-slate-300">
+                        <div>
+                            <div className="text-xs font-bold text-slate-400 uppercase">Resumen Global</div>
+                            <div className="text-sm font-bold text-slate-800">{stats.matches} Partidos jugados</div>
+                        </div>
+                        <ChevronRight size={20} className="text-slate-300"/>
+                    </div>
+                ) : (
+                    <div className="bg-slate-50 rounded-2xl p-6 text-center border border-slate-200 border-dashed">
+                        <p className="text-slate-400 text-sm italic">No hay partidos recientes</p>
+                        <button onClick={() => navigate('/p/explore')} style={{ color: THEME.cta }} className="mt-2 text-sm font-bold flex items-center justify-center gap-1 mx-auto">
+                            Apuntarse a un Mini <ChevronRight size={16}/>
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
