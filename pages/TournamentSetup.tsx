@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
@@ -152,7 +151,9 @@ const TournamentSetup: React.FC = () => {
                       <label className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1"><Gift size={14}/> Premios</label>
                       <div className="flex gap-2 mb-2">
                           <input value={prizeInput} onChange={e => setPrizeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPrize()} className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm outline-none focus:border-[#575AF9]" placeholder="Ej. Palas Nox AT10"/>
-                          <button onClick={handleAddPrize} className="bg-slate-800 text-white p-2 rounded-xl hover:bg-slate-900"><Plus size={20}/></button>
+                          <button onClick={handleAddPrize} className="bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 font-bold text-xs uppercase tracking-wide">
+                              Añadir Premio
+                          </button>
                       </div>
                       <div className="flex flex-col gap-1">
                           {prizes.map((p, idx) => (

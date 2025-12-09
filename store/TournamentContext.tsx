@@ -37,6 +37,10 @@ interface TournamentContextType {
     respondToInviteDB: (pairId: string, action: 'accept' | 'reject') => Promise<void>;
     updateTournamentSettings: (settings: Partial<TournamentState>) => Promise<void>;
     createNewTournament: (metadata: Partial<TournamentState>) => Promise<void>;
+    // NEW PERSISTENCE FUNCTIONS
+    togglePaymentDB: (playerId: string, pairId: string, isP1: boolean) => Promise<void>;
+    toggleWaterDB: (pairId: string) => Promise<void>;
+    toggleBallsDB: (courtId: number) => Promise<void>;
 }
 
 const TournamentContext = createContext<TournamentContextType>({
@@ -46,7 +50,8 @@ const TournamentContext = createContext<TournamentContextType>({
     deletePairDB: async () => {}, archiveAndResetDB: async () => {}, resetToSetupDB: async () => {}, regenerateMatchesDB: async () => "", hardResetDB: async () => {},
     formatPlayerName: () => '', setTournamentFormat: async () => {}, getPairElo: () => 1200, substitutePairDB: async () => {},
     finishTournamentDB: async () => {}, respondToInviteDB: async () => {}, updateTournamentSettings: async () => {},
-    createNewTournament: async () => {}
+    createNewTournament: async () => {},
+    togglePaymentDB: async () => {}, toggleWaterDB: async () => {}, toggleBallsDB: async () => {}
 });
 
 const reducer = (state: TournamentState, action: TournamentAction): TournamentState => {
@@ -56,6 +61,7 @@ const reducer = (state: TournamentState, action: TournamentAction): TournamentSt
         case 'UPDATE_SETTINGS': return { ...state, ...action.payload };
         case 'SET_LOADING': return { ...state, loading: action.payload };
         case 'RESET_LOCAL': return { ...initialState, players: state.players }; // Keep players
+        // Optimized optimistic updates can remain here, but DB/Local sync is handled in async functions
         case 'TOGGLE_BALLS': return { ...state, courts: state.courts.map(c => c.id === action.payload ? { ...c, ballsGiven: !c.ballsGiven } : c) };
         case 'TOGGLE_WATER': return { ...state, pairs: state.pairs.map(p => p.id === action.payload ? { ...p, waterReceived: !p.waterReceived } : p) };
         case 'TOGGLE_PAID': return { ...state, pairs: state.pairs.map(p => { if (p.player1Id === action.payload) return { ...p, paidP1: !p.paidP1 }; if (p.player2Id === action.payload) return { ...p, paidP2: !p.paidP2 }; return p; }) };
@@ -84,7 +90,12 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         if (isOfflineMode) {
             const localData = localStorage.getItem(STORAGE_KEY);
-            if (localData) { dispatch({ type: 'SET_STATE', payload: { ...JSON.parse(localData), courts: courts } }); } 
+            if (localData) { 
+                const parsed = JSON.parse(localData);
+                // Merge courts state if available, else default
+                const savedCourts = parsed.courts || courts;
+                dispatch({ type: 'SET_STATE', payload: { ...parsed, courts: savedCourts } }); 
+            } 
             else { dispatch({ type: 'SET_STATE', payload: { players: [], pairs: [], status: 'finished', courts: courts } }); }
             dispatch({ type: 'SET_LOADING', payload: false });
             return;
@@ -148,7 +159,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 dispatch({ type: 'SET_STATE', payload: {
                     id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
                     players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups, format, courts,
-                    // Load Metadata (In real implementation, these would come from DB columns in 'tournaments')
+                    // Load Metadata
                     title: activeTournament.title || 'Mini Torneo',
                     price: activeTournament.price || 15,
                     prizes: activeTournament.prizes || [],
@@ -176,10 +187,75 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const saveLocal = (newState: TournamentState) => { 
         if (isOfflineMode) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
-            // CRITICAL: Notify HistoryContext that local DB changed
             window.dispatchEvent(new Event('local-db-update'));
         } 
     };
+
+    // --- NEW PERSISTENCE ACTIONS ---
+
+    const togglePaymentDB = async (playerId: string, pairId: string, isP1: boolean) => {
+        // Optimistic Update
+        dispatch({ type: 'TOGGLE_PAID', payload: playerId });
+        
+        const pair = state.pairs.find(p => p.id === pairId);
+        if (!pair) return;
+        const newVal = isP1 ? !pair.paidP1 : !pair.paidP2;
+
+        if (isOfflineMode) {
+            const updatedPairs = state.pairs.map(p => {
+                if (p.id === pairId) return isP1 ? { ...p, paidP1: newVal } : { ...p, paidP2: newVal };
+                return p;
+            });
+            const newState = { ...state, pairs: updatedPairs };
+            saveLocal(newState);
+            return;
+        }
+
+        const field = isP1 ? 'paid_p1' : 'paid_p2';
+        await supabase.from('tournament_pairs').update({ [field]: newVal }).eq('id', pairId);
+    };
+
+    const toggleWaterDB = async (pairId: string) => {
+        dispatch({ type: 'TOGGLE_WATER', payload: pairId });
+        
+        const pair = state.pairs.find(p => p.id === pairId);
+        if (!pair) return;
+        
+        if (isOfflineMode) {
+            const updatedPairs = state.pairs.map(p => p.id === pairId ? { ...p, waterReceived: !p.waterReceived } : p);
+            const newState = { ...state, pairs: updatedPairs };
+            saveLocal(newState);
+            return;
+        }
+
+        await supabase.from('tournament_pairs').update({ water_received: !pair.waterReceived }).eq('id', pairId);
+    };
+
+    const toggleBallsDB = async (courtId: number) => {
+        dispatch({ type: 'TOGGLE_BALLS', payload: courtId });
+        
+        // Courts are currently local-state mainly, but could be DB.
+        // For now, in Online mode, we don't have a 'courts' table row per tournament easily accessible 
+        // without a complex schema change. 
+        // Strategy: Save court state in LocalStorage even in Online Mode for ephemeral session data,
+        // OR rely on local state if persistence isn't critical across devices for balls.
+        // Given the request, we will save to LocalStorage ALWAYS for courts to ensure refresh persistence.
+        
+        const updatedCourts = state.courts.map(c => c.id === courtId ? { ...c, ballsGiven: !c.ballsGiven } : c);
+        
+        if (isOfflineMode) {
+            const newState = { ...state, courts: updatedCourts };
+            saveLocal(newState);
+        } else {
+            // In online mode, we might want to store this in a separate local key or accept it's session-based
+            // For now, let's update the state wrapper but we can't easily persist to Supabase without a column.
+            // We will save to localStorage as a fallback so it survives refresh on the same device.
+            const tempKey = `padelpro_courts_${state.id}`;
+            localStorage.setItem(tempKey, JSON.stringify(updatedCourts));
+        }
+    };
+
+    // --- EXISTING ACTIONS ---
 
     const setTournamentFormat = async (format: TournamentFormat) => {
         dispatch({ type: 'SET_FORMAT', payload: format });
@@ -197,7 +273,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             return;
         }
         if (state.id) {
-            // Map state fields to DB columns
              await supabase.from('tournaments').update({ 
                  title: settings.title, 
                  price: settings.price, 
@@ -243,11 +318,10 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             }]).select().single();
             
             if (error) throw error;
-            await loadData(); // Reload to pull the new tournament
+            await loadData(); 
         }
     };
 
-    // DB ACTIONS
     const addPlayerToDB = async (p: Partial<Player>, ownerId?: string) => {
         const targetUserId = ownerId || user?.id;
         
@@ -280,7 +354,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         
         let tournamentId = state.id; 
         if (!tournamentId) { 
-            // Fallback: If no tournament exists, create one in setup mode (should be handled by createNewTournament)
             if(user) {
                 const { data: t } = await supabase.from('tournaments').insert([{ user_id: user.id, status: 'setup', format: state.format }]).select().single(); 
                 tournamentId = t.id;
@@ -421,7 +494,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             };
             currentHistory.unshift(archivedTournament);
             localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(currentHistory));
-            // Trigger update so HistoryContext notices
             window.dispatchEvent(new Event('local-db-update'));
         }
 
@@ -448,7 +520,8 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             addPlayerToDB, updatePlayerInDB, deletePlayerDB, createPairInDB, updatePairDB, startTournamentDB,
             updateScoreDB, nextRoundDB, deletePairDB, archiveAndResetDB, resetToSetupDB, regenerateMatchesDB, hardResetDB,
             formatPlayerName, setTournamentFormat, getPairElo: Logic.getPairElo, substitutePairDB, finishTournamentDB, respondToInviteDB, assignPartnerDB,
-            updateTournamentSettings, createNewTournament
+            updateTournamentSettings, createNewTournament,
+            togglePaymentDB, toggleWaterDB, toggleBallsDB
         }}>
             {children}
         </TournamentContext.Provider>

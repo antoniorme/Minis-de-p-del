@@ -1,76 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
 import { useTimer } from '../store/TimerContext';
-import { TournamentFormat, Player, Pair, GenerationMethod } from '../types';
-import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Settings, RotateCcw, Check, ArrowRight, Archive, Calendar } from 'lucide-react';
+import { Player, Pair } from '../types';
+import { ChevronRight, Edit2, Info, User, Play, RotateCcw, CheckCircle, XCircle, Trophy, Medal, Settings, Coffee, ArrowRight, Archive, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-interface WizardProps {
-    pairs: Pair[];
-    players: Player[];
-    onComplete: (orderedPairs: Pair[]) => void;
-    onCancel: () => void;
-    formatName: (p?: Player) => string;
-    limit: number; 
-}
-
-const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplete, onCancel, formatName, limit }) => {
-    const [currentGroupIdx, setCurrentGroupIdx] = useState(0); 
-    const [orderedPairs, setOrderedPairs] = useState<Pair[]>([]);
-    
-    let groupNames = ['A', 'B', 'C', 'D'];
-    if (limit === 10) groupNames = ['A', 'B'];
-    if (limit === 8) groupNames = ['A', 'B'];
-    if (limit === 12) groupNames = ['A', 'B', 'C'];
-    
-    const effectiveGroupSize = limit === 10 ? 5 : 4;
-    const currentGroup = groupNames[currentGroupIdx];
-    const assignedIds = new Set(orderedPairs.map(p => p.id));
-    const availablePairs = pairs.filter(p => !assignedIds.has(p.id));
-    const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
-
-    const toggleSelection = (id: string) => {
-        if (selectedForGroup.includes(id)) setSelectedForGroup(selectedForGroup.filter(pid => pid !== id));
-        else if (selectedForGroup.length < effectiveGroupSize) setSelectedForGroup([...selectedForGroup, id]);
-    };
-
-    const confirmGroup = () => {
-        if (selectedForGroup.length !== effectiveGroupSize) return;
-        const newGroupPairs = selectedForGroup.map(id => pairs.find(p => p.id === id)!);
-        const newOrder = [...orderedPairs, ...newGroupPairs];
-        setOrderedPairs(newOrder); setSelectedForGroup([]);
-        if (currentGroupIdx < groupNames.length - 1) setCurrentGroupIdx(currentGroupIdx + 1);
-        else onComplete(newOrder);
-    };
-
-    return (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-4">
-            <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl h-[85vh] flex flex-col">
-                <div className="text-center mb-4"><h3 className="text-2xl font-black text-slate-900">Configurar Grupo {currentGroup}</h3><p className="text-slate-500 text-sm">Selecciona {effectiveGroupSize} parejas de la lista</p></div>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-2 mb-4 custom-scrollbar">
-                    {availablePairs.map(pair => {
-                        const p1 = players.find(p => p.id === pair.player1Id);
-                        const p2 = players.find(p => p.id === pair.player2Id);
-                        const isSelected = selectedForGroup.includes(pair.id);
-                        return (
-                            <div key={pair.id} onClick={() => toggleSelection(pair.id)} className={`p-3 rounded-xl border-2 flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-300'}`}>
-                                <div><div className="font-bold text-slate-800 text-sm">{formatName(p1)}</div><div className="font-bold text-slate-800 text-sm">& {formatName(p2)}</div></div>
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-[#575AF9] border-[#575AF9]' : 'border-slate-300'}`}>{isSelected && <Check size={14} className="text-white" strokeWidth={3}/>}</div>
-                            </div>
-                        )
-                    })}
-                </div>
-                <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
-                    <div className="text-center font-bold text-[#575AF9] mb-2">Seleccionadas: {selectedForGroup.length} / {effectiveGroupSize}</div>
-                    <button onClick={confirmGroup} disabled={selectedForGroup.length !== effectiveGroupSize} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === effectiveGroupSize ? 'bg-[#575AF9] text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>{currentGroupIdx === groupNames.length - 1 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}</button>
-                    <button onClick={onCancel} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 interface NextMatchInfo {
     pairA: { name: string; status: 'win' | 'loss'; nextText: string; highlight: boolean };
@@ -78,8 +13,8 @@ interface NextMatchInfo {
 }
 
 const ActiveTournament: React.FC = () => {
-  const { state, updateScoreDB, nextRoundDB, startTournamentDB, resetToSetupDB, formatPlayerName, setTournamentFormat, finishTournamentDB, archiveAndResetDB } = useTournament();
-  const { resetTimer, startTimer } = useTimer();
+  const { state, updateScoreDB, nextRoundDB, resetToSetupDB, formatPlayerName, finishTournamentDB, archiveAndResetDB } = useTournament();
+  const { resetTimer } = useTimer();
   const navigate = useNavigate();
   
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
@@ -91,22 +26,10 @@ const ActiveTournament: React.FC = () => {
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // SETUP STATE
-  const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
-  const [selectedFormat, setSelectedFormat] = useState<TournamentFormat>('16_mini');
-  const [showManualWizard, setShowManualWizard] = useState(false);
-
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
 
-  useEffect(() => { if(state.format) setSelectedFormat(state.format); }, [state.format]);
-
   const themeColor = getFormatColor(state.format);
-
-  const handleFormatChange = (fmt: TournamentFormat) => {
-      setSelectedFormat(fmt);
-      setTournamentFormat(fmt); 
-  };
 
   const currentMatches = state.matches.filter(m => m.round === state.currentRound);
   
@@ -154,21 +77,15 @@ const ActiveTournament: React.FC = () => {
       return 'Playoff';
   };
 
-  const handleStart = async () => {
-      if (generationMethod === 'manual') { setShowManualWizard(true); return; }
-      try { await startTournamentDB(generationMethod); resetTimer(); startTimer(); } catch (e: any) { setErrorMessage(e.message || "Error desconocido al iniciar torneo."); }
+  const handleResetToSetup = async () => { 
+      await resetToSetupDB(); 
+      setShowResetConfirm(false); 
+      navigate('/dashboard'); // Go back to dashboard to re-configure
   };
-
-  const handleResetToSetup = async () => { await resetToSetupDB(); setShowResetConfirm(false); };
   
   const handleArchive = async () => {
       await archiveAndResetDB();
       navigate('/dashboard');
-  };
-
-  const handleManualWizardComplete = async (orderedPairs: Pair[]) => {
-      setShowManualWizard(false);
-      try { await startTournamentDB('manual', orderedPairs); resetTimer(); startTimer(); } catch (e: any) { setErrorMessage(e.message || "Error al iniciar el torneo manual."); }
   };
 
   // UPDATED LOGIC: Prioritize Next Match over Phase Label
@@ -297,66 +214,28 @@ const ActiveTournament: React.FC = () => {
       );
   };
 
+  // 1. SETUP STATE (WAITING FOR GENERATION)
   if (state.status === 'setup') {
-      let limit = 16; if (selectedFormat === '10_mini') limit = 10; if (selectedFormat === '12_mini') limit = 12; if (selectedFormat === '8_mini') limit = 8;
-      const totalPairs = state.pairs.length; const canStart = totalPairs >= limit; 
-
       return (
-          <div className="flex flex-col h-full space-y-6 pb-20">
-              <div className="flex justify-between items-center">
-                  <h2 className="text-2xl font-bold text-slate-900">Configuración Técnica</h2>
-                  <div className={`px-4 py-2 rounded-xl text-xs font-bold uppercase border ${canStart ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-orange-100 text-orange-600 border-orange-200'}`}>
-                      {totalPairs}/{limit} Parejas
-                  </div>
+          <div className="flex flex-col h-full items-center justify-center py-20 text-center animate-fade-in">
+              <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-slate-300 mb-6">
+                  <Settings size={40} />
               </div>
-
-              {/* Tournament Info Summary */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-start gap-4">
-                  <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-100">
-                      <Trophy size={24} className="text-[#575AF9]"/>
-                  </div>
-                  <div>
-                      <h3 className="font-black text-slate-800">{state.title || 'Mini Torneo'}</h3>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                          <span className="flex items-center gap-1"><Calendar size={12}/> {state.startDate ? new Date(state.startDate).toLocaleDateString() : 'Hoy'}</span>
-                          <span>|</span>
-                          <span>{state.levelRange || 'Nivel Abierto'}</span>
-                      </div>
-                  </div>
-              </div>
-
-              {/* TECHNICAL CONFIG */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-                  <div className="flex items-center gap-2 mb-2 text-slate-400 font-bold text-xs uppercase tracking-wider">
-                      <Settings size={16}/> Configuración de Brackets
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-600 uppercase mb-2">Formato (Parejas)</h3>
-                    <div className="grid grid-cols-4 gap-2">
-                        <button onClick={() => handleFormatChange('16_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all text-sm ${selectedFormat === '16_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>16</button>
-                        <button onClick={() => handleFormatChange('12_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all text-sm ${selectedFormat === '12_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>12</button>
-                        <button onClick={() => handleFormatChange('10_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all text-sm ${selectedFormat === '10_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>10</button>
-                        <button onClick={() => handleFormatChange('8_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all text-sm ${selectedFormat === '8_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>8</button>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-600 uppercase mb-2">Orden de Grupos</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button onClick={() => setGenerationMethod('arrival')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><Clock size={18}/> <span className="text-xs font-bold uppercase">Llegada</span></button>
-                        <button onClick={() => setGenerationMethod('manual')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><ListOrdered size={18}/> <span className="text-xs font-bold uppercase">Manual</span></button>
-                        <button onClick={() => setGenerationMethod('elo-balanced')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><TrendingUp size={18}/> <span className="text-xs font-bold uppercase">Nivel</span></button>
-                        <button onClick={() => setGenerationMethod('elo-mixed')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><Shuffle size={18}/> <span className="text-xs font-bold uppercase">Mix</span></button>
-                    </div>
-                  </div>
-              </div>
-              
-              <button onClick={handleStart} disabled={!canStart} style={{ backgroundColor: canStart ? THEME.cta : '#e2e8f0' }} className={`w-full py-5 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${canStart ? 'text-white active:scale-95 hover:shadow-2xl hover:opacity-90' : 'text-slate-400 cursor-not-allowed'}`}><Play size={24} fill="currentColor" /> GENERAR CUADROS Y EMPEZAR</button>
-               {errorMessage && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center"><div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 mb-2">Error</h3><p className="text-slate-500 mb-6 text-sm break-words">{errorMessage}</p><button onClick={() => setErrorMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button></div></div>)}
-              {showManualWizard && (<ManualGroupingWizard pairs={state.pairs.filter(p => !p.isReserve).slice(0, limit)} players={state.players} onCancel={() => setShowManualWizard(false)} onComplete={handleManualWizardComplete} formatName={formatPlayerName} limit={limit} />)}
+              <h2 className="text-2xl font-black text-slate-900 mb-2">Preparando Torneo</h2>
+              <p className="text-slate-500 max-w-xs mx-auto mb-8">
+                  El torneo está en fase de registro. Ve al Panel de Control para generar los cuadros y empezar.
+              </p>
+              <button 
+                onClick={() => navigate('/dashboard')}
+                className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg"
+              >
+                  Ir al Panel
+              </button>
           </div>
       )
   }
 
+  // 2. FINISHED STATE
   if (isTournamentFinished) {
       const champions = getChampions();
       return (
@@ -413,6 +292,7 @@ const ActiveTournament: React.FC = () => {
       );
   }
 
+  // 3. ACTIVE MATCHES STATE
   return (
     <div className="space-y-6 pb-32">
       {/* Floating Sticky Header (Boxed & Better Spaced) */}
@@ -427,8 +307,9 @@ const ActiveTournament: React.FC = () => {
             <button 
                 onClick={() => setShowResetConfirm(true)} 
                 className="p-2 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors"
+                title="Reiniciar Configuración"
             >
-                <Settings size={20}/>
+                <RotateCcw size={20}/>
             </button>
         </div>
       </div>

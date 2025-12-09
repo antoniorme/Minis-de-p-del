@@ -6,7 +6,7 @@ import { DollarSign, Droplets, Circle, Users, Check, RefreshCw, X, AlertTriangle
 import { Pair, Player } from '../types';
 
 const CheckIn: React.FC = () => {
-  const { state, dispatch, formatPlayerName, substitutePairDB } = useTournament(); 
+  const { state, dispatch, formatPlayerName, substitutePairDB, toggleBallsDB, toggleWaterDB, togglePaymentDB } = useTournament(); 
   
   // States for Substitution Modal
   const [subModalOpen, setSubModalOpen] = useState(false);
@@ -87,7 +87,7 @@ const CheckIn: React.FC = () => {
                 <div className="flex justify-between items-start mb-4 pr-8">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pareja {idx}</span>
                     <button 
-                    onClick={() => dispatch({ type: 'TOGGLE_WATER', payload: pair.id })}
+                    onClick={() => toggleWaterDB(pair.id)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-sm active:scale-95 ${pair.waterReceived ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-white border border-slate-300 text-slate-400 hover:border-blue-400 hover:text-blue-500'}`}
                     >
                         <Droplets size={14} fill={pair.waterReceived ? "currentColor" : "none"}/> 
@@ -100,7 +100,7 @@ const CheckIn: React.FC = () => {
                     <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg">
                         <span className={`text-sm font-bold truncate pr-2 ${pair.paidP1 ? 'text-slate-800' : 'text-rose-500'}`}>{formatPlayerName(p1)}</span>
                         <button 
-                        onClick={() => p1 && dispatch({type: 'TOGGLE_PAID', payload: p1.id})} 
+                        onClick={() => p1 && togglePaymentDB(p1.id, pair.id, true)} 
                         className={`w-9 h-9 flex items-center justify-center rounded-lg shadow-sm transition-all border shrink-0 active:scale-95 ${pair.paidP1 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-300 border-slate-200 hover:border-emerald-400 hover:text-emerald-400'}`}
                         >
                             {pair.paidP1 ? <Check size={18} strokeWidth={4} /> : <DollarSign size={18}/>}
@@ -109,7 +109,7 @@ const CheckIn: React.FC = () => {
                     <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg">
                         <span className={`text-sm font-bold truncate pr-2 ${pair.paidP2 ? 'text-slate-800' : 'text-rose-500'}`}>{formatPlayerName(p2)}</span>
                         <button 
-                        onClick={() => p2 && dispatch({type: 'TOGGLE_PAID', payload: p2.id})} 
+                        onClick={() => p2 && togglePaymentDB(p2.id, pair.id, false)} 
                         className={`w-9 h-9 flex items-center justify-center rounded-lg shadow-sm transition-all border shrink-0 active:scale-95 ${pair.paidP2 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-300 border-slate-200 hover:border-emerald-400 hover:text-emerald-400'}`}
                         >
                             {pair.paidP2 ? <Check size={18} strokeWidth={4} /> : <DollarSign size={18}/>}
@@ -135,7 +135,7 @@ const CheckIn: React.FC = () => {
                     <div style={{ backgroundColor: themeColor }} className="flex items-center justify-between mb-4 text-white p-4 rounded-xl shadow-md transition-colors duration-300">
                         <span className="text-xl font-black tracking-tight">PISTA {court.id}</span>
                         <button 
-                            onClick={() => dispatch({ type: 'TOGGLE_BALLS', payload: court.id })}
+                            onClick={() => toggleBallsDB(court.id)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors border active:scale-95 ${court.ballsGiven ? 'bg-white text-slate-800 border-white' : 'bg-white/20 text-white border-white/20 hover:bg-white/30'}`}
                         >
                             <Circle size={16} fill={court.ballsGiven ? "currentColor" : "none"} />
