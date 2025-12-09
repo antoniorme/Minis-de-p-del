@@ -4,7 +4,7 @@ import { useTournament } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
 import { useHistory } from '../store/HistoryContext';
 import { useTimer } from '../store/TimerContext';
-import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy, Smartphone, Link, Copy, Check, Plus, Settings, Edit, Shuffle, ListOrdered, TrendingUp, X, Check as CheckIcon, AlertTriangle } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy, Smartphone, Link, Check, Plus, Settings, Edit, Shuffle, ListOrdered, TrendingUp, X, Check as CheckIcon, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { TournamentFormat, GenerationMethod, Pair, Player } from '../types';

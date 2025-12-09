@@ -156,9 +156,15 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                      mappedPairs = [...completeConfirmedWithReserves, ...others.map(p => ({...p, isReserve: true}))];
                 }
 
+                // Check localStorage for ball status as it is ephemeral in online mode
+                const tempKey = `padelpro_courts_${activeTournament.id}`;
+                const savedCourts = localStorage.getItem(tempKey);
+                const finalCourts = savedCourts ? JSON.parse(savedCourts) : courts;
+
                 dispatch({ type: 'SET_STATE', payload: {
                     id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
-                    players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups, format, courts,
+                    players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups, format, 
+                    courts: finalCourts,
                     // Load Metadata
                     title: activeTournament.title || 'Mini Torneo',
                     price: activeTournament.price || 15,
@@ -207,6 +213,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 return p;
             });
             const newState = { ...state, pairs: updatedPairs };
+            dispatch({ type: 'SET_STATE', payload: newState });
             saveLocal(newState);
             return;
         }
@@ -220,38 +227,38 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         
         const pair = state.pairs.find(p => p.id === pairId);
         if (!pair) return;
+        const newVal = !pair.waterReceived;
         
         if (isOfflineMode) {
-            const updatedPairs = state.pairs.map(p => p.id === pairId ? { ...p, waterReceived: !p.waterReceived } : p);
+            const updatedPairs = state.pairs.map(p => p.id === pairId ? { ...p, waterReceived: newVal } : p);
             const newState = { ...state, pairs: updatedPairs };
+            dispatch({ type: 'SET_STATE', payload: newState });
             saveLocal(newState);
             return;
         }
 
-        await supabase.from('tournament_pairs').update({ water_received: !pair.waterReceived }).eq('id', pairId);
+        await supabase.from('tournament_pairs').update({ water_received: newVal }).eq('id', pairId);
     };
 
     const toggleBallsDB = async (courtId: number) => {
         dispatch({ type: 'TOGGLE_BALLS', payload: courtId });
         
-        // Courts are currently local-state mainly, but could be DB.
-        // For now, in Online mode, we don't have a 'courts' table row per tournament easily accessible 
-        // without a complex schema change. 
-        // Strategy: Save court state in LocalStorage even in Online Mode for ephemeral session data,
-        // OR rely on local state if persistence isn't critical across devices for balls.
-        // Given the request, we will save to LocalStorage ALWAYS for courts to ensure refresh persistence.
-        
         const updatedCourts = state.courts.map(c => c.id === courtId ? { ...c, ballsGiven: !c.ballsGiven } : c);
         
         if (isOfflineMode) {
             const newState = { ...state, courts: updatedCourts };
+            dispatch({ type: 'SET_STATE', payload: newState });
             saveLocal(newState);
         } else {
-            // In online mode, we might want to store this in a separate local key or accept it's session-based
-            // For now, let's update the state wrapper but we can't easily persist to Supabase without a column.
-            // We will save to localStorage as a fallback so it survives refresh on the same device.
-            const tempKey = `padelpro_courts_${state.id}`;
-            localStorage.setItem(tempKey, JSON.stringify(updatedCourts));
+            // In online mode, we update the state AND save to localStorage as a fallback
+            // because we don't have a 'courts' table in the provided schema.
+            // This ensures persistence on refresh.
+            dispatch({ type: 'SET_STATE', payload: { ...state, courts: updatedCourts } });
+            
+            if (state.id) {
+                const tempKey = `padelpro_courts_${state.id}`;
+                localStorage.setItem(tempKey, JSON.stringify(updatedCourts));
+            }
         }
     };
 
