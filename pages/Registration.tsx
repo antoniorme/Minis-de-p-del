@@ -2,10 +2,10 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp, Link as LinkIcon, UserPlus } from 'lucide-react';
 
 const Registration: React.FC = () => {
-  const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, formatPlayerName, getPairElo } = useTournament();
+  const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, formatPlayerName, getPairElo, assignPartnerDB } = useTournament();
   
   // MODAL STATES
   const [isPairModalOpen, setIsPairModalOpen] = useState(false);
@@ -17,13 +17,21 @@ const Registration: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   
+  // SOLO MATCHING STATES
+  const [showSoloMatchModal, setShowSoloMatchModal] = useState<string | null>(null); // ID of solo pair being matched
+  const [selectedSoloPartner, setSelectedSoloPartner] = useState('');
+
   const currentFormat = state.format || '16_mini';
-  const activePairs = state.pairs || [];
+  // Filter complete pairs for the main count
+  const activePairs = state.pairs.filter(p => p.player2Id !== null) || [];
+  // Filter solo players
+  const soloPairs = state.pairs.filter(p => p.player2Id === null) || [];
+
   const limit = currentFormat === '10_mini' ? 10 : 16;
   
   const totalRegistered = activePairs.length;
 
-  const assignedPlayerIds = activePairs.reduce((acc, pair) => {
+  const assignedPlayerIds = state.pairs.reduce((acc, pair) => {
       if (isEditingPairId && pair.id === isEditingPairId) return acc;
       if (pair.player1Id) acc.add(pair.player1Id);
       if (pair.player2Id) acc.add(pair.player2Id);
@@ -125,7 +133,7 @@ const Registration: React.FC = () => {
       const pair = state.pairs.find(p => p.id === pairId);
       if (!pair) return;
       setSelectedP1(pair.player1Id);
-      setSelectedP2(pair.player2Id);
+      setSelectedP2(pair.player2Id || '');
       setIsEditingPairId(pairId);
       setIsPairModalOpen(true);
   };
@@ -144,7 +152,7 @@ const Registration: React.FC = () => {
       if (isEditingPairId) {
           await updatePairDB(isEditingPairId, selectedP1, selectedP2);
       } else {
-          if (state.pairs.length >= 32) return setAlertMessage("Límite de parejas alcanzado.");
+          if (state.pairs.filter(p=>p.player2Id).length >= 32) return setAlertMessage("Límite de parejas alcanzado.");
           await createPairInDB(selectedP1, selectedP2);
       }
       
@@ -156,6 +164,25 @@ const Registration: React.FC = () => {
           await deletePairDB(showDeleteModal);
           setShowDeleteModal(null);
       }
+  };
+
+  // --- SOLO MATCHING HANDLERS ---
+  const handleOpenSoloMatch = (soloId: string) => {
+      setShowSoloMatchModal(soloId);
+      setSelectedSoloPartner('');
+  };
+
+  const handleConfirmSoloMatch = async () => {
+      if (!showSoloMatchModal || !selectedSoloPartner) return;
+      
+      // Check if the selected partner is also a solo pair (to merge)
+      const partnerAsSolo = soloPairs.find(p => p.player1Id === selectedSoloPartner);
+      const mergeId = partnerAsSolo ? partnerAsSolo.id : undefined;
+
+      await assignPartnerDB(showSoloMatchModal, selectedSoloPartner, mergeId);
+      
+      setShowSoloMatchModal(null);
+      setSelectedSoloPartner('');
   };
 
   const PairList = ({ pairs, title, colorClass }: { pairs: any[], title: string, colorClass: string }) => (
@@ -211,6 +238,32 @@ const Registration: React.FC = () => {
           <span className="font-black text-indigo-900 text-lg">AÑADIR NUEVA PAREJA</span>
       </button>
       
+      {/* SOLO PLAYERS BAG */}
+      {soloPairs.length > 0 && (
+          <div className="mt-8 bg-amber-50 p-6 rounded-2xl border border-amber-100">
+              <div className="flex items-center gap-2 mb-4">
+                  <UserPlus className="text-amber-600"/>
+                  <h3 className="text-sm uppercase font-bold tracking-wider text-amber-700">Bolsa de Jugadores (Sin Pareja)</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {soloPairs.map(solo => {
+                      const p = state.players.find(p => p.id === solo.player1Id);
+                      return (
+                          <div key={solo.id} className="bg-white p-4 rounded-xl shadow-sm border border-amber-200 flex justify-between items-center">
+                              <div className="font-bold text-slate-800">{formatPlayerName(p)}</div>
+                              <div className="flex gap-2">
+                                  <button onClick={() => handleOpenSoloMatch(solo.id)} className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-200 flex items-center gap-1">
+                                      <LinkIcon size={12}/> Emparejar
+                                  </button>
+                                  <button onClick={() => setShowDeleteModal(solo.id)} className="p-1.5 text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
+                              </div>
+                          </div>
+                      );
+                  })}
+              </div>
+          </div>
+      )}
+
       <PairList pairs={activePairs} title="Parejas Inscritas" colorClass="text-slate-600" />
 
       {/* PAIR MODAL */}
@@ -228,7 +281,7 @@ const Registration: React.FC = () => {
                       </button>
                   </div>
                   
-                  {/* Scrollable Body containing inputs AND buttons */}
+                  {/* Scrollable Body */}
                   <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                       <PlayerSelector 
                         label="JUGADOR 1" 
@@ -248,7 +301,6 @@ const Registration: React.FC = () => {
                         otherSelectedId={selectedP1}
                       />
                       
-                      {/* Buttons at the end of content */}
                       <div className="flex gap-3 mt-8 pb-8 sm:pb-0">
                           <button onClick={closePairModal} className="flex-1 py-4 bg-slate-100 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
                           <button onClick={handleSavePair} style={{ backgroundColor: THEME.cta }} className="flex-1 py-4 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95 hover:opacity-90"><Save size={20} /> Guardar</button>
@@ -258,6 +310,37 @@ const Registration: React.FC = () => {
           </div>
       )}
       
+      {/* SOLO MATCH MODAL */}
+      {showSoloMatchModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Emparejar Jugador</h3>
+                  <p className="text-sm text-slate-500 mb-4">Elige un compañero. Puedes buscar en el club o seleccionar a otro jugador suelto.</p>
+                  
+                  <div className="mb-4">
+                      <PlayerSelector 
+                        label="COMPAÑERO" 
+                        selectedId={selectedSoloPartner} 
+                        onSelect={setSelectedSoloPartner} 
+                        otherSelectedId={state.pairs.find(p=>p.id===showSoloMatchModal)?.player1Id}
+                      />
+                  </div>
+
+                  <div className="flex gap-3">
+                      <button onClick={() => setShowSoloMatchModal(null)} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-600">Cancelar</button>
+                      <button 
+                        onClick={handleConfirmSoloMatch} 
+                        disabled={!selectedSoloPartner}
+                        style={{ backgroundColor: THEME.cta }} 
+                        className="flex-1 py-3 text-white rounded-xl font-bold disabled:opacity-50"
+                      >
+                          Confirmar
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {showDeleteModal && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">

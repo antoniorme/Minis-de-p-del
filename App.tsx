@@ -25,6 +25,10 @@ import Onboarding from './pages/Onboarding';
 
 // Player Pages
 import PlayerDashboard from './pages/player/PlayerDashboard';
+import PlayerTournaments from './pages/player/PlayerTournaments';
+
+// Public Pages
+import JoinTournament from './pages/public/JoinTournament';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }: React.PropsWithChildren) => {
@@ -53,6 +57,9 @@ const AppRoutes = () => {
         <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
         <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
         
+        {/* Public Registration Wizard (No Auth Required) */}
+        <Route path="/join/:clubId" element={<JoinTournament />} />
+
         {/* Fullscreen Onboarding (No Layout) */}
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
@@ -61,9 +68,10 @@ const AppRoutes = () => {
         <Route path="/p/*" element={
             <PlayerLayout>
                 <Routes>
+                    <Route index element={<Navigate to="dashboard" replace />} />
                     <Route path="dashboard" element={<PlayerDashboard />} />
+                    <Route path="tournaments" element={<PlayerTournaments />} />
                     {/* Placeholder routes for nav */}
-                    <Route path="tournaments" element={<div className="p-6 text-center text-slate-400">Próximamente: Torneos</div>} />
                     <Route path="profile" element={<div className="p-6 text-center text-slate-400">Próximamente: Perfil</div>} />
                     <Route path="*" element={<Navigate to="dashboard" replace />} />
                 </Routes>

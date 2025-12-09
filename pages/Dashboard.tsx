@@ -3,12 +3,14 @@ import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
 import { useHistory } from '../store/HistoryContext';
-import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy, Smartphone, Link, Copy, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../store/AuthContext';
 
 const Dashboard: React.FC = () => {
   const { state } = useTournament();
   const { archiveTournament } = useHistory();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   // MODAL STATE
@@ -17,9 +19,11 @@ const Dashboard: React.FC = () => {
       isOpen: boolean;
   }>({ type: null, isOpen: false });
 
+  const [linkCopied, setLinkCopied] = useState(false);
+
   // Calculate stats based on computed isReserve flag
-  const activePairsCount = state.pairs.filter(p => !p.isReserve).length;
-  const reservePairsCount = state.pairs.filter(p => p.isReserve).length;
+  const activePairsCount = state.pairs.filter(p => !p.isReserve && p.player2Id).length;
+  const reservePairsCount = state.pairs.filter(p => p.isReserve && p.player2Id).length;
   
   // Format Label (e.g., "12", "16")
   const formatLabel = state.format ? state.format.replace('_mini', '') : '16';
@@ -56,6 +60,14 @@ const Dashboard: React.FC = () => {
   const openModal = (type: 'archive') => {
       setModalConfig({ type, isOpen: true });
   }
+
+  const handleCopyLink = () => {
+      if (!user) return;
+      const url = `${window.location.origin}/#/join/${user.id}`;
+      navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+  };
 
   const ActivityIcon = (status: string) => {
     switch(status) {
@@ -164,6 +176,15 @@ const Dashboard: React.FC = () => {
               </button>
           </div>
 
+          {/* Copy Link Button */}
+          <button 
+            onClick={handleCopyLink}
+            className="w-full py-3 bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2"
+          >
+            {linkCopied ? <Check size={18} /> : <Link size={18} />}
+            {linkCopied ? '¡Enlace Copiado!' : 'Copiar Enlace de Inscripción'}
+          </button>
+
           {/* Archive Action (Only when finished) */}
           {state.status === 'finished' && (
                 <div className="mt-4 pt-4 border-t border-slate-100">
@@ -177,6 +198,17 @@ const Dashboard: React.FC = () => {
                     <p className="text-center text-xs text-slate-400 mt-2">Guardará resultados en historial y preparará un nuevo torneo.</p>
                 </div>
            )}
+
+           {/* Preview Player App Button */}
+           <div className="mt-6 pt-6 border-t border-slate-100">
+               <button 
+                onClick={() => navigate('/p/dashboard')}
+                className="w-full py-3 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2"
+              >
+                <Smartphone size={18} />
+                Vista Previa App Jugadores (Test)
+              </button>
+           </div>
         </div>
       </div>
 

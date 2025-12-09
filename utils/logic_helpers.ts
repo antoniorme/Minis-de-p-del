@@ -1,3 +1,4 @@
+
 import { Pair, Player, Group, TournamentFormat, GenerationMethod } from '../types';
 import { calculateDisplayRanking } from './Elo';
 
@@ -8,8 +9,12 @@ export const GROUP_NAMES_8 = ['A', 'B'];
 
 export const getPairElo = (pair: Pair, players: Player[]): number => {
     const p1 = players.find(p => p.id === pair.player1Id);
-    const p2 = players.find(p => p.id === pair.player2Id);
-    return (p1 ? calculateDisplayRanking(p1) : 1200) + (p2 ? calculateDisplayRanking(p2) : 1200);
+    const p2 = pair.player2Id ? players.find(p => p.id === pair.player2Id) : null;
+    
+    const p1Elo = p1 ? calculateDisplayRanking(p1) : 1200;
+    const p2Elo = p2 ? calculateDisplayRanking(p2) : p1Elo; // If solo, use p1 twice for estimation or just p1
+    
+    return p1Elo + p2Elo;
 };
 
 export const sortPairsByMethod = (pairs: Pair[], players: Player[], method: GenerationMethod): Pair[] => {
@@ -39,7 +44,10 @@ export const generateGroupsHelper = (pairs: Pair[], players: Player[], method: G
   if (format === '8_mini') limit = 8;
   if (format === '12_mini') limit = 12;
 
-  let sortedPairs = sortPairsByMethod(pairs, players, method);
+  // IMPORTANT: Filter out incomplete pairs (solos) before generating groups
+  const completePairs = pairs.filter(p => p.player2Id !== null);
+
+  let sortedPairs = sortPairsByMethod(completePairs, players, method);
   const titularPairs = sortedPairs.slice(0, limit);
   const groups: Group[] = [];
   

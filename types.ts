@@ -26,7 +26,7 @@ export interface Pair {
   id: string; 
   tournament_id?: string;
   player1Id: string; 
-  player2Id: string; 
+  player2Id: string | null; // UPDATED: Can be null for solo players
   name: string; 
   waterReceived: boolean;
   paidP1: boolean;
@@ -38,6 +38,7 @@ export interface Pair {
   };
   groupId?: string; 
   isReserve?: boolean; 
+  status?: 'confirmed' | 'pending' | 'rejected'; 
 }
 
 export interface Match {
@@ -68,7 +69,7 @@ export interface TournamentState {
   id?: string; 
   status: 'setup' | 'checkin' | 'active' | 'finished';
   currentRound: number; 
-  format: TournamentFormat; // NEW: Format definition
+  format: TournamentFormat; 
   players: Player[]; 
   pairs: Pair[]; 
   matches: Match[]; 
@@ -93,7 +94,7 @@ export interface PastTournament {
     winnerConsolation?: string; 
     playerCount: number;
     format?: TournamentFormat;
-    data?: TournamentState; // Made optional as history list often doesn't have full data
+    data?: TournamentState; 
 }
 
 export type TournamentAction =

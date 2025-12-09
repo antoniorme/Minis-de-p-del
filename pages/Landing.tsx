@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy } from 'lucide-react';
+import { Trophy, Smartphone } from 'lucide-react';
 
 const Landing: React.FC = () => {
   const navigate = useNavigate();
@@ -32,6 +33,20 @@ const Landing: React.FC = () => {
           className="w-full py-4 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl font-bold text-slate-600 transition-transform active:scale-95 shadow-sm"
         >
           Crear Cuenta
+        </button>
+
+        <div className="relative flex py-2 items-center">
+            <div className="flex-grow border-t border-slate-200"></div>
+            <span className="flex-shrink-0 mx-4 text-slate-300 text-xs font-bold uppercase">o</span>
+            <div className="flex-grow border-t border-slate-200"></div>
+        </div>
+
+        <button 
+          onClick={() => navigate('/p/dashboard')}
+          className="w-full py-4 bg-slate-800 text-slate-200 hover:bg-slate-900 rounded-xl font-bold transition-transform active:scale-95 shadow-sm flex items-center justify-center gap-3"
+        >
+          <Smartphone size={20} />
+          Soy Jugador
         </button>
       </div>
 

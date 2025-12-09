@@ -67,7 +67,7 @@ const CheckIn: React.FC = () => {
       }
   };
 
-  const PairCard = ({ pair, idx }: { pair: Pair, idx: number | string }) => {
+  const PairCard: React.FC<{ pair: Pair; idx: number | string }> = ({ pair, idx }) => {
         const p1 = getPlayer(pair.player1Id);
         const p2 = getPlayer(pair.player2Id);
         const allPaid = pair.paidP1 && pair.paidP2;
