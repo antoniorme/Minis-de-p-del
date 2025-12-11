@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../../store/TournamentContext';
@@ -15,6 +14,7 @@ const JoinTournament: React.FC = () => {
     const { globalTournaments } = useHistory();
 
     const [step, setStep] = useState(1);
+    const [alertMessage, setAlertMessage] = useState<{type: 'error'|'success', message: string} | null>(null);
     
     // --- STEP 1: IDENTITY ---
     const [isGuest, setIsGuest] = useState(true); 
@@ -74,8 +74,14 @@ const JoinTournament: React.FC = () => {
     }, [state.players]);
 
     const handleNext = () => {
-        if (step === 2 && !myName) return alert("Por favor, introduce tu nombre.");
-        if (step === 3 && !partnerType) return alert("Elige una opción para tu compañero.");
+        if (step === 2 && !myName) {
+            setAlertMessage({ type: 'error', message: "Por favor, introduce tu nombre." });
+            return;
+        }
+        if (step === 3 && !partnerType) {
+            setAlertMessage({ type: 'error', message: "Elige una opción para tu compañero." });
+            return;
+        }
         setStep(prev => prev + 1);
     };
 
@@ -107,7 +113,10 @@ const JoinTournament: React.FC = () => {
             if (myId) localStorage.setItem('padel_sim_player_id', myId);
         }
 
-        if (!myId) return alert("Error al procesar tu usuario.");
+        if (!myId) {
+            setAlertMessage({ type: 'error', message: "Error al procesar tu usuario." });
+            return;
+        }
 
         // 2. Handle Partner
         let p2Id: string | null = null;
@@ -133,8 +142,14 @@ const JoinTournament: React.FC = () => {
         // 3. Create Pair
         await createPairInDB(myId, p2Id, 'confirmed'); 
 
-        alert("¡Inscripción realizada con éxito!");
-        navigate('/'); 
+        setAlertMessage({ type: 'success', message: "¡Inscripción realizada con éxito!" });
+    };
+
+    const closeAlert = () => {
+        if (alertMessage?.type === 'success') {
+            navigate('/');
+        }
+        setAlertMessage(null);
     };
 
     // Filter players for search - EXCLUDING CURRENT USER
@@ -443,6 +458,22 @@ const JoinTournament: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* ALERT MODAL */}
+            {alertMessage && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${alertMessage.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                            {alertMessage.type === 'error' ? <AlertTriangle size={32} /> : <Check size={32} />}
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">{alertMessage.type === 'error' ? 'Atención' : 'Todo listo'}</h3>
+                        <p className="text-slate-500 mb-6">{alertMessage.message}</p>
+                        <button onClick={closeAlert} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
+                            {alertMessage.type === 'error' ? 'Revisar' : 'Continuar'}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

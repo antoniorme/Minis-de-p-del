@@ -4,12 +4,18 @@ import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
 import { useTimer } from '../store/TimerContext';
 import { Player, Pair } from '../types';
-import { ChevronRight, Edit2, Info, User, Play, RotateCcw, CheckCircle, XCircle, Trophy, Medal, Settings, Coffee, ArrowRight, Archive, X } from 'lucide-react';
+import { ChevronRight, Edit2, Info, User, Play, RotateCcw, CheckCircle, XCircle, Trophy, Medal, Settings, Coffee, ArrowRight, Archive, X, AlertTriangle, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface NextMatchInfo {
     pairA: { name: string; status: 'win' | 'loss'; nextText: string; highlight: boolean };
     pairB: { name: string; status: 'win' | 'loss'; nextText: string; highlight: boolean };
+}
+
+interface AlertState {
+    type: 'error' | 'success' | 'info';
+    title: string;
+    message: string;
 }
 
 const ActiveTournament: React.FC = () => {
@@ -24,7 +30,7 @@ const ActiveTournament: React.FC = () => {
   const [nextMatchInfo, setNextMatchInfo] = useState<NextMatchInfo | null>(null);
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [alertMessage, setAlertMessage] = useState<AlertState | null>(null);
   
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
@@ -80,7 +86,7 @@ const ActiveTournament: React.FC = () => {
   const handleResetToSetup = async () => { 
       await resetToSetupDB(); 
       setShowResetConfirm(false); 
-      navigate('/dashboard'); // Go back to dashboard to re-configure
+      navigate('/dashboard'); 
   };
   
   const handleArchive = async () => {
@@ -88,9 +94,7 @@ const ActiveTournament: React.FC = () => {
       navigate('/dashboard');
   };
 
-  // UPDATED LOGIC: Prioritize Next Match over Phase Label
   const getNextStepText = (pairId: string, isWinner: boolean, phase: string, courtId: number, bracket: string) => {
-      // 1. Look ahead for ANY scheduled match in a future round
       const nextMatch = state.matches.find(m => (m.pairAId === pairId || m.pairBId === pairId) && m.round > state.currentRound);
       
       if (nextMatch) {
@@ -102,7 +106,6 @@ const ActiveTournament: React.FC = () => {
           return `Espera turno (vs ${shortOpName})`;
       }
 
-      // 2. Fallbacks based on Phase
       if (phase === 'group') {
            const maxGroupRound = state.format === '16_mini' ? 4 : 3;
            if (state.currentRound >= maxGroupRound) return "Esperando Fase Final";
@@ -133,7 +136,10 @@ const ActiveTournament: React.FC = () => {
   const handleSaveScore = async () => {
     if (selectedMatchId && scoreA !== '' && scoreB !== '') {
         const valA = parseInt(scoreA); const valB = parseInt(scoreB);
-        if (valA === valB) return alert("El partido no puede terminar en empate.");
+        if (valA === valB) {
+            setAlertMessage({ type: 'error', title: 'Empate no permitido', message: 'Los partidos de torneo deben tener un ganador.' });
+            return;
+        }
         
         const m = state.matches.find(m => m.id === selectedMatchId);
         if (!m) return;
@@ -183,17 +189,32 @@ const ActiveTournament: React.FC = () => {
   const handleNextRoundClick = () => {
       if (!allMatchesFinished && !isTournamentFinished) {
           const remaining = activePlayableMatches.length - finishedPlayableMatches;
-          if (state.currentRound < 7) return alert(`No se puede avanzar ronda. Faltan ${remaining} partido(s) activos por finalizar.`);
+          if (state.currentRound < 7) {
+              setAlertMessage({ 
+                  type: 'error', 
+                  title: 'Ronda incompleta', 
+                  message: `No se puede avanzar. Faltan ${remaining} partido(s) activos por finalizar.` 
+              });
+              return;
+          }
       }
       setShowRoundConfirm(true);
   };
   
   const handleFinishTournament = async () => {
        if (!allMatchesFinished) return;
-       try { await finishTournamentDB(); } catch (e: any) { setErrorMessage("Error al finalizar: " + e.message); }
+       try { await finishTournamentDB(); } catch (e: any) { setAlertMessage({ type: 'error', title: 'Error', message: e.message }); }
   };
 
-  const confirmNextRound = async () => { setShowRoundConfirm(false); try { resetTimer(); await nextRoundDB(); } catch (e: any) { setErrorMessage(`Error al avanzar: ${e.message || e}`); } };
+  const confirmNextRound = async () => { 
+      setShowRoundConfirm(false); 
+      try { 
+          resetTimer(); 
+          await nextRoundDB(); 
+      } catch (e: any) { 
+          setAlertMessage({ type: 'error', title: 'Error al avanzar', message: e.message || e }); 
+      } 
+  };
 
   const getChampions = () => {
       let finalMainRound = 7; let finalConsRound = 8;
@@ -498,6 +519,22 @@ const ActiveTournament: React.FC = () => {
 
                   <button onClick={handleCloseInfoModal} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">
                       Continuar y Siguiente Partido
+                  </button>
+              </div>
+          </div>
+      )}
+
+      {/* ALERT MODAL */}
+      {alertMessage && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${alertMessage.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                      {alertMessage.type === 'error' ? <X size={32} /> : <AlertTriangle size={32} />}
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-2">{alertMessage.title}</h3>
+                  <p className="text-slate-500 mb-6">{alertMessage.message}</p>
+                  <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
+                      Entendido
                   </button>
               </div>
           </div>

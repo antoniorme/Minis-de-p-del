@@ -244,9 +244,9 @@ const Dashboard: React.FC = () => {
               />
           ) : (
               <StatCard 
-                title="Formato Seleccionado" 
-                value={`Mini ${currentLimit} Parejas`} 
-                subValue="Sistema de Grupos"
+                title="Formato" 
+                value={`Mini ${currentLimit}`} 
+                subValue={null}
                 icon={LayoutGrid} 
                 color="text-indigo-400" 
                 active={true}

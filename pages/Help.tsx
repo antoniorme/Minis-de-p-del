@@ -8,7 +8,7 @@ const Help: React.FC = () => {
   const faqs = [
       {
         q: "1. Pasos para crear un torneo",
-        a: "El proceso es simple: \n1. Ve a la pestaña 'Registro' y añade a las parejas (mínimo 10 o 16).\n2. Cuando estés listo, pulsa 'Empezar' o ve a la pestaña 'Directo'.\n3. Allí verás el panel de configuración: verifica que están todos, elige el formato y el método de mezcla.\n4. ¡Pulsa 'Empezar Torneo' y a jugar!"
+        a: "1. Ve a 'Mis Torneos' y pulsa 'Nuevo'.\n2. Completa los detalles del evento (precio, fecha, premios).\n3. En la fase de **Configuración**, gestiona las inscripciones hasta llegar al cupo.\n4. Pulsa 'GENERAR CUADROS Y EMPEZAR' y elige el método de sorteo.\n5. El torneo pasará a fase **En Juego** y podrás ir a la pantalla de 'Directo' para gestionar los partidos."
       },
       {
         q: "2. Jugadores vs Parejas: ¿Cuál es la diferencia?",
@@ -24,11 +24,11 @@ const Help: React.FC = () => {
       },
       { 
         q: "5. Formatos y Lógica", 
-        a: "• **Mini 16:** 4 Grupos de 4. Si tienes <8 pistas, es rotativo con descansos (4 rondas). Si tienes >=8 pistas, es simultáneo (3 rondas).\n• **Mini 12:** 3 Grupos de 4. Pasan a cuartos los 2 primeros de cada grupo y los 2 mejores terceros.\n• **Mini 10:** 2 Grupos de 5. Juegan todos contra todos (5 partidos). Los cruces de cuartos son A vs B." 
+        a: "Elige el formato según el número de inscritos:\n\n• **Mini 16:** 4 Grupos de 4. Si tienes <8 pistas, es rotativo con descansos (4 rondas). Si tienes >=8 pistas, es simultáneo (3 rondas).\n• **Mini 12:** 3 Grupos de 4. Pasan a cuartos los 2 primeros de cada grupo y los 2 mejores terceros.\n• **Mini 10:** 2 Grupos de 5. Juegan todos contra todos (5 partidos). Los cruces de cuartos son A vs B.\n• **Mini 8:** 2 Grupos de 4. Formato rápido con cruces directos." 
       },
       { 
         q: "6. Botón de Pánico (Reiniciar)", 
-        a: "Si te has equivocado al crear el torneo (ej. elegiste 'Nivel' y querías 'Mix'), ve a la pantalla de Directo y pulsa el icono de engranaje ⚙️. Allí verás 'Reiniciar Configuración'. Esto borrará los partidos generados y te dejará configurar de nuevo sin borrar a los jugadores." 
+        a: "Si te has equivocado al crear el torneo (ej. elegiste 'Nivel' y querías 'Mix'), ve a la pantalla de Directo y pulsa el icono de engranaje ⚙️. Allí verás 'Reiniciar Configuración'. Esto borrará los partidos generados y te devolverá a la fase de Configuración." 
       },
       { 
         q: "7. ¿Cómo funcionan los Puntos (ELO)?", 

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { getFormatColor } from '../utils/theme';
-import { Trophy, Grid, GitMerge, ArrowLeft, Edit2 } from 'lucide-react';
+import { Trophy, Grid, GitMerge, ArrowLeft, Edit2, AlertTriangle } from 'lucide-react';
 
 const Results: React.FC = () => {
   const { state, updateScoreDB, formatPlayerName } = useTournament();
@@ -25,6 +25,7 @@ const Results: React.FC = () => {
   const [editMatchId, setEditMatchId] = useState<string | null>(null);
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   const getPairName = (id: string) => {
     const pair = state.pairs.find(p => p.id === id);
@@ -90,7 +91,10 @@ const Results: React.FC = () => {
       if (editMatchId && scoreA !== '' && scoreB !== '') {
           const valA = parseInt(scoreA);
           const valB = parseInt(scoreB);
-           if (valA === valB) { return alert("El partido no puede terminar en empate."); }
+           if (valA === valB) { 
+               setAlertMessage("El partido no puede terminar en empate.");
+               return; 
+           }
           updateScoreDB(editMatchId, valA, valB);
           setEditMatchId(null);
       }
@@ -192,6 +196,18 @@ const Results: React.FC = () => {
                         </div>
                     </div>
                )}
+               {alertMessage && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                          <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+                              <AlertTriangle size={32} />
+                          </div>
+                          <h3 className="text-xl font-black text-slate-900 mb-2">Error</h3>
+                          <p className="text-slate-500 mb-6">{alertMessage}</p>
+                          <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
+                      </div>
+                  </div>
+              )}
           </div>
       );
   }

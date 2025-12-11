@@ -31,6 +31,7 @@ const SuperAdmin: React.FC = () => {
     const [foundUser, setFoundUser] = useState<UserResult | null>(null);
     const [clubName, setClubName] = useState('');
     const [createError, setCreateError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     const fetchClubs = async () => {
         setLoading(true);
@@ -96,7 +97,7 @@ const SuperAdmin: React.FC = () => {
         if (error) {
             setCreateError(error.message);
         } else {
-            alert(`Club "${clubName}" creado correctamente.`);
+            setSuccessMessage(`Club "${clubName}" creado correctamente.`);
             setFoundUser(null);
             setClubName('');
             setSearchEmail('');
@@ -237,6 +238,22 @@ const SuperAdmin: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* SUCCESS MODAL */}
+            {successMessage && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
+                            <Check size={32} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">¡Club Creado!</h3>
+                        <p className="text-slate-500 mb-6">{successMessage}</p>
+                        <button onClick={() => setSuccessMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
+                            Entendido
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { FileText, Gift, Euro, Plus, X, Play, ArrowLeft, Save } from 'lucide-react';
+import { FileText, Gift, Euro, Plus, X, Play, ArrowLeft, Save, AlertTriangle, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const TournamentSetup: React.FC = () => {
@@ -21,6 +21,7 @@ const TournamentSetup: React.FC = () => {
     const [prizes, setPrizes] = useState<string[]>([]);
     const [prizeInput, setPrizeInput] = useState('');
     const [extras, setExtras] = useState<string[]>(['Bolas Nuevas', 'Agua']);
+    const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
     // Pre-fill form if Editing
     useEffect(() => {
@@ -58,7 +59,10 @@ const TournamentSetup: React.FC = () => {
     };
 
     const handleSubmit = async () => {
-        if (!title) return alert("El título es obligatorio");
+        if (!title) {
+            setAlertMessage({ type: 'error', message: "El título es obligatorio." });
+            return;
+        }
         
         const metadata = {
             title,
@@ -72,12 +76,18 @@ const TournamentSetup: React.FC = () => {
 
         if (isEditing) {
             await updateTournamentSettings(metadata);
-            alert("Información actualizada correctamente");
+            setAlertMessage({ type: 'success', message: "Información actualizada correctamente." });
         } else {
             await createNewTournament(metadata);
+            navigate('/dashboard');
         }
+    };
 
-        navigate('/dashboard');
+    const closeAlert = () => {
+        setAlertMessage(null);
+        if (alertMessage?.type === 'success' && isEditing) {
+            navigate('/dashboard');
+        }
     };
 
     return (
@@ -175,6 +185,22 @@ const TournamentSetup: React.FC = () => {
                       {isEditing ? 'GUARDAR CAMBIOS' : 'PUBLICAR Y ABRIR INSCRIPCIONES'}
                   </button>
             </div>
+
+            {/* ALERT MODAL */}
+            {alertMessage && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${alertMessage.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                            {alertMessage.type === 'error' ? <AlertTriangle size={32} /> : <Check size={32} />}
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">{alertMessage.type === 'error' ? 'Atención' : 'Guardado'}</h3>
+                        <p className="text-slate-500 mb-6">{alertMessage.message}</p>
+                        <button onClick={closeAlert} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
+                            {alertMessage.type === 'error' ? 'Revisar' : 'Continuar'}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

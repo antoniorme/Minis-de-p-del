@@ -1,18 +1,18 @@
 
-
 import React, { useState } from 'react';
 import { useHistory } from '../store/HistoryContext';
 import { THEME } from '../utils/theme';
-import { Save, Building, Image as ImageIcon, Upload, MapPin } from 'lucide-react';
+import { Save, Building, Image as ImageIcon, Upload, MapPin, Check } from 'lucide-react';
 
 const ClubProfile: React.FC = () => {
   const { clubData, updateClubData } = useHistory();
   const [form, setForm] = useState(clubData);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
       e.preventDefault();
       updateClubData(form);
-      alert("Datos guardados correctamente");
+      setShowSuccess(true);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,6 +119,21 @@ const ClubProfile: React.FC = () => {
               </button>
           </form>
       </div>
+
+      {showSuccess && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
+                      <Check size={32} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-2">¡Guardado!</h3>
+                  <p className="text-slate-500 mb-6">Los datos del club se han actualizado correctamente.</p>
+                  <button onClick={() => setShowSuccess(false)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
+                      Entendido
+                  </button>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

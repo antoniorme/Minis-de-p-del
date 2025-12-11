@@ -2,10 +2,15 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X, Trash2 } from 'lucide-react';
+import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle } from 'lucide-react';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { calculateDisplayRanking, calculateInitialElo, manualToElo } from '../utils/Elo';
+
+interface AlertState {
+    type: 'error' | 'success';
+    message: string;
+}
 
 const PlayerManager: React.FC = () => {
   const { state, updatePlayerInDB, addPlayerToDB, deletePlayerDB, formatPlayerName } = useTournament();
@@ -14,6 +19,7 @@ const PlayerManager: React.FC = () => {
   const [search, setSearch] = useState('');
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [alertMessage, setAlertMessage] = useState<AlertState | null>(null);
   
   const [isCreating, setIsCreating] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], manual_rating: 5, email: '', phone: '' });
@@ -44,12 +50,15 @@ const PlayerManager: React.FC = () => {
           setEditingPlayer(null);
           setShowDeleteConfirm(false);
       } catch (e: any) {
-          alert("Error al eliminar: " + e.message);
+          setAlertMessage({ type: 'error', message: "Error al eliminar: " + e.message });
       }
   };
   
   const handleCreate = async () => {
-      if (!newPlayer.name) return alert("El nombre es obligatorio");
+      if (!newPlayer.name) {
+          setAlertMessage({ type: 'error', message: "El nombre es obligatorio." });
+          return;
+      }
       // Calcular ELO inicial basado en anclas
       const initialElo = calculateInitialElo(newPlayer.categories, newPlayer.manual_rating);
       
@@ -268,6 +277,22 @@ const PlayerManager: React.FC = () => {
                 </div>
             </div>
         </div>
+      )}
+
+      {/* ALERT MODAL */}
+      {alertMessage && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${alertMessage.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                      {alertMessage.type === 'error' ? <AlertTriangle size={32} /> : <Check size={32} />}
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-2">{alertMessage.type === 'error' ? 'Error' : 'Éxito'}</h3>
+                  <p className="text-slate-500 mb-6">{alertMessage.message}</p>
+                  <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
+                      Entendido
+                  </button>
+              </div>
+          </div>
       )}
     </div>
   );

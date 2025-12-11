@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, UserCog, History, Settings, HelpCircle, X, Bell, Shield, LayoutGrid, Home } from 'lucide-react';
@@ -38,6 +39,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const currentNavItems = isTournamentActive ? tournamentNavItems : clubNavItems;
 
   const menuItems = [
+      { path: '/dashboard', label: 'Mis Torneos', icon: LayoutGrid }, // Added per request
       { path: '/players', label: 'Gestión Jugadores', icon: UserCog },
       { path: '/history', label: 'Historial Minis', icon: History },
       { path: '/club', label: 'Datos del Club', icon: Settings },
@@ -86,10 +88,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     )
                 )}
                 
-                {/* TITLE */}
+                {/* TITLE - ALWAYS CLUB NAME */}
                 <div className="flex flex-col overflow-hidden">
                     <h1 className="text-lg font-black bg-gradient-to-r from-[#2B2DBF] to-[#575AF9] bg-clip-text text-transparent truncate leading-tight">
-                        {isTournamentActive ? (state.title || 'Torneo') : (clubData.name || 'Minis de Padel')}
+                        {clubData.name || 'Minis de Padel'}
                     </h1>
                     {isTournamentActive && <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">Gestión de Torneo</span>}
                 </div>
