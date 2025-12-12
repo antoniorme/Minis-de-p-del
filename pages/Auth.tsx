@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, AlertTriangle } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
@@ -13,38 +13,35 @@ type AuthView = 'login' | 'register' | 'recovery';
 // ------------------------------------------------------------------
 const TEST_KEY = '10000000-ffff-ffff-ffff-000000000001';
 
-// HELPERS DE ENTORNO
-// Usamos funciones para evitar errores de acceso directo si el objeto no existe en runtime
+// LECTURA SEGURA DE VARIABLES DE ENTORNO
+// Usamos funciones para evitar el error "Cannot read properties of undefined"
+// si import.meta.env no existe en tiempo de ejecución.
 const getEnvKey = () => {
     try {
-        // Vite reemplaza esto estáticamente en tiempo de compilación
+        // @ts-ignore
         return import.meta.env.VITE_HCAPTCHA_SITE_KEY;
-    } catch {
-        return null;
+    } catch (e) {
+        return '';
     }
 };
 
 const getIsDev = () => {
     try {
+        // @ts-ignore
         return import.meta.env.DEV;
-    } catch {
+    } catch (e) {
         return false;
     }
 };
 
-// LÓGICA DE CLAVE:
-// 1. Intentamos leer la variable de entorno.
-// 2. Si no existe, usamos la clave de TEST para asegurar que el widget siempre salga (evita "no sale el captcha").
 const RAW_KEY = getEnvKey();
 const IS_DEV = getIsDev();
-const HCAPTCHA_SITE_KEY = RAW_KEY || TEST_KEY;
 
-// Debug en consola para ayudar a diagnosticar
-console.log('Captcha Config:', { 
-    hasEnvKey: !!RAW_KEY, 
-    usingKey: HCAPTCHA_SITE_KEY,
-    mode: IS_DEV ? 'DEV' : 'PROD' 
-});
+// LÓGICA DE SELECCIÓN DE CLAVE:
+// 1. Si existe clave real, úsala.
+// 2. Si NO existe clave real y estamos en DEV, usa la de TEST.
+// 3. Si no, vacío (mostrará error en UI).
+const HCAPTCHA_SITE_KEY = RAW_KEY ? RAW_KEY : (IS_DEV ? TEST_KEY : '');
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -120,7 +117,6 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      // Captcha Check
       if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
           setError("Por favor, completa la verificación de seguridad.");
           setLoading(false);
@@ -157,7 +153,12 @@ const AuthPage: React.FC = () => {
         return;
     }
 
-    // CAPTCHA CHECK
+    if (!HCAPTCHA_SITE_KEY && !showDevTools) {
+        setError("Error Crítico: Falta configurar VITE_HCAPTCHA_SITE_KEY en el servidor.");
+        setLoading(false);
+        return;
+    }
+
     if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
         setError("Por favor, completa el captcha para continuar.");
         setLoading(false);
@@ -373,14 +374,24 @@ const AuthPage: React.FC = () => {
             />
           </div>
 
-          {/* CAPTCHA WIDGET (hCaptcha) - Guaranteed Render */}
-          {!showDevTools && HCAPTCHA_SITE_KEY && (
+          {/* CAPTCHA WIDGET */}
+          {!showDevTools && HCAPTCHA_SITE_KEY ? (
               <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
                   <HCaptcha
                       sitekey={HCAPTCHA_SITE_KEY}
                       onVerify={onCaptchaVerify}
                       ref={captchaRef}
                   />
+              </div>
+          ) : !showDevTools && (
+              // WARNING SI NO HAY CLAVE EN PROD
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-lg text-xs flex items-start gap-2">
+                  <AlertTriangle size={16} className="shrink-0"/>
+                  <div>
+                      <strong>Falta configuración del Captcha:</strong>
+                      <br/>
+                      Añade <code>VITE_HCAPTCHA_SITE_KEY</code> a tus variables de entorno en producción.
+                  </div>
               </div>
           )}
 
