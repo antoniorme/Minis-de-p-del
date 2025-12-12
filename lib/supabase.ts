@@ -1,20 +1,30 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Intentamos obtener las variables de forma segura sin funciones auxiliares complejas
+// Función auxiliar segura para leer env vars
+const getEnv = (key: string): string => {
+    try {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) {
+            // @ts-ignore
+            const val = import.meta.env[key];
+            return typeof val === 'string' ? val : "";
+        }
+    } catch (e) {
+        return "";
+    }
+    return "";
+};
+
 let supabaseUrl = 'https://placeholder.supabase.co';
 let supabaseKey = 'placeholder';
 
-try {
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) {
-    // @ts-ignore
-    if (import.meta.env.VITE_SUPABASE_URL) supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    // @ts-ignore
-    if (import.meta.env.VITE_SUPABASE_ANON_KEY) supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  }
-} catch (e) {
-  console.warn("No se pudieron leer las variables de entorno de Vite.");
+const envUrl = getEnv("VITE_SUPABASE_URL");
+const envKey = getEnv("VITE_SUPABASE_ANON_KEY");
+
+if (envUrl && envKey) {
+    supabaseUrl = envUrl;
+    supabaseKey = envKey;
 }
 
 // Inicialización segura del cliente

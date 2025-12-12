@@ -9,25 +9,28 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 type AuthView = 'login' | 'register' | 'recovery';
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN HCAPTCHA (BLINDADA)
+// CONFIGURACIÓN HCAPTCHA (ULTRA-SEGURA)
 // ------------------------------------------------------------------
 
-let HCAPTCHA_SITE_TOKEN = "";
-let IS_DEV_ENV = false;
-
-// Bloque try-catch para evitar que la app explote (Pantalla Blanca) si import.meta.env falla
-try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) {
-         // @ts-ignore
-         // Usamos TOKEN en lugar de KEY para evitar filtros de seguridad de Vercel
-         HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN || "";
-         // @ts-ignore
-         IS_DEV_ENV = import.meta.env.DEV;
+// Función auxiliar para leer variables sin que explote la app
+const getEnv = (key: string): string => {
+    try {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) {
+            // @ts-ignore
+            const val = import.meta.env[key];
+            // Handle boolean values (like DEV) by converting to string or ignoring
+            if (typeof val === 'boolean') return val ? "true" : "";
+            return typeof val === 'string' ? val : "";
+        }
+    } catch (e) {
+        console.error("Error reading env:", e);
     }
-} catch (e) {
-    console.warn("Error seguro al leer variables de entorno:", e);
-}
+    return "";
+};
+
+const HCAPTCHA_SITE_TOKEN = getEnv("VITE_HCAPTCHA_SITE_TOKEN");
+const IS_DEV_ENV = getEnv("DEV");
 
 // Detección de entorno local
 const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -62,6 +65,13 @@ const AuthPage: React.FC = () => {
       if (isOfflineMode || isPlaceholder) {
           setShowDevTools(true);
       }
+      
+      // Log para depuración en consola del navegador
+      console.log("Auth Config Status:", {
+          hasToken: !!HCAPTCHA_SITE_TOKEN,
+          isLocal: IS_LOCAL,
+          tokenLength: HCAPTCHA_SITE_TOKEN ? HCAPTCHA_SITE_TOKEN.length : 0
+      });
   }, [isOfflineMode]);
 
   useEffect(() => {
@@ -158,7 +168,7 @@ const AuthPage: React.FC = () => {
 
     if (!showDevTools && !allowBypass) {
         if (!HCAPTCHA_SITE_TOKEN) {
-            setError("ERROR: No se detecta VITE_HCAPTCHA_SITE_TOKEN. Revisa las variables en Vercel.");
+            setError("ERROR CRÍTICO: No se detecta VITE_HCAPTCHA_SITE_TOKEN. La variable de entorno está vacía.");
             setLoading(false);
             return;
         }
@@ -369,7 +379,7 @@ const AuthPage: React.FC = () => {
         </div>
 
         {error && (
-          <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm mb-6 text-center font-medium shadow-sm">
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm mb-6 text-center font-medium shadow-sm break-words">
             {error}
           </div>
         )}
@@ -413,11 +423,11 @@ const AuthPage: React.FC = () => {
                       <ShieldAlert size={24} className="shrink-0 mt-1" />
                       <div className="text-xs">
                           <strong className="block text-sm mb-1">Error de Configuración</strong>
-                          <p className="mb-2">No se detecta <code>VITE_HCAPTCHA_SITE_TOKEN</code>.</p>
-                          <ul className="list-disc pl-4 space-y-1 opacity-90">
-                            <li>Renombra la variable en Vercel.</li>
-                            <li><strong>Haz Redeploy</strong>.</li>
-                          </ul>
+                          <p className="mb-2">La App no detecta el Token del Captcha.</p>
+                          <p className="font-mono bg-rose-100 px-1 py-0.5 rounded text-[10px] break-all">
+                              Variable esperada: VITE_HCAPTCHA_SITE_TOKEN
+                          </p>
+                          <p className="mt-2 text-[10px]">Asegúrate de que está añadida en Vercel y has hecho Redeploy.</p>
                       </div>
                   </div>
               )
