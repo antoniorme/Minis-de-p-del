@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
 import { THEME } from '../../utils/theme';
-import { User, Check, Trophy, Search, ArrowRight, UserPlus, AlertTriangle, X, Calendar, Phone, AtSign, MapPin, ExternalLink, ArrowRightCircle, ArrowLeftCircle, Repeat, Shuffle } from 'lucide-react';
+import { User, Check, Trophy, Search, ArrowRight, UserPlus, AlertTriangle, X, Calendar, Phone, AtSign, MapPin, ExternalLink, ArrowRightCircle, ArrowLeftCircle, Repeat, Shuffle, Lock, Eye, EyeOff } from 'lucide-react';
 import { calculateInitialElo } from '../../utils/Elo';
 import { supabase } from '../../lib/supabase';
 
@@ -16,18 +16,28 @@ const JoinTournament: React.FC = () => {
 
     const [step, setStep] = useState(1);
     const [alertMessage, setAlertMessage] = useState<{type: 'error'|'success', message: string} | null>(null);
+    
+    // PUBLIC DATA STATE
     const [realClubName, setRealClubName] = useState('Club de Padel');
+    const [activeTournamentInfo, setActiveTournamentInfo] = useState<any>(null);
     
     // --- STEP 1: IDENTITY ---
     const [isGuest, setIsGuest] = useState(true); 
     
     // --- STEP 2: MY DATA ---
     const [myName, setMyName] = useState('');
-    const [myNickname, setMyNickname] = useState(''); // NEW
+    const [myNickname, setMyNickname] = useState('');
     const [myPhone, setMyPhone] = useState('');
+    const [myEmail, setMyEmail] = useState(''); // NEW: Email field
     const [myCategories, setMyCategories] = useState<string[]>([]);
     const [myPosition, setMyPosition] = useState<'right' | 'backhand' | undefined>(undefined);
     const [myPlayBoth, setMyPlayBoth] = useState(false);
+
+    // --- NEW: ACCOUNT CREATION ---
+    const [createAccount, setCreateAccount] = useState(false);
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     
     // --- STEP 3: PARTNER ---
     const [partnerType, setPartnerType] = useState<'search' | 'new' | 'solo' | null>(null);
@@ -42,8 +52,8 @@ const JoinTournament: React.FC = () => {
     const [partnerPosition, setPartnerPosition] = useState<'right' | 'backhand' | undefined>(undefined);
     const [partnerPlayBoth, setPartnerPlayBoth] = useState(false);
 
-    // Context Data
-    const tournamentInfo = globalTournaments.find(t => t.clubId === clubId) || {
+    // Computed Info (Fallback to Mock/Context if DB fetch hasn't finished or failed)
+    const tournamentInfo = activeTournamentInfo || globalTournaments.find(t => t.clubId === clubId) || {
         name: 'Torneo del Club',
         clubName: realClubName,
         date: new Date().toISOString(),
@@ -53,17 +63,55 @@ const JoinTournament: React.FC = () => {
     };
 
     const formatDate = (iso: string) => {
-        return new Date(iso).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        try {
+            return new Date(iso).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        } catch (e) {
+            return 'Fecha por determinar';
+        }
     };
 
     // Initial Load & Auth Check
     useEffect(() => {
         const init = async () => {
+            // Load app context (players list etc)
             await loadData();
+            
             if (clubId) {
-                // Fetch Real Club Name directly from Supabase
-                const { data } = await supabase.from('clubs').select('name').eq('owner_id', clubId).single();
-                if (data) setRealClubName(data.name);
+                try {
+                    // 1. Fetch Real Club Name directly from Supabase (Public Read)
+                    const { data: clubData } = await supabase
+                        .from('clubs')
+                        .select('name, address, maps_url') // Ensure these columns exist or select *
+                        .eq('owner_id', clubId)
+                        .single();
+                    
+                    if (clubData) {
+                        setRealClubName(clubData.name);
+                    }
+
+                    // 2. Fetch Active Tournament for this Club to get Title/Date
+                    const { data: tData } = await supabase
+                        .from('tournaments')
+                        .select('title, date, price')
+                        .eq('user_id', clubId)
+                        .neq('status', 'finished')
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (tData) {
+                        setActiveTournamentInfo({
+                            name: tData.title,
+                            date: tData.date,
+                            clubName: clubData?.name || 'Club de Padel',
+                            clubLogo: '🎾',
+                            address: clubData?.address || '',
+                            mapsUrl: (clubData as any)?.maps_url || ''
+                        });
+                    }
+                } catch (error) {
+                    console.warn("Could not fetch public club details", error);
+                }
             }
         };
         init();
@@ -88,9 +136,25 @@ const JoinTournament: React.FC = () => {
     }, [state.players]);
 
     const handleNext = () => {
-        if (step === 2 && !myName) {
-            setAlertMessage({ type: 'error', message: "Por favor, introduce tu nombre." });
-            return;
+        if (step === 2) {
+            if (!myName) {
+                setAlertMessage({ type: 'error', message: "Por favor, introduce tu nombre." });
+                return;
+            }
+            if (createAccount) {
+                if (!myEmail) {
+                    setAlertMessage({ type: 'error', message: "El email es obligatorio para crear una cuenta." });
+                    return;
+                }
+                if (password.length < 6) {
+                    setAlertMessage({ type: 'error', message: "La contraseña debe tener al menos 6 caracteres." });
+                    return;
+                }
+                if (password !== confirmPassword) {
+                    setAlertMessage({ type: 'error', message: "Las contraseñas no coinciden." });
+                    return;
+                }
+            }
         }
         if (step === 3 && !partnerType) {
             setAlertMessage({ type: 'error', message: "Elige una opción para tu compañero." });
@@ -114,22 +178,42 @@ const JoinTournament: React.FC = () => {
         }
 
         let myId = localStorage.getItem('padel_sim_player_id');
+        let newAuthUserId = null;
+
+        // 0. Create Supabase Auth User if requested
+        if (createAccount && !myId) {
+            try {
+                const { data, error } = await supabase.auth.signUp({
+                    email: myEmail,
+                    password: password,
+                });
+                if (error) throw error;
+                if (data.user) {
+                    newAuthUserId = data.user.id;
+                }
+            } catch (e: any) {
+                setAlertMessage({ type: 'error', message: "Error al crear cuenta: " + e.message });
+                return;
+            }
+        }
 
         // 1. Create Myself if not exists
         if (!myId) {
             const myElo = calculateInitialElo(myCategories, 5); 
             // IMPORTANT: Pass clubId as second arg to associate with the club
             myId = await addPlayerToDB({
-                name: myName + ' (App)',
+                name: myName + (createAccount ? '' : ' (App)'), // Don't append (App) if they created a real account
                 nickname: myNickname || myName,
                 phone: myPhone,
+                email: myEmail,
                 categories: myCategories,
                 preferred_position: myPosition,
                 play_both_sides: myPlayBoth,
-                global_rating: myElo
+                global_rating: myElo,
+                profile_user_id: newAuthUserId || undefined // Link to Auth User if created
             }, clubId);
             
-            // Auto-login for future
+            // Auto-login for future (store player ID)
             if (myId) localStorage.setItem('padel_sim_player_id', myId);
         }
 
@@ -164,7 +248,7 @@ const JoinTournament: React.FC = () => {
         // 3. Create Pair
         await createPairInDB(myId, p2Id, 'confirmed'); 
 
-        setAlertMessage({ type: 'success', message: "¡Inscripción realizada con éxito!" });
+        setAlertMessage({ type: 'success', message: createAccount ? "¡Cuenta creada e inscripción realizada!" : "¡Inscripción realizada con éxito!" });
     };
 
     const closeAlert = () => {
@@ -300,6 +384,15 @@ const JoinTournament: React.FC = () => {
                                     <input value={myPhone} onChange={e => setMyPhone(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mt-1 text-sm font-bold text-slate-800 outline-none focus:border-[#575AF9]" placeholder="600..."/>
                                 </div>
                             </div>
+
+                            {/* EMAIL FIELD */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
+                                <div className="relative mt-1">
+                                    <AtSign size={16} className="absolute left-3 top-3.5 text-slate-400"/>
+                                    <input value={myEmail} onChange={e => setMyEmail(e.target.value)} className="w-full pl-9 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#575AF9]" placeholder="usuario@email.com"/>
+                                </div>
+                            </div>
                             
                             {/* Position Selector */}
                             <div className="space-y-2">
@@ -332,6 +425,56 @@ const JoinTournament: React.FC = () => {
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* CREATE ACCOUNT TOGGLE */}
+                            <div className="pt-2 border-t border-slate-100">
+                                <div 
+                                    onClick={() => setCreateAccount(!createAccount)}
+                                    className={`flex items-center gap-3 p-4 rounded-xl cursor-pointer border transition-all ${createAccount ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                                >
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${createAccount ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>
+                                        {createAccount && <Check size={14} className="text-white"/>}
+                                    </div>
+                                    <div>
+                                        <div className={`text-sm font-bold ${createAccount ? 'text-indigo-800' : 'text-slate-700'}`}>Crear cuenta para próximas veces</div>
+                                        <div className="text-xs text-slate-500">Guarda tu historial y nivel.</div>
+                                    </div>
+                                </div>
+
+                                {createAccount && (
+                                    <div className="space-y-3 mt-4 animate-slide-up pl-2 border-l-2 border-indigo-100 ml-4">
+                                        <div>
+                                            <label className="text-xs font-bold text-indigo-800 uppercase">Contraseña</label>
+                                            <div className="relative mt-1">
+                                                <Lock size={16} className="absolute left-3 top-3.5 text-indigo-300"/>
+                                                <input 
+                                                    type={showPassword ? "text" : "password"} 
+                                                    value={password} 
+                                                    onChange={e => setPassword(e.target.value)} 
+                                                    className="w-full pl-9 pr-10 p-3 bg-white border border-indigo-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#575AF9]" 
+                                                    placeholder="Mínimo 6 caracteres"
+                                                />
+                                                <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-indigo-300 hover:text-indigo-500">
+                                                    {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-indigo-800 uppercase">Confirmar Contraseña</label>
+                                            <div className="relative mt-1">
+                                                <Lock size={16} className="absolute left-3 top-3.5 text-indigo-300"/>
+                                                <input 
+                                                    type="password"
+                                                    value={confirmPassword} 
+                                                    onChange={e => setConfirmPassword(e.target.value)} 
+                                                    className="w-full pl-9 p-3 bg-white border border-indigo-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#575AF9]" 
+                                                    placeholder="Repite la contraseña"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* FLOW BUTTONS (IN CONTENT) */}
@@ -524,10 +667,12 @@ const JoinTournament: React.FC = () => {
                                     <div className="text-lg font-bold text-slate-900 flex items-center gap-2">
                                         {myName}
                                         {!isGuest && <span className="bg-blue-100 text-blue-600 text-[10px] px-2 py-0.5 rounded-full uppercase">Tú</span>}
+                                        {createAccount && <span className="bg-indigo-100 text-indigo-600 text-[10px] px-2 py-0.5 rounded-full uppercase">Cuenta</span>}
                                     </div>
-                                    <div className="text-xs text-slate-500 mt-1 flex gap-2">
+                                    <div className="text-xs text-slate-500 mt-1 flex gap-2 flex-wrap">
                                         <span>{myCategories.join(', ')}</span>
                                         {myPosition && <span className="bg-slate-200 px-1.5 rounded text-[10px] uppercase font-bold text-slate-600">{myPosition === 'right' ? 'Derecha' : 'Revés'}</span>}
+                                        {myEmail && <span className="text-slate-400 truncate w-full mt-1">{myEmail}</span>}
                                     </div>
                                 </div>
                                 <div className="border-t border-slate-200 pt-4">

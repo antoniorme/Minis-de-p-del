@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldAlert, ShieldCheck, Terminal, AlertTriangle } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldAlert, ShieldCheck, Terminal, Eye, EyeOff } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
@@ -44,6 +44,9 @@ const AuthPage: React.FC = () => {
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState(''); // NEW: Confirm Password
+  const [showPassword, setShowPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -77,6 +80,7 @@ const AuthPage: React.FC = () => {
   };
 
   const ensurePlayerRecord = async (userId: string, userEmail: string) => {
+      // Basic check to see if player exists, created with email name as placeholder
       const { data: existingPlayer } = await supabase
           .from('players')
           .select('id')
@@ -87,7 +91,7 @@ const AuthPage: React.FC = () => {
           await supabase.from('players').insert([{
               user_id: userId,
               email: userEmail,
-              name: userEmail.split('@')[0], 
+              name: userEmail.split('@')[0], // Placeholder name
               categories: ['Iniciación'], 
               manual_rating: 5
           }]);
@@ -153,6 +157,11 @@ const AuthPage: React.FC = () => {
             ...authOptions
         });
       } else {
+        // Register Logic
+        if (password !== confirmPassword) {
+            throw new Error("Las contraseñas no coinciden.");
+        }
+        
         result = await supabase.auth.signUp({ 
             email, 
             password,
@@ -162,14 +171,19 @@ const AuthPage: React.FC = () => {
 
       if (result.error) throw result.error;
 
-      if (result.data.user && result.data.session) {
-          await ensurePlayerRecord(result.data.user.id, result.data.user.email!);
-          // Navigation is handled by App.tsx observing AuthContext state
-      } else if (view === 'register' && result.data.user && !result.data.session) {
-           setSuccessMsg("¡Cuenta creada! Revisa tu email para confirmarla.");
-           if(captchaRef.current) captchaRef.current.resetCaptcha(); 
-           setCaptchaToken(null);
-           setView('login');
+      if (result.data.user) {
+          // If login successful or auto-login after signup, ensure player record exists (basic)
+          if (view === 'login' || (view === 'register' && result.data.session)) {
+              await ensurePlayerRecord(result.data.user.id, result.data.user.email!);
+          }
+          
+          if (view === 'register' && !result.data.session) {
+               // Email confirmation required case
+               setSuccessMsg("¡Cuenta creada! Revisa tu email para confirmarla.");
+               if(captchaRef.current) captchaRef.current.resetCaptcha(); 
+               setCaptchaToken(null);
+               setView('login');
+          }
       }
 
     } catch (err: any) {
@@ -323,14 +337,30 @@ const AuthPage: React.FC = () => {
               placeholder="Email"
             />
           </div>
+          
           <div className="relative">
             <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
             <input
-              type="password" required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6}
-              className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium transition-all focus:ring-4 focus:ring-indigo-50"
+              type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6}
+              className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium transition-all focus:ring-4 focus:ring-indigo-50"
               placeholder="Contraseña"
             />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600">
+                {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+            </button>
           </div>
+
+          {/* CONFIRM PASSWORD - ONLY FOR REGISTER */}
+          {view === 'register' && (
+              <div className="relative animate-slide-up">
+                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                <input
+                  type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium transition-all focus:ring-4 focus:ring-indigo-50"
+                  placeholder="Repetir Contraseña"
+                />
+              </div>
+          )}
 
           {/* CAPTCHA WIDGET */}
           {(!IS_LOCAL || HCAPTCHA_SITE_TOKEN) ? (
@@ -367,7 +397,7 @@ const AuthPage: React.FC = () => {
             type="submit" disabled={loading}
             className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-2xl font-bold text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center items-center text-lg"
           >
-            {loading ? <Loader2 className="animate-spin" /> : (view === 'login' ? 'Entrar' : 'Registrarse')}
+            {loading ? <Loader2 className="animate-spin" /> : (view === 'login' ? 'Entrar' : 'Crear Cuenta')}
           </button>
         </form>
 
