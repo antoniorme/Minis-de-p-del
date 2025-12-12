@@ -2,8 +2,155 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp, Link as LinkIcon, UserPlus } from 'lucide-react';
+import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp, Link as LinkIcon, UserPlus, Phone, Database } from 'lucide-react';
+import { Player } from '../types';
 
+// --- SUB-COMPONENT: PLAYER SELECTOR (Extracted to prevent re-renders) ---
+interface PlayerSelectorProps {
+    label: string;
+    selectedId: string;
+    onSelect: (id: string) => void;
+    otherSelectedId: string;
+    players: Player[];
+    onAddPlayer: (p: Partial<Player>) => Promise<string | null>;
+    formatName: (p?: Player) => string;
+}
+
+const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedId, onSelect, otherSelectedId, players, onAddPlayer, formatName }) => {
+    const [tab, setTab] = useState<'search' | 'new'>('search');
+    const [searchQuery, setSearchQuery] = useState('');
+    
+    // Form State
+    const [newPlayer, setNewPlayer] = useState({ 
+        name: '', 
+        nickname: '', 
+        phone: '', 
+        categories: [] as string[], 
+        saveRecord: true, 
+        manual_rating: 5 
+    });
+    
+    // Determine the assignedIds set based on the full list passed (optimization: done in parent ideally, but simple here)
+    // We filter locally based on the passed props
+    const selectedPlayer = players.find(p => p.id === selectedId);
+    
+    const filteredPlayers = players.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              (p.nickname && p.nickname.toLowerCase().includes(searchQuery.toLowerCase()));
+        const notOtherSlot = p.id !== otherSelectedId;
+        // Note: Global assignment check is handled by filtering activePairs in parent if needed, 
+        // or we rely on the user not picking the same person twice visually. 
+        // For strictness, the parent could pass a list of 'unavailableIds'.
+        return matchesSearch && notOtherSlot;
+    });
+
+    const handleCreatePlayer = async () => {
+        if(!newPlayer.name) return;
+        
+        // We pass the data to the context function
+        const newId = await onAddPlayer({
+            name: newPlayer.name,
+            nickname: newPlayer.nickname,
+            phone: newPlayer.phone,
+            categories: newPlayer.categories,
+            manual_rating: newPlayer.manual_rating,
+            // If saveRecord is false, in a real backend we might flag it as "temp", 
+            // but for now we just create them. Ideally, we add a 'is_temporary' flag to DB.
+        });
+
+        if(newId) { 
+            onSelect(newId); 
+            setNewPlayer({ name: '', nickname: '', phone: '', categories: [], saveRecord: true, manual_rating: 5 }); 
+            setTab('search'); 
+        }
+    };
+
+    const toggleNewCat = (cat: string) => { 
+        setNewPlayer(prev => { 
+            const exists = prev.categories.includes(cat); 
+            return { ...prev, categories: exists ? prev.categories.filter(c => c !== cat) : [...prev.categories, cat] }; 
+        }); 
+    };
+
+    return (
+        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 shadow-sm">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">{label}</label>
+            {selectedId ? (
+                <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-indigo-200 shadow-sm animate-fade-in">
+                    <div className="flex items-center gap-3">
+                        <div style={{ color: THEME.cta }} className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center border border-indigo-200"><User size={16} /></div>
+                        <div>
+                            <div className="font-bold text-slate-800 text-sm">{formatName(selectedPlayer)}</div>
+                        </div>
+                    </div>
+                    <button onClick={() => onSelect('')} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><X size={18}/></button>
+                </div>
+            ) : (
+                <>
+                    <div className="flex bg-white p-1 rounded-lg border border-slate-200 mb-3 shadow-sm">
+                        <button onClick={() => setTab('search')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2 ${tab === 'search' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><Search size={14}/> Buscar</button>
+                        <button onClick={() => setTab('new')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2 ${tab === 'new' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><Plus size={14}/> Nuevo</button>
+                    </div>
+                    {tab === 'search' ? (
+                        <div className="animate-fade-in">
+                            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Escribe para buscar..." className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg mb-2 focus:border-[#575AF9] outline-none text-slate-800 placeholder:text-slate-400 shadow-inner" />
+                            <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                                {filteredPlayers.slice(0, 50).map(p => (
+                                    <button key={p.id} onClick={() => onSelect(p.id)} className="w-full text-left p-2 hover:bg-blue-50 rounded flex items-center justify-between text-sm text-slate-700 border border-transparent hover:border-blue-100 transition-colors">
+                                        <span className="font-medium">{formatName(p)}</span>
+                                        <div className="flex items-center gap-2">{p.categories?.[0] && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{p.categories[0]}</span>}</div>
+                                    </button>
+                                ))}
+                                {filteredPlayers.length === 0 && <p className="text-xs text-center text-slate-400 py-4 italic">No hay jugadores disponibles.</p>}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-3 animate-fade-in">
+                            <input placeholder="Nombre completo" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
+                            
+                            <div className="grid grid-cols-2 gap-2">
+                                <input placeholder="Apodo" value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
+                                <div className="relative">
+                                    <Phone size={14} className="absolute left-3 top-3.5 text-slate-400"/>
+                                    <input placeholder="Teléfono" value={newPlayer.phone} onChange={e => setNewPlayer({...newPlayer, phone: e.target.value})} className="w-full pl-9 p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
+                                </div>
+                            </div>
+                            
+                            <div className="bg-slate-100 p-3 rounded-lg border border-slate-200">
+                                <div className="flex justify-between items-center mb-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Nivel (ELO Manual)</label>
+                                  <span style={{ color: THEME.cta }} className="text-sm font-black">{newPlayer.manual_rating}</span>
+                                </div>
+                                <input 
+                                  type="range" min="1" max="10" step="0.5" 
+                                  value={newPlayer.manual_rating} 
+                                  onChange={e => setNewPlayer({...newPlayer, manual_rating: parseFloat(e.target.value)})}
+                                  className="w-full accent-[#575AF9] h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
+                                />
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5">{TOURNAMENT_CATEGORIES.map(c => (<button key={c} onClick={() => toggleNewCat(c)} className={`px-2.5 py-1.5 text-[10px] font-bold rounded-md border transition-all ${newPlayer.categories.includes(c) ? 'bg-[#575AF9] text-white border-[#575AF9] shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200'}`}>{c}</button>))}</div>
+                            
+                            <div 
+                                onClick={() => setNewPlayer({...newPlayer, saveRecord: !newPlayer.saveRecord})}
+                                className="flex items-center gap-2 cursor-pointer p-2 hover:bg-slate-50 rounded-lg"
+                            >
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${newPlayer.saveRecord ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-slate-300'}`}>
+                                    {newPlayer.saveRecord && <Check size={14} className="text-white"/>}
+                                </div>
+                                <span className="text-xs font-bold text-slate-600 flex items-center gap-1"><Database size={12}/> Guardar en base de datos</span>
+                            </div>
+
+                            <button onClick={handleCreatePlayer} style={{ backgroundColor: THEME.cta }} className="w-full py-3 text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2 hover:opacity-90"><Check size={16}/> Crear y Usar Jugador</button>
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
+};
+
+// --- MAIN REGISTRATION COMPONENT ---
 const Registration: React.FC = () => {
   const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, formatPlayerName, getPairElo, assignPartnerDB } = useTournament();
   
@@ -18,109 +165,23 @@ const Registration: React.FC = () => {
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   
   // SOLO MATCHING STATES
-  const [showSoloMatchModal, setShowSoloMatchModal] = useState<string | null>(null); // ID of solo pair being matched
+  const [showSoloMatchModal, setShowSoloMatchModal] = useState<string | null>(null); 
   const [selectedSoloPartner, setSelectedSoloPartner] = useState('');
 
   const currentFormat = state.format || '16_mini';
-  // Filter complete pairs for the main count
   const activePairs = state.pairs.filter(p => p.player2Id !== null) || [];
-  // Filter solo players
   const soloPairs = state.pairs.filter(p => p.player2Id === null) || [];
-
-  const limit = currentFormat === '10_mini' ? 10 : 16;
-  
   const totalRegistered = activePairs.length;
 
-  const assignedPlayerIds = state.pairs.reduce((acc, pair) => {
-      if (isEditingPairId && pair.id === isEditingPairId) return acc;
-      if (pair.player1Id) acc.add(pair.player1Id);
-      if (pair.player2Id) acc.add(pair.player2Id);
-      return acc;
-  }, new Set<string>());
-
-  const PlayerSelector = ({ label, selectedId, onSelect, otherSelectedId }: any) => {
-      const [tab, setTab] = useState<'search' | 'new'>('search');
-      const [searchQuery, setSearchQuery] = useState('');
-      const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], saveRecord: true, manual_rating: 5 });
-      
-      const selectedPlayer = state.players.find(p => p.id === selectedId);
-      
-      const filteredPlayers = state.players.filter(p => {
-          const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                (p.nickname && p.nickname.toLowerCase().includes(searchQuery.toLowerCase()));
-          const notAssigned = !assignedPlayerIds.has(p.id);
-          const notOtherSlot = p.id !== otherSelectedId;
-          
-          return matchesSearch && notAssigned && notOtherSlot;
+  // Filter out players who are already assigned to a pair (confirmed or solo)
+  // But allow if we are editing the current pair, or if checking against "otherSelectedId"
+  const availablePlayers = state.players.filter(p => {
+      const isAssigned = state.pairs.some(pair => {
+          if (isEditingPairId && pair.id === isEditingPairId) return false;
+          return pair.player1Id === p.id || pair.player2Id === p.id;
       });
-
-      const handleCreatePlayer = async () => {
-          if(!newPlayer.name) return;
-          const newId = await addPlayerToDB(newPlayer);
-          if(newId) { onSelect(newId); setNewPlayer({ name: '', nickname: '', categories: [], saveRecord: true, manual_rating: 5 }); setTab('search'); }
-      };
-      const toggleNewCat = (cat: string) => { setNewPlayer(prev => { const exists = prev.categories.includes(cat); return { ...prev, categories: exists ? prev.categories.filter(c => c !== cat) : [...prev.categories, cat] }; }); };
-
-      return (
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 shadow-sm">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">{label}</label>
-              {selectedId ? (
-                  <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-indigo-200 shadow-sm animate-fade-in">
-                      <div className="flex items-center gap-3">
-                          <div style={{ color: THEME.cta }} className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center border border-indigo-200"><User size={16} /></div>
-                          <div>
-                              <div className="font-bold text-slate-800 text-sm">{formatPlayerName(selectedPlayer)}</div>
-                          </div>
-                      </div>
-                      <button onClick={() => onSelect('')} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><X size={18}/></button>
-                  </div>
-              ) : (
-                  <>
-                      <div className="flex bg-white p-1 rounded-lg border border-slate-200 mb-3 shadow-sm">
-                          <button onClick={() => setTab('search')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2 ${tab === 'search' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><Search size={14}/> Buscar</button>
-                          <button onClick={() => setTab('new')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2 ${tab === 'new' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><Plus size={14}/> Nuevo</button>
-                      </div>
-                      {tab === 'search' ? (
-                          <div className="animate-fade-in">
-                              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Escribe para buscar..." className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg mb-2 focus:border-[#575AF9] outline-none text-slate-800 placeholder:text-slate-400 shadow-inner" />
-                              <div className="max-h-32 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                                  {filteredPlayers.slice(0, 50).map(p => (
-                                      <button key={p.id} onClick={() => onSelect(p.id)} className="w-full text-left p-2 hover:bg-blue-50 rounded flex items-center justify-between text-sm text-slate-700 border border-transparent hover:border-blue-100 transition-colors">
-                                          <span className="font-medium">{formatPlayerName(p)}</span>
-                                          <div className="flex items-center gap-2">{p.categories?.[0] && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{p.categories[0]}</span>}</div>
-                                      </button>
-                                  ))}
-                                  {filteredPlayers.length === 0 && <p className="text-xs text-center text-slate-400 py-4 italic">No hay jugadores disponibles.</p>}
-                              </div>
-                          </div>
-                      ) : (
-                          <div className="space-y-3 animate-fade-in">
-                              <input placeholder="Nombre completo" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
-                              <input placeholder="Apodo (opcional)" value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
-                              
-                              <div className="bg-slate-100 p-3 rounded-lg border border-slate-200">
-                                  <div className="flex justify-between items-center mb-1">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Nivel (ELO Manual)</label>
-                                    <span style={{ color: THEME.cta }} className="text-sm font-black">{newPlayer.manual_rating}</span>
-                                  </div>
-                                  <input 
-                                    type="range" min="1" max="10" step="0.5" 
-                                    value={newPlayer.manual_rating} 
-                                    onChange={e => setNewPlayer({...newPlayer, manual_rating: parseFloat(e.target.value)})}
-                                    className="w-full accent-[#575AF9] h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
-                                  />
-                              </div>
-
-                              <div className="flex flex-wrap gap-1.5">{TOURNAMENT_CATEGORIES.map(c => (<button key={c} onClick={() => toggleNewCat(c)} className={`px-2.5 py-1.5 text-[10px] font-bold rounded-md border transition-all ${newPlayer.categories.includes(c) ? 'bg-[#575AF9] text-white border-[#575AF9] shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200'}`}>{c}</button>))}</div>
-                              
-                              <button onClick={handleCreatePlayer} style={{ backgroundColor: THEME.cta }} className="w-full py-3 text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2 hover:opacity-90"><Check size={16}/> Crear y Usar Jugador</button>
-                          </div>
-                      )}
-                  </>
-              )}
-          </div>
-      );
-  };
+      return !isAssigned;
+  });
 
   const openNewPairModal = () => {
     setIsEditingPairId(null);
@@ -166,7 +227,6 @@ const Registration: React.FC = () => {
       }
   };
 
-  // --- SOLO MATCHING HANDLERS ---
   const handleOpenSoloMatch = (soloId: string) => {
       setShowSoloMatchModal(soloId);
       setSelectedSoloPartner('');
@@ -174,13 +234,9 @@ const Registration: React.FC = () => {
 
   const handleConfirmSoloMatch = async () => {
       if (!showSoloMatchModal || !selectedSoloPartner) return;
-      
-      // Check if the selected partner is also a solo pair (to merge)
       const partnerAsSolo = soloPairs.find(p => p.player1Id === selectedSoloPartner);
       const mergeId = partnerAsSolo ? partnerAsSolo.id : undefined;
-
       await assignPartnerDB(showSoloMatchModal, selectedSoloPartner, mergeId);
-      
       setShowSoloMatchModal(null);
       setSelectedSoloPartner('');
   };
@@ -269,7 +325,7 @@ const Registration: React.FC = () => {
       {/* PAIR MODAL */}
       {isPairModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
-              <div className="bg-white w-full h-full sm:h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col">
+              <div className="bg-white w-full h-full sm:h-[90vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col">
                   {/* Compact Header */}
                   <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
                       <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -288,6 +344,9 @@ const Registration: React.FC = () => {
                         selectedId={selectedP1} 
                         onSelect={setSelectedP1} 
                         otherSelectedId={selectedP2}
+                        players={availablePlayers.concat(selectedP1 ? [state.players.find(p=>p.id===selectedP1)!].filter(Boolean) : [])}
+                        onAddPlayer={addPlayerToDB}
+                        formatName={formatPlayerName}
                       />
                       <div className="flex justify-center items-center gap-4 my-4">
                           <div className="h-px bg-slate-200 flex-1"></div>
@@ -299,6 +358,9 @@ const Registration: React.FC = () => {
                         selectedId={selectedP2} 
                         onSelect={setSelectedP2} 
                         otherSelectedId={selectedP1}
+                        players={availablePlayers.concat(selectedP2 ? [state.players.find(p=>p.id===selectedP2)!].filter(Boolean) : [])}
+                        onAddPlayer={addPlayerToDB}
+                        formatName={formatPlayerName}
                       />
                       
                       <div className="flex gap-3 mt-8 pb-8 sm:pb-0">
@@ -322,7 +384,10 @@ const Registration: React.FC = () => {
                         label="COMPAÑERO" 
                         selectedId={selectedSoloPartner} 
                         onSelect={setSelectedSoloPartner} 
-                        otherSelectedId={state.pairs.find(p=>p.id===showSoloMatchModal)?.player1Id}
+                        otherSelectedId={state.pairs.find(p=>p.id===showSoloMatchModal)?.player1Id!}
+                        players={availablePlayers}
+                        onAddPlayer={addPlayerToDB}
+                        formatName={formatPlayerName}
                       />
                   </div>
 
