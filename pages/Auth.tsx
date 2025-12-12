@@ -151,6 +151,13 @@ const AuthPage: React.FC = () => {
       // Solo enviamos opciones de captcha si tenemos un token válido configurado
       const authOptions = (HCAPTCHA_SITE_TOKEN && captchaToken) ? { options: { captchaToken } } : undefined;
 
+      // --- LOG DE DEPURACIÓN PARA VERCEL ---
+      console.log("🔍 DEBUG AUTH: Enviando petición a Supabase");
+      console.log("   - Site Key Configurada:", !!HCAPTCHA_SITE_TOKEN);
+      console.log("   - Token Captcha Generado:", captchaToken ? "SÍ (Oculto)" : "NO");
+      console.log("   - Options Payload:", authOptions);
+      // -------------------------------------
+
       if (view === 'login') {
         result = await supabase.auth.signInWithPassword({ 
             email, 
@@ -223,6 +230,7 @@ const AuthPage: React.FC = () => {
   };
 
   const onCaptchaVerify = (token: string) => {
+      console.log("✅ Captcha Resuelto en Frontend:", token.substring(0, 10) + "...");
       setCaptchaToken(token);
       setError(null);
   };
