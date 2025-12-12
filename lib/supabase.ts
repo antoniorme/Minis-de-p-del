@@ -11,11 +11,19 @@ let supabaseKey = 'placeholder';
 try {
     // Vite buscará y reemplazará estas cadenas exactas.
     // Si no las reemplaza y env es undefined, saltará al catch sin romper la app.
-    const envUrl = import.meta.env.VITE_SUPABASE_URL;
-    const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-    if (envUrl && typeof envUrl === 'string') supabaseUrl = envUrl;
-    if (envKey && typeof envKey === 'string') supabaseKey = envKey;
+    // @ts-ignore
+    if (import.meta && import.meta.env) {
+        // @ts-ignore
+        if (import.meta.env.VITE_SUPABASE_URL && typeof import.meta.env.VITE_SUPABASE_URL === 'string') {
+            // @ts-ignore
+            supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        }
+        // @ts-ignore
+        if (import.meta.env.VITE_SUPABASE_ANON_KEY && typeof import.meta.env.VITE_SUPABASE_ANON_KEY === 'string') {
+            // @ts-ignore
+            supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        }
+    }
 } catch (error) {
     console.warn('Supabase env vars not detected, running in placeholder mode.');
 }
