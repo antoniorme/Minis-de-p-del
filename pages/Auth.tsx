@@ -3,31 +3,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, CheckCircle, ShieldAlert, Clock, Key, Send, AlertTriangle } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, AlertTriangle } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
 
-// Acceso seguro a variables de entorno
-const getEnv = (key: string, defaultValue: string): string => {
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta && import.meta.env && import.meta.env[key] !== undefined) {
-      // @ts-ignore
-      return String(import.meta.env[key]);
-    }
-  } catch (e) {
-    console.warn(`Error reading env var ${key}`);
-  }
-  return defaultValue;
-};
-
 // ------------------------------------------------------------------
 // CONFIGURACIÓN HCAPTCHA
-// IMPORTANTE: Ya no usamos clave de prueba por defecto.
-// Si falla, es porque Vercel no está inyectando VITE_HCAPTCHA_SITE_KEY.
+// Acceso seguro mediante short-circuit para evitar crash si import.meta.env es undefined
 // ------------------------------------------------------------------
-const HCAPTCHA_SITE_KEY = getEnv('VITE_HCAPTCHA_SITE_KEY', '');
+const TEST_KEY = '10000000-ffff-ffff-ffff-000000000001';
+
+// Safe extraction variables
+const ENV_SITE_KEY = (import.meta.env && import.meta.env.VITE_HCAPTCHA_SITE_KEY) || '';
+const IS_DEV = (import.meta.env && import.meta.env.DEV) || false;
+
+const HCAPTCHA_SITE_KEY = ENV_SITE_KEY || (IS_DEV ? TEST_KEY : '');
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -53,8 +44,9 @@ const AuthPage: React.FC = () => {
 
   useEffect(() => {
       const isPlaceholder = (supabase as any).supabaseUrl === 'https://placeholder.supabase.co';
-      // Si estamos offline, usando la base de datos de prueba, O SI NO HAY KEY DE CAPTCHA
-      if (isOfflineMode || isPlaceholder || !HCAPTCHA_SITE_KEY) {
+      
+      // Solo mostramos DevTools si explícitamente estamos offline o la base de datos es placeholder.
+      if (isOfflineMode || isPlaceholder) {
           setShowDevTools(true);
       }
   }, [isOfflineMode]);
@@ -103,7 +95,7 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      // Captcha Check (Solo si no estamos en modo dev forzado)
+      // Captcha Check
       if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
           setError("Por favor, completa la verificación de seguridad.");
           setLoading(false);
@@ -140,6 +132,7 @@ const AuthPage: React.FC = () => {
     }
 
     // CAPTCHA CHECK
+    // Solo requerimos captcha si existe una clave configurada.
     if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
         setError("Por favor, completa el captcha para continuar.");
         setLoading(false);
@@ -337,12 +330,12 @@ const AuthPage: React.FC = () => {
           </div>
         )}
 
-        {!HCAPTCHA_SITE_KEY && !isOfflineMode && !showDevTools && (
+        {/* Warning if no key detected but not in offline mode (Only in PROD) */}
+        {!HCAPTCHA_SITE_KEY && !isOfflineMode && !showDevTools && !IS_DEV && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-xs mb-6 flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5"/>
                 <span>
-                    <strong>Configuración Incompleta:</strong> No se ha detectado la clave <code>VITE_HCAPTCHA_SITE_KEY</code>.
-                    <br/>Revisa las variables de entorno en Vercel.
+                    <strong>Configuración Captcha:</strong> No se detecta clave. Si el login falla, contacta con el administrador.
                 </span>
             </div>
         )}
@@ -365,7 +358,7 @@ const AuthPage: React.FC = () => {
             />
           </div>
 
-          {/* CAPTCHA WIDGET (hCaptcha) */}
+          {/* CAPTCHA WIDGET (hCaptcha) - Only render if KEY exists */}
           {!showDevTools && HCAPTCHA_SITE_KEY && (
               <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
                   <HCaptcha
@@ -405,7 +398,7 @@ const AuthPage: React.FC = () => {
                     <Code2 size={16}/> Modo Desarrollador (Simulación)
                 </div>
                 <div className="text-center text-[10px] text-slate-400 mb-2">
-                    Activado porque no se detectaron claves de producción o base de datos real.
+                    Activado porque no hay conexión a base de datos real.
                 </div>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                     <button 
