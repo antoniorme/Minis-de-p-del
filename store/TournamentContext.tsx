@@ -23,7 +23,7 @@ interface TournamentContextType {
     state: TournamentState; dispatch: React.Dispatch<TournamentAction>; loadData: () => Promise<void>;
     addPlayerToDB: (p: Partial<Player>, ownerId?: string) => Promise<string | null>; updatePlayerInDB: (p: Partial<Player>) => Promise<void>;
     deletePlayerDB: (id: string) => Promise<void>;
-    createPairInDB: (p1: string, p2: string | null, status?: 'confirmed' | 'pending') => Promise<void>; 
+    createPairInDB: (p1: string, p2: string | null, status?: 'confirmed' | 'pending') => Promise<string | null>; 
     updatePairDB: (pairId: string, p1: string, p2: string) => Promise<void>;
     assignPartnerDB: (pairId: string, partnerId: string, mergeWithPairId?: string) => Promise<void>;
     startTournamentDB: (method: GenerationMethod, customOrderedPairs?: Pair[]) => Promise<void>;
@@ -51,7 +51,7 @@ interface TournamentContextType {
 const TournamentContext = createContext<TournamentContextType>({
     state: initialState, dispatch: () => null, loadData: async () => {}, 
     addPlayerToDB: async () => null, updatePlayerInDB: async () => {}, deletePlayerDB: async () => {},
-    createPairInDB: async () => {}, updatePairDB: async () => {}, assignPartnerDB: async () => {}, startTournamentDB: async () => {}, updateScoreDB: async () => {}, nextRoundDB: async () => {},
+    createPairInDB: async () => null, updatePairDB: async () => {}, assignPartnerDB: async () => {}, startTournamentDB: async () => {}, updateScoreDB: async () => {}, nextRoundDB: async () => {},
     deletePairDB: async () => {}, archiveAndResetDB: async () => {}, resetToSetupDB: async () => {}, regenerateMatchesDB: async () => "", hardResetDB: async () => {},
     formatPlayerName: () => '', setTournamentFormat: async () => {}, getPairElo: () => 1200, substitutePairDB: async () => {},
     finishTournamentDB: async () => {}, respondToInviteDB: async () => {}, updateTournamentSettings: async () => {},
@@ -424,21 +424,24 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const createPairInDB = async (p1: string, p2: string | null, status: 'confirmed' | 'pending' = 'confirmed') => {
+        const newId = isOfflineMode ? `pair-${Date.now()}` : '';
+        
         if (isOfflineMode) { 
-            const newPair: Pair = { id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false, status }; 
+            const newPair: Pair = { id: newId, player1Id: p1, player2Id: p2, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false, status }; 
             let limit = 16; if(state.format === '10_mini') limit = 10; if(state.format === '12_mini') limit = 12; if(state.format === '8_mini') limit = 8; 
             newPair.isReserve = p2 !== null && state.pairs.filter(p=>p.status==='confirmed' && p.player2Id).length >= limit; 
             const newState = { ...state, pairs: [...state.pairs, newPair] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); 
             if (p2 && status === 'pending') { const inviter = state.players.find(p => p.id === p1)?.name || 'Un jugador'; addNotification(p2, 'invite', 'Invitación a Torneo', `${inviter} te ha invitado a formar pareja.`, '/p/tournaments'); }
-            return; 
+            return newId; 
         }
         
         let tournamentId = state.id; 
-        if (!tournamentId) return; // Must have active tournament
+        if (!tournamentId) return null; // Must have active tournament
         
-        await supabase.from('tournament_pairs').insert([{ tournament_id: tournamentId, player1_id: p1, player2_id: p2, status }]); 
+        const { data } = await supabase.from('tournament_pairs').insert([{ tournament_id: tournamentId, player1_id: p1, player2_id: p2, status }]).select().single(); 
         if (p2 && status === 'pending') { const inviter = state.players.find(p => p.id === p1)?.name || 'Un jugador'; addNotification(p2, 'invite', 'Invitación a Torneo', `${inviter} te ha invitado a formar pareja.`, '/p/tournaments'); }
         await selectTournament(tournamentId); // Refresh pairs
+        return data?.id || null;
     };
     
     const assignPartnerDB = async (pairId: string, partnerId: string, mergeWithPairId?: string) => {

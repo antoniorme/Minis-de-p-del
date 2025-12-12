@@ -1,17 +1,27 @@
 
 import React, { useMemo, useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
-import { getFormatColor } from '../utils/theme';
-import { DollarSign, Droplets, Circle, Users, Check, RefreshCw, X, AlertTriangle, ArrowRight, UserPlus } from 'lucide-react';
+import { getFormatColor, THEME } from '../utils/theme';
+import { DollarSign, Droplets, Circle, Users, Check, RefreshCw, X, AlertTriangle, ArrowRight, UserPlus, Save, User } from 'lucide-react';
 import { Pair, Player } from '../types';
+import { PlayerSelector } from '../components/PlayerSelector';
 
 const CheckIn: React.FC = () => {
-  const { state, dispatch, formatPlayerName, substitutePairDB, toggleBallsDB, toggleWaterDB, togglePaymentDB } = useTournament(); 
+  const { state, dispatch, formatPlayerName, substitutePairDB, toggleBallsDB, toggleWaterDB, togglePaymentDB, createPairInDB, addPlayerToDB } = useTournament(); 
   
   // States for Substitution Modal
   const [subModalOpen, setSubModalOpen] = useState(false);
   const [activePairToSub, setActivePairToSub] = useState<string | null>(null);
+  
+  // Tab State: 'reserve' (existing) or 'new' (create fresh)
+  const [subTab, setSubTab] = useState<'reserve' | 'new'>('reserve');
+  
+  // Reserve Selection State
   const [confirmingReserve, setConfirmingReserve] = useState<Pair | null>(null);
+
+  // New Pair Creation State
+  const [newP1, setNewP1] = useState('');
+  const [newP2, setNewP2] = useState('');
 
   const getPlayer = (id: string) => state.players.find(p => p.id === id);
 
@@ -51,18 +61,46 @@ const CheckIn: React.FC = () => {
   const openSubModal = (pairId: string) => {
       setActivePairToSub(pairId);
       setConfirmingReserve(null);
+      setSubTab('reserve');
+      setNewP1('');
+      setNewP2('');
       setSubModalOpen(true);
   };
 
   const handleSubstitution = async () => {
-      if (!activePairToSub || !confirmingReserve) return;
+      if (!activePairToSub) return;
+      
+      let finalReserveId = confirmingReserve?.id;
+
+      // Handle New Pair Creation
+      if (subTab === 'new') {
+          if (!newP1 || !newP2) return;
+          try {
+              // Create the pair in DB. It will likely be created as 'confirmed'.
+              // Since the tournament is full, Logic would mark it as reserve upon reload, 
+              // but we need the ID immediately.
+              const createdId = await createPairInDB(newP1, newP2, 'confirmed');
+              if (createdId) {
+                  finalReserveId = createdId;
+              } else {
+                  throw new Error("No se pudo crear la pareja");
+              }
+          } catch (e) {
+              console.error(e);
+              return;
+          }
+      }
+
+      if (!finalReserveId) return;
+
       try {
-          await substitutePairDB(activePairToSub, confirmingReserve.id);
+          await substitutePairDB(activePairToSub, finalReserveId);
           setSubModalOpen(false);
           setActivePairToSub(null);
           setConfirmingReserve(null);
+          setNewP1('');
+          setNewP2('');
       } catch (e: any) {
-          // Fallback error, though we try to avoid system alerts
           console.error(e);
       }
   };
@@ -198,9 +236,10 @@ const CheckIn: React.FC = () => {
 
       {/* SUBSTITUTION MODAL */}
       {subModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
-                  <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
+              <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col">
+                  {/* HEADER */}
+                  <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
                       <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                           <RefreshCw className="text-blue-600"/> Sustituir Pareja
                       </h3>
@@ -209,81 +248,99 @@ const CheckIn: React.FC = () => {
                       </button>
                   </div>
                   
-                  {!confirmingReserve ? (
-                        /* STEP 1: SELECT RESERVE */
-                        <>
-                            {reservePairs.length === 0 ? (
-                                <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-xl mb-4">
-                                    No hay reservas disponibles.
-                                </div>
-                            ) : (
-                                <>
-                                    <p className="text-sm text-slate-500 mb-4 font-medium">Selecciona la pareja reserva:</p>
-                                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
-                                        {reservePairs.map((rp, idx) => {
-                                            const p1 = getPlayer(rp.player1Id);
-                                            const p2 = getPlayer(rp.player2Id);
-                                            return (
-                                                <button 
-                                                    key={rp.id}
-                                                    onClick={() => setConfirmingReserve(rp)}
-                                                    className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-all flex justify-between items-center group active:scale-95"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="bg-slate-100 text-slate-400 p-2 rounded-lg group-hover:bg-blue-100 group-hover:text-blue-600">
-                                                            <UserPlus size={18}/>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-[10px] font-bold text-slate-400 uppercase group-hover:text-blue-500">Reserva #{idx+1}</div>
-                                                            <div className="font-bold text-slate-800 text-sm leading-tight">{formatPlayerName(p1)}<br/>{formatPlayerName(p2)}</div>
-                                                        </div>
-                                                    </div>
-                                                    <ArrowRight size={16} className="text-slate-300 group-hover:text-blue-500"/>
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
-                                </>
-                            )}
-                            <div className="mt-4 p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100 flex items-start gap-2 leading-relaxed">
-                                <AlertTriangle size={14} className="shrink-0 mt-0.5"/>
-                                <span>La reserva heredará la posición, los partidos y las estadísticas de la pareja sustituida.</span>
-                            </div>
-                        </>
-                  ) : (
-                      /* STEP 2: CONFIRMATION */
-                      <div className="text-center animate-fade-in">
-                          <h4 className="text-lg font-black text-slate-900 mb-6">¿Confirmar Cambio?</h4>
-                          
-                          <div className="space-y-2 mb-8 relative">
-                               {/* OUT */}
-                              <div className="bg-rose-50 p-3 rounded-xl border border-rose-100 flex items-center gap-3 text-left">
-                                  <div className="bg-white p-2 rounded-lg text-rose-500 border border-rose-100 font-bold text-xs uppercase shrink-0 w-12 text-center">Sale</div>
-                                  <div className="font-bold text-slate-800 text-sm">
-                                      {activePairToSub && getPlayer(state.pairs.find(p=>p.id===activePairToSub)?.player1Id!)?.name} <span className="text-slate-400">&</span> {' '}
-                                      {activePairToSub && getPlayer(state.pairs.find(p=>p.id===activePairToSub)?.player2Id!)?.name}
-                                  </div>
-                              </div>
-                              
-                              <div className="absolute left-6 top-1/2 -translate-y-1/2 z-10 bg-white border border-slate-200 rounded-full p-1 text-slate-400 shadow-sm">
-                                <RefreshCw size={14} />
-                              </div>
+                  {/* TABS */}
+                  <div className="flex p-2 gap-2 bg-slate-50 border-b border-slate-100 shrink-0">
+                      <button onClick={() => setSubTab('reserve')} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${subTab === 'reserve' ? 'bg-white text-blue-600 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>Banquillo ({reservePairs.length})</button>
+                      <button onClick={() => setSubTab('new')} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${subTab === 'new' ? 'bg-white text-blue-600 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>Nueva Pareja</button>
+                  </div>
 
-                              {/* IN */}
-                              <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex items-center gap-3 text-left">
-                                  <div className="bg-white p-2 rounded-lg text-emerald-600 border border-emerald-100 font-bold text-xs uppercase shrink-0 w-12 text-center">Entra</div>
-                                  <div className="font-bold text-slate-800 text-sm">
-                                      {getPlayer(confirmingReserve.player1Id)?.name} <span className="text-slate-400">&</span> {getPlayer(confirmingReserve.player2Id)?.name}
+                  {/* BODY */}
+                  <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                      {subTab === 'reserve' ? (
+                          <>
+                              {reservePairs.length === 0 ? (
+                                  <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-xl mb-4 border border-dashed border-slate-200">
+                                      No hay reservas disponibles.
+                                      <br/>
+                                      <button onClick={() => setSubTab('new')} className="text-blue-500 font-bold text-sm mt-2 hover:underline">Crear Nueva Pareja</button>
                                   </div>
+                              ) : (
+                                  <div className="space-y-2">
+                                      {reservePairs.map((rp, idx) => {
+                                          const p1 = getPlayer(rp.player1Id);
+                                          const p2 = getPlayer(rp.player2Id);
+                                          const isSelected = confirmingReserve?.id === rp.id;
+                                          return (
+                                              <button 
+                                                  key={rp.id}
+                                                  onClick={() => setConfirmingReserve(rp)}
+                                                  className={`w-full text-left p-3 rounded-xl border flex justify-between items-center transition-all ${isSelected ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500' : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'}`}
+                                              >
+                                                  <div className="flex items-center gap-3">
+                                                      <div className={`p-2 rounded-lg ${isSelected ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                          <UserPlus size={18}/>
+                                                      </div>
+                                                      <div>
+                                                          <div className={`text-[10px] font-bold uppercase ${isSelected ? 'text-blue-600' : 'text-slate-400'}`}>Reserva #{idx+1}</div>
+                                                          <div className="font-bold text-slate-800 text-sm leading-tight">{formatPlayerName(p1)}<br/>{formatPlayerName(p2)}</div>
+                                                      </div>
+                                                  </div>
+                                                  {isSelected && <Check size={20} className="text-blue-500"/>}
+                                              </button>
+                                          )
+                                      })}
+                                  </div>
+                              )}
+                          </>
+                      ) : (
+                          <div className="space-y-6">
+                              <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800 border border-blue-100">
+                                  Crea una pareja rápida para sustituir a la titular. Esta nueva pareja <strong>heredará</strong> los puntos y la posición.
                               </div>
+                              <PlayerSelector 
+                                label="JUGADOR 1 (Entrante)" 
+                                selectedId={newP1} 
+                                onSelect={setNewP1} 
+                                otherSelectedId={newP2}
+                                players={state.players}
+                                onAddPlayer={addPlayerToDB}
+                                formatName={formatPlayerName}
+                              />
+                              <div className="flex justify-center -my-3 relative z-10"><span className="bg-slate-100 text-slate-400 text-xs px-2 py-1 rounded-full font-bold border border-slate-200">&</span></div>
+                              <PlayerSelector 
+                                label="JUGADOR 2 (Entrante)" 
+                                selectedId={newP2} 
+                                onSelect={setNewP2} 
+                                otherSelectedId={newP1}
+                                players={state.players}
+                                onAddPlayer={addPlayerToDB}
+                                formatName={formatPlayerName}
+                              />
                           </div>
+                      )}
+                  </div>
 
-                          <div className="flex gap-3">
-                              <button onClick={() => setConfirmingReserve(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">Atrás</button>
-                              <button onClick={handleSubstitution} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">Confirmar</button>
-                          </div>
-                      </div>
-                  )}
+                  {/* FOOTER ACTIONS */}
+                  <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-3xl">
+                      {subTab === 'reserve' ? (
+                          <button 
+                            onClick={handleSubstitution} 
+                            disabled={!confirmingReserve}
+                            className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 ${confirmingReserve ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-300 cursor-not-allowed'}`}
+                          >
+                              Confirmar Sustitución
+                          </button>
+                      ) : (
+                          <button 
+                            onClick={handleSubstitution} 
+                            disabled={!newP1 || !newP2}
+                            style={{ backgroundColor: THEME.cta }}
+                            className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${(newP1 && newP2) ? 'hover:opacity-90' : 'opacity-50 cursor-not-allowed'}`}
+                          >
+                              <Save size={18}/> Crear y Sustituir
+                          </button>
+                      )}
+                  </div>
               </div>
           </div>
       )}

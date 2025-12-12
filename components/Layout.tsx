@@ -72,20 +72,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       {/* Main Header (Boxed) - Sticky */}
       <div className="bg-slate-50 pt-2 px-2 md:pt-4 sticky top-0 z-40">
           <header className="max-w-3xl mx-auto bg-white px-4 py-3 flex justify-between items-center border border-slate-200 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-4 overflow-hidden">
-                {/* LOGO OR BACK BUTTON */}
-                {isTournamentActive ? (
-                    <button onClick={handleBackToHub} className="p-1.5 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
-                        <Home size={20} className="text-slate-600"/>
+            <div className="flex items-center gap-3 overflow-hidden">
+                {/* Back Button (Only if tournament is active) */}
+                {isTournamentActive && (
+                    <button onClick={handleBackToHub} className="p-1.5 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors shrink-0" title="Volver a Mis Torneos">
+                        <Home size={18} className="text-slate-600"/>
                     </button>
-                ) : (
-                    clubData.logoUrl && (
-                        <img 
-                        src={clubData.logoUrl} 
-                        alt="Club Logo" 
-                        className="w-10 h-10 rounded-full object-cover border-2 border-slate-100 shadow-sm shrink-0" 
-                        />
-                    )
+                )}
+
+                {/* LOGO - ALWAYS VISIBLE */}
+                {clubData.logoUrl && (
+                    <img 
+                    src={clubData.logoUrl} 
+                    alt="Club Logo" 
+                    className="w-10 h-10 rounded-full object-cover border-2 border-slate-100 shadow-sm shrink-0" 
+                    />
                 )}
                 
                 {/* TITLE - ALWAYS CLUB NAME */}
