@@ -1,36 +1,23 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, ShieldAlert, ShieldCheck, Terminal } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, ShieldAlert, ShieldCheck, Terminal, AlertTriangle } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN HCAPTCHA (ULTRA-SEGURA)
+// CONFIGURACIÓN DE ENTORNO (ACCESO SEGURO)
 // ------------------------------------------------------------------
+// Usamos (import.meta.env || {}) para evitar errores de "Cannot read properties of undefined"
+// si el entorno no inyecta el objeto env correctamente.
 
-// Función auxiliar para leer variables sin que explote la app
-const getEnv = (key: string): string => {
-    try {
-        // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) {
-            // @ts-ignore
-            const val = import.meta.env[key];
-            // Handle boolean values (like DEV) by converting to string or ignoring
-            if (typeof val === 'boolean') return val ? "true" : "";
-            return typeof val === 'string' ? val : "";
-        }
-    } catch (e) {
-        console.error("Error reading env:", e);
-    }
-    return "";
-};
+// @ts-ignore
+const env = (import.meta.env || {}) as any;
 
-const HCAPTCHA_SITE_TOKEN = getEnv("VITE_HCAPTCHA_SITE_TOKEN");
-const IS_DEV_ENV = getEnv("DEV");
+const HCAPTCHA_SITE_TOKEN = (env.VITE_HCAPTCHA_SITE_TOKEN as string) || "";
+const IS_DEV_ENV = env.DEV;
 
 // Detección de entorno local
 const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -112,25 +99,10 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      const allowBypass = IS_LOCAL && !HCAPTCHA_SITE_TOKEN;
-
-      if (!showDevTools && !allowBypass) {
-          if (!HCAPTCHA_SITE_TOKEN) {
-              setError("Falta configuración VITE_HCAPTCHA_SITE_TOKEN en Vercel.");
-              setLoading(false);
-              return;
-          }
-          if (!captchaToken) {
-              setError("Completa el Captcha.");
-              setLoading(false);
-              return;
-          }
-      }
-
       try {
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
               redirectTo: window.location.origin + '/#/auth?type=recovery',
-              captchaToken: captchaToken || undefined 
+              captchaToken: (HCAPTCHA_SITE_TOKEN && captchaToken) ? captchaToken : undefined 
           });
           if (error) throw error;
           setSuccessMsg("Si el email existe, recibirás un enlace para entrar.");
@@ -157,26 +129,17 @@ const AuthPage: React.FC = () => {
         return;
     }
 
-    // LÓGICA DE BLOQUEO INTELIGENTE
-    const allowBypass = IS_LOCAL && !HCAPTCHA_SITE_TOKEN;
-
-    if (!showDevTools && !allowBypass) {
-        if (!HCAPTCHA_SITE_TOKEN) {
-            setError("ERROR CRÍTICO: No se detecta VITE_HCAPTCHA_SITE_TOKEN. La variable de entorno está vacía.");
-            setLoading(false);
-            return;
-        }
-        
-        if (!captchaToken) {
-            setError("Debes completar el Captcha para continuar.");
-            setLoading(false);
-            return;
-        }
+    // SI HAY TOKEN CONFIGURADO PERO NO SE HA RESUELTO EL CAPTCHA
+    if (HCAPTCHA_SITE_TOKEN && !captchaToken && !IS_LOCAL) {
+        setError("Por favor, completa el Captcha para continuar.");
+        setLoading(false);
+        return;
     }
 
     try {
       let result;
-      const authOptions = captchaToken ? { options: { captchaToken } } : undefined;
+      // Solo enviamos opciones de captcha si tenemos un token válido configurado
+      const authOptions = (HCAPTCHA_SITE_TOKEN && captchaToken) ? { options: { captchaToken } } : undefined;
 
       if (view === 'login') {
         result = await supabase.auth.signInWithPassword({ 
@@ -233,7 +196,7 @@ const AuthPage: React.FC = () => {
       else if (message.includes('Invalid login')) message = 'Credenciales incorrectas.';
       else if (message.includes('User already registered')) message = 'Este email ya está registrado.';
       else if (message.includes('Captcha')) message = 'Error de Captcha. Inténtalo de nuevo.';
-      else if (message.includes('security purposes')) message = 'El servidor requiere Captcha pero no se ha enviado.';
+      else if (message.includes('security purposes')) message = 'El servidor requiere Captcha. Configúralo en Vercel.';
       
       setError(message);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -259,15 +222,11 @@ const AuthPage: React.FC = () => {
       let output = "";
       try {
           output += `Host: ${window.location.hostname}\n`;
-          output += `Protocol: ${window.location.protocol}\n`;
           // @ts-ignore
           const metaEnv = import.meta.env;
           output += `Mode: ${metaEnv?.MODE || 'undefined'}\n`;
-          output += `Dev: ${metaEnv?.DEV}\n`;
-          output += `Prod: ${metaEnv?.PROD}\n`;
-          output += `Has Token var: ${'VITE_HCAPTCHA_SITE_TOKEN' in metaEnv ? 'YES' : 'NO'}\n`;
-          output += `Token Length: ${HCAPTCHA_SITE_TOKEN ? HCAPTCHA_SITE_TOKEN.length : 0}\n`;
-          output += `Token Preview: ${HCAPTCHA_SITE_TOKEN ? HCAPTCHA_SITE_TOKEN.substring(0, 4) + '...' : 'EMPTY'}\n`;
+          output += `HCAPTCHA_SITE_TOKEN Detected: ${HCAPTCHA_SITE_TOKEN ? 'YES' : 'NO'}\n`;
+          if (HCAPTCHA_SITE_TOKEN) output += `Token Value: ${HCAPTCHA_SITE_TOKEN.substring(0, 4)}... (Hidden)\n`;
       } catch (e) {
           output += "Error getting diagnostics.";
       }
@@ -337,30 +296,19 @@ const AuthPage: React.FC = () => {
                             />
                         </div>
                         
-                        {/* CAPTCHA FOR RECOVERY */}
-                        {!showDevTools && (
-                            HCAPTCHA_SITE_TOKEN ? (
-                                <div className="flex justify-center my-4">
-                                    <HCaptcha
-                                        sitekey={HCAPTCHA_SITE_TOKEN}
-                                        onVerify={onCaptchaVerify}
-                                        ref={captchaRef}
-                                    />
-                                </div>
-                            ) : IS_LOCAL ? (
-                                <div className="bg-amber-50 text-amber-600 text-xs p-2 text-center rounded-lg border border-amber-100">
-                                    Modo Local: Captcha Omitido
-                                </div>
-                            ) : (
-                                <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-start gap-2">
-                                    <ShieldAlert size={20} className="shrink-0"/>
-                                    <div><strong>Error Config:</strong> Falta TOKEN Captcha.</div>
-                                </div>
-                            )
+                        {/* CAPTCHA FOR RECOVERY - IF AVAILABLE */}
+                        {HCAPTCHA_SITE_TOKEN && (
+                            <div className="flex justify-center my-4">
+                                <HCaptcha
+                                    sitekey={HCAPTCHA_SITE_TOKEN}
+                                    onVerify={onCaptchaVerify}
+                                    ref={captchaRef}
+                                />
+                            </div>
                         )}
 
                         <button
-                            type="submit" disabled={loading || (!HCAPTCHA_SITE_TOKEN && !IS_LOCAL && !showDevTools)}
+                            type="submit" disabled={loading}
                             className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-70 disabled:cursor-not-allowed py-4 rounded-2xl font-bold text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center items-center text-lg gap-2"
                         >
                             {loading ? <Loader2 className="animate-spin" /> : <>Enviar Enlace <Send size={20}/></>}
@@ -416,7 +364,7 @@ const AuthPage: React.FC = () => {
             />
           </div>
 
-          {/* CAPTCHA WIDGET - SMART LOGIC */}
+          {/* CAPTCHA WIDGET - RENDER ONLY IF TOKEN IS AVAILABLE */}
           {!showDevTools && (
               HCAPTCHA_SITE_TOKEN ? (
                   <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
@@ -427,38 +375,18 @@ const AuthPage: React.FC = () => {
                       />
                   </div>
               ) : IS_LOCAL ? (
-                  // LOCAL DEV BYPASS MESSAGE
+                  // LOCAL DEV BYPASS
                   <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-xl flex items-center justify-center gap-2 text-indigo-700 text-xs font-bold mb-2">
                       <ShieldCheck size={16}/> Modo Local: Captcha Omitido
                   </div>
               ) : (
-                  // ERROR DE CONFIGURACIÓN CLARO (PRODUCCIÓN)
-                  <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex flex-col gap-3 text-rose-800">
-                      <div className="flex gap-3">
-                        <ShieldAlert size={24} className="shrink-0 mt-1" />
-                        <div className="text-xs">
-                            <strong className="block text-sm mb-1">Error de Configuración</strong>
-                            <p className="mb-2">La App no detecta el Token del Captcha.</p>
-                            <p className="font-mono bg-rose-100 px-1 py-0.5 rounded text-[10px] break-all">
-                                Variable esperada: VITE_HCAPTCHA_SITE_TOKEN
-                            </p>
-                        </div>
+                  // PROD MISSING TOKEN - WARNING ONLY (Permissive mode until config fixed)
+                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-start gap-3 text-amber-800 mb-2">
+                      <AlertTriangle size={20} className="shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                          <strong className="block text-sm mb-1">Captcha No Configurado</strong>
+                          <p>La variable VITE_HCAPTCHA_SITE_TOKEN no se detecta en el Build. El login puede fallar si Supabase lo requiere.</p>
                       </div>
-                      
-                      {/* DEBUG TOGGLE */}
-                      <button 
-                        type="button" 
-                        onClick={() => setShowDiagnose(!showDiagnose)} 
-                        className="text-[10px] font-bold uppercase text-rose-600 flex items-center gap-1 hover:underline mt-1"
-                      >
-                          <Terminal size={12}/> {showDiagnose ? 'Ocultar' : 'Ver Detalles Técnicos'}
-                      </button>
-                      
-                      {showDiagnose && (
-                          <div className="bg-slate-900 text-emerald-400 p-3 rounded-lg font-mono text-[10px] whitespace-pre-wrap leading-tight mt-2 overflow-x-auto">
-                              {getDiagnosticInfo()}
-                          </div>
-                      )}
                   </div>
               )
           )}
@@ -472,7 +400,7 @@ const AuthPage: React.FC = () => {
           )}
 
           <button
-            type="submit" disabled={loading || (!HCAPTCHA_SITE_TOKEN && !IS_LOCAL && !showDevTools)}
+            type="submit" disabled={loading}
             className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-2xl font-bold text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center items-center text-lg"
           >
             {loading ? <Loader2 className="animate-spin" /> : (view === 'login' ? 'Entrar' : 'Registrarse')}
@@ -516,6 +444,22 @@ const AuthPage: React.FC = () => {
                 </button>
             </div>
         )}
+        
+        {/* DIAGNOSTIC TOGGLE */}
+        <div className="mt-8 text-center">
+             <button 
+                type="button" 
+                onClick={() => setShowDiagnose(!showDiagnose)} 
+                className="text-[10px] font-bold uppercase text-slate-300 flex items-center justify-center gap-1 hover:text-slate-500 mx-auto"
+              >
+                  <Terminal size={12}/> Info Técnica
+              </button>
+              {showDiagnose && (
+                  <div className="bg-slate-900 text-emerald-400 p-3 rounded-lg font-mono text-[10px] whitespace-pre-wrap leading-tight mt-2 overflow-x-auto text-left mx-auto max-w-xs">
+                      {getDiagnosticInfo()}
+                  </div>
+              )}
+        </div>
       </div>
     </div>
   );
