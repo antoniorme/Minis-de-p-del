@@ -10,15 +10,35 @@ type AuthView = 'login' | 'register' | 'recovery';
 
 // ------------------------------------------------------------------
 // CONFIGURACIÓN HCAPTCHA
-// Acceso seguro mediante short-circuit para evitar crash si import.meta.env es undefined
 // ------------------------------------------------------------------
 const TEST_KEY = '10000000-ffff-ffff-ffff-000000000001';
 
-// Safe extraction variables
-const ENV_SITE_KEY = (import.meta.env && import.meta.env.VITE_HCAPTCHA_SITE_KEY) || '';
-const IS_DEV = (import.meta.env && import.meta.env.DEV) || false;
+// Definición segura de variables para evitar el crash "Cannot read properties of undefined"
+// Usamos optional chaining y fallback para asegurar que nunca sea undefined.
+const getEnvVar = (key: string) => {
+    try {
+        // @ts-ignore
+        return import.meta.env && import.meta.env[key] ? import.meta.env[key] : '';
+    } catch {
+        return '';
+    }
+};
 
-const HCAPTCHA_SITE_KEY = ENV_SITE_KEY || (IS_DEV ? TEST_KEY : '');
+const getIsDev = () => {
+    try {
+        // @ts-ignore
+        return import.meta.env && import.meta.env.DEV ? true : false;
+    } catch {
+        return false;
+    }
+}
+
+// Clave real o vacía
+const REAL_SITE_KEY = getEnvVar('VITE_HCAPTCHA_SITE_KEY');
+const IS_DEV_MODE = getIsDev();
+
+// Lógica final: Si hay clave en .env, úsala. Si estamos en DEV y no hay clave, usa la de test.
+const HCAPTCHA_SITE_KEY = REAL_SITE_KEY || (IS_DEV_MODE ? TEST_KEY : '');
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -43,9 +63,8 @@ const AuthPage: React.FC = () => {
   const [showDevTools, setShowDevTools] = useState(false);
 
   useEffect(() => {
+      // @ts-ignore
       const isPlaceholder = (supabase as any).supabaseUrl === 'https://placeholder.supabase.co';
-      
-      // Solo mostramos DevTools si explícitamente estamos offline o la base de datos es placeholder.
       if (isOfflineMode || isPlaceholder) {
           setShowDevTools(true);
       }
@@ -62,7 +81,7 @@ const AuthPage: React.FC = () => {
       setError(null);
       setSuccessMsg(null);
       setCaptchaToken(null);
-      captchaRef.current?.resetCaptcha();
+      if(captchaRef.current) captchaRef.current.resetCaptcha();
   };
 
   const ensurePlayerRecord = async (userId: string, userEmail: string) => {
@@ -95,7 +114,7 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      // Captcha Check
+      // Captcha Check (Solo si hay clave configurada)
       if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
           setError("Por favor, completa la verificación de seguridad.");
           setLoading(false);
@@ -111,7 +130,7 @@ const AuthPage: React.FC = () => {
           setSuccessMsg("Si el email existe, recibirás un enlace para entrar.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
-          captchaRef.current?.resetCaptcha();
+          if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
       } finally {
           setLoading(false);
@@ -124,6 +143,7 @@ const AuthPage: React.FC = () => {
     setError(null);
     setIsPendingVerification(false);
 
+    // @ts-ignore
     if ((supabase as any).supabaseUrl === 'https://placeholder.supabase.co') {
         setError("Base de datos no conectada. Usa los botones de 'Modo Desarrollador' abajo.");
         setLoading(false);
@@ -132,7 +152,7 @@ const AuthPage: React.FC = () => {
     }
 
     // CAPTCHA CHECK
-    // Solo requerimos captcha si existe una clave configurada.
+    // Solo bloqueamos si EXISTE una clave de captcha configurada y no se ha resuelto.
     if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
         setError("Por favor, completa el captcha para continuar.");
         setLoading(false);
@@ -187,7 +207,7 @@ const AuthPage: React.FC = () => {
           }
       } else if (view === 'register' && result.data.user && !result.data.session) {
            setError("Revisa tu email para confirmar la cuenta.");
-           captchaRef.current?.resetCaptcha(); 
+           if(captchaRef.current) captchaRef.current.resetCaptcha(); 
            setCaptchaToken(null);
       }
 
@@ -199,7 +219,7 @@ const AuthPage: React.FC = () => {
       else if (message.includes('Captcha')) message = 'Error de Captcha. Inténtalo de nuevo.';
       
       setError(message);
-      captchaRef.current?.resetCaptcha();
+      if(captchaRef.current) captchaRef.current.resetCaptcha();
       setCaptchaToken(null);
     } finally {
       setLoading(false);
@@ -330,16 +350,6 @@ const AuthPage: React.FC = () => {
           </div>
         )}
 
-        {/* Warning if no key detected but not in offline mode (Only in PROD) */}
-        {!HCAPTCHA_SITE_KEY && !isOfflineMode && !showDevTools && !IS_DEV && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-xs mb-6 flex items-start gap-2">
-                <AlertTriangle size={16} className="shrink-0 mt-0.5"/>
-                <span>
-                    <strong>Configuración Captcha:</strong> No se detecta clave. Si el login falla, contacta con el administrador.
-                </span>
-            </div>
-        )}
-
         <form onSubmit={handleAuth} className="space-y-4">
           <div className="relative">
             <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
@@ -359,6 +369,7 @@ const AuthPage: React.FC = () => {
           </div>
 
           {/* CAPTCHA WIDGET (hCaptcha) - Only render if KEY exists */}
+          {/* Si HCAPTCHA_SITE_KEY está vacía, no se renderiza. Si está, se renderiza. */}
           {!showDevTools && HCAPTCHA_SITE_KEY && (
               <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
                   <HCaptcha
@@ -366,6 +377,13 @@ const AuthPage: React.FC = () => {
                       onVerify={onCaptchaVerify}
                       ref={captchaRef}
                   />
+              </div>
+          )}
+
+          {/* FALLBACK WARNING: Si no hay clave y no estamos en dev, muestra aviso sutil para debug (Opcional, pero útil si dices que no sale) */}
+          {!showDevTools && !HCAPTCHA_SITE_KEY && !IS_DEV_MODE && (
+              <div className="text-[10px] text-slate-300 text-center">
+                  Captcha no configurado (Falta variable de entorno)
               </div>
           )}
 
