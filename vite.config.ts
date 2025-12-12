@@ -1,3 +1,4 @@
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -7,4 +8,11 @@ export default defineConfig({
   server: {
     host: true,
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      // Simplificado: Dejamos que Vite decida la mejor estrategia de chunks por defecto
+      // para evitar errores de carga de módulos.
+    }
+  }
 });

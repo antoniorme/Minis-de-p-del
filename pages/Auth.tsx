@@ -4,11 +4,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, CheckCircle, ShieldAlert, Clock, Key, Send } from 'lucide-react';
-import HCaptcha from '@hcaptcha/react-hcaptcha';
+import ReCAPTCHA from "react-google-recaptcha";
 
 type AuthView = 'login' | 'register' | 'recovery';
 
-// Acceso seguro a variables de entorno para evitar crasheos si import.meta.env no está definido
+// Acceso seguro a variables de entorno
 const getEnv = (key: string, defaultValue: string): string => {
   try {
     // @ts-ignore
@@ -23,17 +23,16 @@ const getEnv = (key: string, defaultValue: string): string => {
 };
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN DEL CAPTCHA
-// Pega tu Site Key dentro de las comillas simples donde dice 'PON_TU_SITE_KEY_AQUI'
+// CONFIGURACIÓN GOOGLE RECAPTCHA
+// Usa la variable de entorno VITE_RECAPTCHA_SITE_KEY.
 // ------------------------------------------------------------------
-const HCAPTCHA_SITE_KEY = getEnv('VITE_HCAPTCHA_SITE_KEY', '6LfiuigsAAAAAFQqXB5_7VpRzLBnHKT8g1BXTfI3');
+const RECAPTCHA_SITE_KEY = getEnv('VITE_RECAPTCHA_SITE_KEY', ''); 
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
   const { checkUserRole, loginWithDevBypass, isOfflineMode, signOut } = useAuth();
   const [searchParams] = useSearchParams();
   
-  // Replaced boolean isLogin with string view state
   const [view, setView] = useState<AuthView>('login');
   
   const [email, setEmail] = useState('');
@@ -44,7 +43,7 @@ const AuthPage: React.FC = () => {
   
   // Captcha State
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const captchaRef = useRef<HCaptcha>(null);
+  const captchaRef = useRef<ReCAPTCHA>(null);
   
   // Verification Gate State
   const [isPendingVerification, setIsPendingVerification] = useState(false);
@@ -53,7 +52,8 @@ const AuthPage: React.FC = () => {
 
   useEffect(() => {
       const isPlaceholder = (supabase as any).supabaseUrl === 'https://placeholder.supabase.co';
-      if (isOfflineMode || isPlaceholder) {
+      // Si estamos offline o no tenemos clave de recaptcha, mostramos dev tools
+      if (isOfflineMode || isPlaceholder || !RECAPTCHA_SITE_KEY) {
           setShowDevTools(true);
       }
   }, [isOfflineMode]);
@@ -70,7 +70,7 @@ const AuthPage: React.FC = () => {
       setError(null);
       setSuccessMsg(null);
       setCaptchaToken(null);
-      captchaRef.current?.resetCaptcha();
+      captchaRef.current?.reset();
   };
 
   const ensurePlayerRecord = async (userId: string, userEmail: string) => {
@@ -103,8 +103,7 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      // Captcha Check for recovery too if enabled globally
-      if (!captchaToken && !showDevTools) {
+      if (!captchaToken && !showDevTools && RECAPTCHA_SITE_KEY) {
           setError("Por favor, completa la verificación de seguridad.");
           setLoading(false);
           return;
@@ -119,7 +118,7 @@ const AuthPage: React.FC = () => {
           setSuccessMsg("Si el email existe, recibirás un enlace para entrar.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
-          captchaRef.current?.resetCaptcha();
+          captchaRef.current?.reset();
           setCaptchaToken(null);
       } finally {
           setLoading(false);
@@ -140,7 +139,7 @@ const AuthPage: React.FC = () => {
     }
 
     // CAPTCHA CHECK
-    if (!captchaToken && !showDevTools) {
+    if (!captchaToken && !showDevTools && RECAPTCHA_SITE_KEY) {
         setError("Por favor, completa el captcha para continuar.");
         setLoading(false);
         return;
@@ -148,7 +147,6 @@ const AuthPage: React.FC = () => {
 
     try {
       let result;
-      // Pass captchaToken in options
       const authOptions = captchaToken ? { options: { captchaToken } } : undefined;
 
       if (view === 'login') {
@@ -195,7 +193,7 @@ const AuthPage: React.FC = () => {
           }
       } else if (view === 'register' && result.data.user && !result.data.session) {
            setError("Revisa tu email para confirmar la cuenta.");
-           captchaRef.current?.resetCaptcha(); // Reset on success but email confirm
+           captchaRef.current?.reset(); 
            setCaptchaToken(null);
       }
 
@@ -207,7 +205,7 @@ const AuthPage: React.FC = () => {
       else if (message.includes('Captcha')) message = 'Error de Captcha. Inténtalo de nuevo.';
       
       setError(message);
-      captchaRef.current?.resetCaptcha();
+      captchaRef.current?.reset();
       setCaptchaToken(null);
     } finally {
       setLoading(false);
@@ -220,9 +218,9 @@ const AuthPage: React.FC = () => {
       else navigate('/dashboard');
   };
 
-  const onCaptchaVerify = (token: string) => {
+  const onCaptchaChange = (token: string | null) => {
       setCaptchaToken(token);
-      setError(null);
+      if (token) setError(null);
   };
 
   if (isPendingVerification) {
@@ -236,9 +234,6 @@ const AuthPage: React.FC = () => {
                 <p className="text-slate-500 mb-8 leading-relaxed">
                     Tu usuario ha sido registrado correctamente, pero necesita ser validado por la administración antes de acceder.
                 </p>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-8 text-sm text-slate-600">
-                    Te enviaremos un aviso a <strong>{email}</strong> cuando tu cuenta esté activa.
-                </div>
                 <button 
                     onClick={() => { signOut(); setIsPendingVerification(false); switchView('login'); }}
                     className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors"
@@ -292,11 +287,11 @@ const AuthPage: React.FC = () => {
                         </div>
                         
                         {/* CAPTCHA FOR RECOVERY */}
-                        {!showDevTools && (
+                        {!showDevTools && RECAPTCHA_SITE_KEY && (
                             <div className="flex justify-center my-4">
-                                <HCaptcha
-                                    sitekey={HCAPTCHA_SITE_KEY}
-                                    onVerify={onCaptchaVerify}
+                                <ReCAPTCHA
+                                    sitekey={RECAPTCHA_SITE_KEY}
+                                    onChange={onCaptchaChange}
                                     ref={captchaRef}
                                 />
                             </div>
@@ -360,13 +355,17 @@ const AuthPage: React.FC = () => {
           </div>
 
           {/* CAPTCHA WIDGET */}
-          {!showDevTools && (
+          {!showDevTools && RECAPTCHA_SITE_KEY ? (
               <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
-                  <HCaptcha
-                      sitekey={HCAPTCHA_SITE_KEY}
-                      onVerify={onCaptchaVerify}
+                  <ReCAPTCHA
+                      sitekey={RECAPTCHA_SITE_KEY}
+                      onChange={onCaptchaChange}
                       ref={captchaRef}
                   />
+              </div>
+          ) : !showDevTools && (
+              <div className="text-xs text-center text-amber-500 bg-amber-50 p-2 rounded">
+                  Falta configurar VITE_RECAPTCHA_SITE_KEY
               </div>
           )}
 
