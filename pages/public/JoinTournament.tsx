@@ -1,26 +1,32 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
 import { THEME } from '../../utils/theme';
-import { User, Check, Trophy, Search, ArrowRight, UserPlus, AlertTriangle, X, Calendar, Phone, AtSign, MapPin, ExternalLink, ArrowRightCircle, ArrowLeftCircle, Repeat, Shuffle, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Check, Trophy, Search, ArrowRight, UserPlus, AlertTriangle, X, Calendar, Phone, AtSign, MapPin, ExternalLink, ArrowRightCircle, ArrowLeftCircle, Repeat, Shuffle, Lock, Eye, EyeOff, Link as LinkIcon, Share2, Copy } from 'lucide-react';
 import { calculateInitialElo } from '../../utils/Elo';
 import { supabase } from '../../lib/supabase';
 
 const JoinTournament: React.FC = () => {
     const { clubId } = useParams<{ clubId: string }>();
     const navigate = useNavigate();
-    const { addPlayerToDB, createPairInDB, state, loadData, formatPlayerName } = useTournament();
+    const [searchParams] = useSearchParams();
+    const { addPlayerToDB, createPairInDB, updatePairDB, state, loadData, formatPlayerName } = useTournament();
     const { globalTournaments } = useHistory();
 
     const [step, setStep] = useState(1);
     const [alertMessage, setAlertMessage] = useState<{type: 'error'|'success', message: string} | null>(null);
+    const [generatedLink, setGeneratedLink] = useState<string | null>(null);
     
     // PUBLIC DATA STATE
     const [realClubName, setRealClubName] = useState('Club de Padel');
     const [activeTournamentInfo, setActiveTournamentInfo] = useState<any>(null);
     
+    // INCOMING INVITE STATE
+    const inviteCode = searchParams.get('partnerCode');
+    const [invitationData, setInvitationData] = useState<{ pairId: string, p1Name: string } | null>(null);
+
     // --- STEP 1: IDENTITY ---
     const [isGuest, setIsGuest] = useState(true); 
     
@@ -40,7 +46,7 @@ const JoinTournament: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     
     // --- STEP 3: PARTNER ---
-    const [partnerType, setPartnerType] = useState<'search' | 'new' | 'solo' | null>(null);
+    const [partnerType, setPartnerType] = useState<'search' | 'new' | 'solo' | 'link' | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPartnerId, setSelectedPartnerId] = useState('');
     
@@ -70,52 +76,44 @@ const JoinTournament: React.FC = () => {
         }
     };
 
-    // Initial Load & Auth Check
+    // Initial Load & Auth Check & Invite Check
     useEffect(() => {
         const init = async () => {
-            // Load app context (players list etc)
             await loadData();
             
             if (clubId) {
                 try {
-                    // 1. Fetch Real Club Name directly from Supabase (Public Read)
-                    const { data: clubData } = await supabase
-                        .from('clubs')
-                        .select('name, address, maps_url') // Ensure these columns exist or select *
-                        .eq('owner_id', clubId)
-                        .single();
-                    
-                    if (clubData) {
-                        setRealClubName(clubData.name);
-                    }
+                    // Fetch Club & Tournament Info
+                    const { data: clubData } = await supabase.from('clubs').select('name, address, maps_url').eq('owner_id', clubId).single();
+                    if (clubData) setRealClubName(clubData.name);
 
-                    // 2. Fetch Active Tournament for this Club to get Title/Date
-                    const { data: tData } = await supabase
-                        .from('tournaments')
-                        .select('title, date, price')
-                        .eq('user_id', clubId)
-                        .neq('status', 'finished')
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-
+                    const { data: tData } = await supabase.from('tournaments').select('title, date, price').eq('user_id', clubId).neq('status', 'finished').order('created_at', { ascending: false }).limit(1).maybeSingle();
                     if (tData) {
                         setActiveTournamentInfo({
-                            name: tData.title,
-                            date: tData.date,
-                            clubName: clubData?.name || 'Club de Padel',
-                            clubLogo: '🎾',
-                            address: clubData?.address || '',
-                            mapsUrl: (clubData as any)?.maps_url || ''
+                            name: tData.title, date: tData.date, clubName: clubData?.name || 'Club de Padel',
+                            clubLogo: '🎾', address: clubData?.address || '', mapsUrl: (clubData as any)?.maps_url || ''
                         });
                     }
+
+                    // CHECK INCOMING INVITE
+                    if (inviteCode) {
+                        const { data: pairData } = await supabase.from('tournament_pairs').select('id, player1_id').eq('id', inviteCode).single();
+                        if (pairData) {
+                            const { data: p1Data } = await supabase.from('players').select('name').eq('id', pairData.player1_id).single();
+                            if (p1Data) {
+                                setInvitationData({ pairId: pairData.id, p1Name: p1Data.name });
+                                setPartnerType('link'); // Set logic to link mode
+                            }
+                        }
+                    }
+
                 } catch (error) {
-                    console.warn("Could not fetch public club details", error);
+                    console.warn("Error fetching data", error);
                 }
             }
         };
         init();
-    }, [loadData, clubId]);
+    }, [loadData, clubId, inviteCode]);
 
     // Effect to auto-skip steps if logged in
     useEffect(() => {
@@ -156,7 +154,7 @@ const JoinTournament: React.FC = () => {
                 }
             }
         }
-        if (step === 3 && !partnerType) {
+        if (step === 3 && !partnerType && !invitationData) {
             setAlertMessage({ type: 'error', message: "Elige una opción para tu compañero." });
             return;
         }
@@ -171,6 +169,13 @@ const JoinTournament: React.FC = () => {
         setPartnerCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
     };
 
+    const copyToClipboard = () => {
+        if (generatedLink) {
+            navigator.clipboard.writeText(generatedLink);
+            setAlertMessage({ type: 'success', message: "Enlace copiado al portapapeles" });
+        }
+    };
+
     const handleFinish = async () => {
         if (!clubId) {
             setAlertMessage({ type: 'error', message: "Error crítico: ID de Club no encontrado." });
@@ -183,14 +188,9 @@ const JoinTournament: React.FC = () => {
         // 0. Create Supabase Auth User if requested
         if (createAccount && !myId) {
             try {
-                const { data, error } = await supabase.auth.signUp({
-                    email: myEmail,
-                    password: password,
-                });
+                const { data, error } = await supabase.auth.signUp({ email: myEmail, password: password });
                 if (error) throw error;
-                if (data.user) {
-                    newAuthUserId = data.user.id;
-                }
+                if (data.user) newAuthUserId = data.user.id;
             } catch (e: any) {
                 setAlertMessage({ type: 'error', message: "Error al crear cuenta: " + e.message });
                 return;
@@ -200,9 +200,8 @@ const JoinTournament: React.FC = () => {
         // 1. Create Myself if not exists
         if (!myId) {
             const myElo = calculateInitialElo(myCategories, 5); 
-            // IMPORTANT: Pass clubId as second arg to associate with the club
             myId = await addPlayerToDB({
-                name: myName + (createAccount ? '' : ' (App)'), // Don't append (App) if they created a real account
+                name: myName + (createAccount ? '' : ' (App)'),
                 nickname: myNickname || myName,
                 phone: myPhone,
                 email: myEmail,
@@ -210,10 +209,9 @@ const JoinTournament: React.FC = () => {
                 preferred_position: myPosition,
                 play_both_sides: myPlayBoth,
                 global_rating: myElo,
-                profile_user_id: newAuthUserId || undefined // Link to Auth User if created
+                profile_user_id: newAuthUserId || undefined
             }, clubId);
             
-            // Auto-login for future (store player ID)
             if (myId) localStorage.setItem('padel_sim_player_id', myId);
         }
 
@@ -222,37 +220,75 @@ const JoinTournament: React.FC = () => {
             return;
         }
 
-        // 2. Handle Partner
+        // 2. Handle Partner Logic
         let p2Id: string | null = null;
+        let finalPairId: string | null = null;
 
+        // SCENARIO A: JOINING EXISTING PAIR (INVITE LINK)
+        if (invitationData) {
+            // Update existing pair
+            // Logic: updatePairDB(pairId, p1, p2). 
+            const { data: currentPair } = await supabase.from('tournament_pairs').select('player1_id').eq('id', invitationData.pairId).single();
+            if (currentPair) {
+                await updatePairDB(invitationData.pairId, currentPair.player1_id, myId);
+                setAlertMessage({ type: 'success', message: "¡Te has unido a la pareja correctamente!" });
+            }
+            return;
+        }
+
+        // SCENARIO B: CREATING NEW PARTNER (SMART LINKING)
         if (partnerType === 'search') {
             p2Id = selectedPartnerId;
         } else if (partnerType === 'new') {
-            const pElo = calculateInitialElo([...partnerCategories, 'Invitado'], 5);
-            // IMPORTANT: Pass clubId here too
-            p2Id = await addPlayerToDB({
-                name: partnerName + ' (Invitado)',
-                nickname: partnerName,
-                categories: [...partnerCategories, 'Invitado'],
-                preferred_position: partnerPosition,
-                play_both_sides: partnerPlayBoth,
-                phone: partnerPhone,
-                email: partnerEmail,
-                manual_rating: 5,
-                global_rating: pElo
-            }, clubId);
+            // Check if player exists by Email or Phone to avoid duplicates
+            if (partnerEmail || partnerPhone) {
+                const { data: existingPlayers } = await supabase
+                    .from('players')
+                    .select('id')
+                    .or(`email.eq.${partnerEmail},phone.eq.${partnerPhone}`)
+                    .eq('user_id', clubId) // Ensure matches club
+                    .limit(1);
+                
+                if (existingPlayers && existingPlayers.length > 0) {
+                    p2Id = existingPlayers[0].id; // Use existing ID
+                }
+            }
+
+            // If not found, create new
+            if (!p2Id) {
+                const pElo = calculateInitialElo([...partnerCategories, 'Invitado'], 5);
+                p2Id = await addPlayerToDB({
+                    name: partnerName + ' (Invitado)',
+                    nickname: partnerName,
+                    categories: [...partnerCategories, 'Invitado'],
+                    preferred_position: partnerPosition,
+                    play_both_sides: partnerPlayBoth,
+                    phone: partnerPhone,
+                    email: partnerEmail,
+                    manual_rating: 5,
+                    global_rating: pElo
+                }, clubId);
+            }
         } else if (partnerType === 'solo') {
             p2Id = null;
+        } else if (partnerType === 'link') {
+            p2Id = null; // We create a pair with just me, waiting for P2
         }
 
         // 3. Create Pair
-        await createPairInDB(myId, p2Id, 'confirmed'); 
+        finalPairId = await createPairInDB(myId, p2Id, 'confirmed'); 
 
-        setAlertMessage({ type: 'success', message: createAccount ? "¡Cuenta creada e inscripción realizada!" : "¡Inscripción realizada con éxito!" });
+        if (partnerType === 'link' && finalPairId) {
+            const link = `${window.location.origin}/#/join/${clubId}?partnerCode=${finalPairId}`;
+            setGeneratedLink(link);
+            setAlertMessage({ type: 'success', message: "Reserva creada. ¡Comparte el enlace!" });
+        } else {
+            setAlertMessage({ type: 'success', message: createAccount ? "¡Cuenta creada e inscripción realizada!" : "¡Inscripción realizada con éxito!" });
+        }
     };
 
     const closeAlert = () => {
-        if (alertMessage?.type === 'success') {
+        if (alertMessage?.type === 'success' && !generatedLink) {
             navigate('/');
         }
         setAlertMessage(null);
@@ -384,15 +420,6 @@ const JoinTournament: React.FC = () => {
                                     <input value={myPhone} onChange={e => setMyPhone(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mt-1 text-sm font-bold text-slate-800 outline-none focus:border-[#575AF9]" placeholder="600..."/>
                                 </div>
                             </div>
-
-                            {/* EMAIL FIELD */}
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
-                                <div className="relative mt-1">
-                                    <AtSign size={16} className="absolute left-3 top-3.5 text-slate-400"/>
-                                    <input value={myEmail} onChange={e => setMyEmail(e.target.value)} className="w-full pl-9 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#575AF9]" placeholder="usuario@email.com"/>
-                                </div>
-                            </div>
                             
                             {/* Position Selector */}
                             <div className="space-y-2">
@@ -444,6 +471,21 @@ const JoinTournament: React.FC = () => {
 
                                 {createAccount && (
                                     <div className="space-y-3 mt-4 animate-slide-up pl-2 border-l-2 border-indigo-100 ml-4">
+                                        {/* EMAIL FIELD - MOVED HERE */}
+                                        <div>
+                                            <label className="text-xs font-bold text-indigo-800 uppercase">Email</label>
+                                            <div className="relative mt-1">
+                                                <AtSign size={16} className="absolute left-3 top-3.5 text-indigo-300"/>
+                                                <input 
+                                                    type="email" 
+                                                    value={myEmail} 
+                                                    onChange={e => setMyEmail(e.target.value)} 
+                                                    className="w-full pl-9 p-3 bg-white border border-indigo-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#575AF9]" 
+                                                    placeholder="usuario@email.com"
+                                                />
+                                            </div>
+                                        </div>
+
                                         <div>
                                             <label className="text-xs font-bold text-indigo-800 uppercase">Contraseña</label>
                                             <div className="relative mt-1">
@@ -501,151 +543,192 @@ const JoinTournament: React.FC = () => {
                                 <p className="text-sm text-slate-400">¿Con quién vas a jugar hoy?</p>
                             </div>
                             
-                            <div className="grid grid-cols-1 gap-3">
-                                {/* OPTION A: SEARCH */}
-                                <div className={`rounded-xl border-2 overflow-hidden transition-all ${partnerType === 'search' ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-slate-100'}`}>
-                                    <button 
-                                        onClick={() => setPartnerType(partnerType === 'search' ? null : 'search')}
-                                        className="w-full p-4 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors"
-                                    >
-                                        <div className="bg-white p-2 rounded-full shadow-sm"><Search size={20} className="text-blue-500"/></div>
-                                        <div>
-                                            <div className="font-bold text-slate-800">Buscar en el Club</div>
-                                            <div className="text-xs text-slate-500">Ya ha jugado antes</div>
-                                        </div>
-                                    </button>
-                                    
-                                    {partnerType === 'search' && (
-                                        <div className="px-4 pb-4 animate-fade-in">
-                                            <div className="h-px bg-blue-200 w-full mb-3"></div>
-                                            <input 
-                                                placeholder="Escribe nombre..." 
-                                                value={searchQuery} 
-                                                onChange={e => setSearchQuery(e.target.value)}
-                                                className="w-full p-3 border rounded-lg text-sm mb-2 outline-none focus:border-blue-500 bg-white"
-                                                autoFocus
-                                            />
-                                            <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar mb-2">
-                                                {filteredPlayers.length > 0 ? filteredPlayers.map(p => (
-                                                    <button 
-                                                        key={p.id} 
-                                                        onClick={() => setSelectedPartnerId(p.id)}
-                                                        className={`w-full text-left p-2 text-sm rounded flex items-center justify-between ${selectedPartnerId === p.id ? 'bg-blue-600 text-white' : 'hover:bg-slate-100 text-slate-700'}`}
-                                                    >
-                                                        <span>{formatPlayerName(p)}</span>
-                                                        {selectedPartnerId === p.id && <Check size={14}/>}
-                                                    </button>
-                                                )) : (
-                                                    <p className="text-xs text-slate-400 italic p-2">No encontrado</p>
-                                                )}
-                                            </div>
-                                            <button 
-                                                onClick={handleNext}
-                                                disabled={!selectedPartnerId}
-                                                className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
-                                            >
-                                                Seleccionar y Continuar
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* OPTION B: NEW GUEST */}
-                                <div className={`rounded-xl border-2 overflow-hidden transition-all ${partnerType === 'new' ? 'border-emerald-500 bg-emerald-50 shadow-md' : 'border-slate-100'}`}>
-                                    <button 
-                                        onClick={() => setPartnerType(partnerType === 'new' ? null : 'new')}
-                                        className="w-full p-4 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors"
-                                    >
-                                        <div className="bg-white p-2 rounded-full shadow-sm"><UserPlus size={20} className="text-emerald-500"/></div>
-                                        <div>
-                                            <div className="font-bold text-slate-800">Registrar Amigo</div>
-                                            <div className="text-xs text-slate-500">Es nuevo</div>
-                                        </div>
-                                    </button>
-
-                                    {partnerType === 'new' && (
-                                        <div className="px-4 pb-4 space-y-3 animate-fade-in">
-                                            <div className="h-px bg-emerald-200 w-full mb-3"></div>
-                                            <input 
-                                                placeholder="Nombre completo" 
-                                                value={partnerName} 
-                                                onChange={e => setPartnerName(e.target.value)}
-                                                className="w-full p-3 border rounded-lg text-sm outline-none focus:border-emerald-500 bg-white"
-                                                autoFocus
-                                            />
-                                            
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div className="relative">
-                                                    <Phone size={14} className="absolute left-3 top-3.5 text-slate-400"/>
-                                                    <input 
-                                                        placeholder="Teléfono (Opc.)" 
-                                                        value={partnerPhone} 
-                                                        onChange={e => setPartnerPhone(e.target.value)}
-                                                        className="w-full pl-9 p-3 border rounded-lg text-sm outline-none focus:border-emerald-500 bg-white"
-                                                    />
-                                                </div>
-                                                <div className="relative">
-                                                    <AtSign size={14} className="absolute left-3 top-3.5 text-slate-400"/>
-                                                    <input 
-                                                        placeholder="Email (Opc.)" 
-                                                        value={partnerEmail} 
-                                                        onChange={e => setPartnerEmail(e.target.value)}
-                                                        className="w-full pl-9 p-3 border rounded-lg text-sm outline-none focus:border-emerald-500 bg-white"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Partner Position */}
-                                            <div className="flex bg-slate-100 p-1 rounded-lg">
-                                                <button onClick={() => setPartnerPosition('right')} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPosition === 'right' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><ArrowRightCircle size={12}/> Der.</button>
-                                                <button onClick={() => setPartnerPosition('backhand')} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPosition === 'backhand' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><ArrowLeftCircle size={12}/> Rev.</button>
-                                                <button onClick={() => setPartnerPosition('both')} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPosition === 'both' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><Repeat size={12}/> Ambas</button>
-                                            </div>
-
-                                            {/* CATEGORY SELECTOR REPLACING SLIDER */}
-                                            <div>
-                                                <label className="text-xs font-bold text-emerald-800 uppercase mb-2 block">Categoría Base</label>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {TOURNAMENT_CATEGORIES.map(cat => (
-                                                        <button 
-                                                            key={cat} 
-                                                            onClick={() => togglePartnerCategory(cat)} 
-                                                            className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${partnerCategories.includes(cat) ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-500 border-slate-300'}`}
-                                                        >
-                                                            {cat}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            <button 
-                                                onClick={handleNext}
-                                                disabled={!partnerName}
-                                                className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
-                                            >
-                                                Crear y Continuar
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* OPTION C: SOLO */}
-                                <button 
-                                    onClick={() => { setPartnerType('solo'); handleNext(); }}
-                                    className={`p-4 rounded-xl border-2 text-left transition-all ${partnerType === 'solo' ? 'border-amber-500 bg-amber-50 shadow-sm' : 'border-slate-100 hover:border-slate-300'}`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="bg-white p-2 rounded-full shadow-sm"><User size={20} className="text-amber-500"/></div>
-                                        <div>
-                                            <div className="font-bold text-slate-800">Voy Solo</div>
-                                            <div className="text-xs text-slate-500">Busco pareja</div>
-                                        </div>
-                                        <div className="ml-auto">
-                                            <ArrowRight size={20} className="text-slate-300"/>
-                                        </div>
+                            {invitationData ? (
+                                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center animate-fade-in">
+                                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <LinkIcon size={32}/>
                                     </div>
-                                </button>
-                            </div>
+                                    <h3 className="text-lg font-bold text-emerald-900">¡Invitación Detectada!</h3>
+                                    <p className="text-sm text-emerald-700 mt-2">
+                                        Te unirás a la pareja de:
+                                    </p>
+                                    <div className="text-xl font-black text-emerald-800 mt-1">
+                                        {invitationData.p1Name}
+                                    </div>
+                                    <button 
+                                        onClick={handleNext}
+                                        className="w-full mt-6 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-lg hover:bg-emerald-700"
+                                    >
+                                        Confirmar y Unirse
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-3">
+                                    {/* OPTION A: SEARCH */}
+                                    <div className={`rounded-xl border-2 overflow-hidden transition-all ${partnerType === 'search' ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-slate-100'}`}>
+                                        <button 
+                                            onClick={() => setPartnerType(partnerType === 'search' ? null : 'search')}
+                                            className="w-full p-4 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors"
+                                        >
+                                            <div className="bg-white p-2 rounded-full shadow-sm"><Search size={20} className="text-blue-500"/></div>
+                                            <div>
+                                                <div className="font-bold text-slate-800">Buscar en el Club</div>
+                                                <div className="text-xs text-slate-500">Ya ha jugado antes</div>
+                                            </div>
+                                        </button>
+                                        
+                                        {partnerType === 'search' && (
+                                            <div className="px-4 pb-4 animate-fade-in">
+                                                <div className="h-px bg-blue-200 w-full mb-3"></div>
+                                                <input 
+                                                    placeholder="Escribe nombre..." 
+                                                    value={searchQuery} 
+                                                    onChange={e => setSearchQuery(e.target.value)}
+                                                    className="w-full p-3 border rounded-lg text-sm mb-2 outline-none focus:border-blue-500 bg-white"
+                                                    autoFocus
+                                                />
+                                                <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar mb-2">
+                                                    {filteredPlayers.length > 0 ? filteredPlayers.map(p => (
+                                                        <button 
+                                                            key={p.id} 
+                                                            onClick={() => setSelectedPartnerId(p.id)}
+                                                            className={`w-full text-left p-2 text-sm rounded flex items-center justify-between ${selectedPartnerId === p.id ? 'bg-blue-600 text-white' : 'hover:bg-slate-100 text-slate-700'}`}
+                                                        >
+                                                            <span>{formatPlayerName(p)}</span>
+                                                            {selectedPartnerId === p.id && <Check size={14}/>}
+                                                        </button>
+                                                    )) : (
+                                                        <p className="text-xs text-slate-400 italic p-2">No encontrado</p>
+                                                    )}
+                                                </div>
+                                                <button 
+                                                    onClick={handleNext}
+                                                    disabled={!selectedPartnerId}
+                                                    className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                                                >
+                                                    Seleccionar y Continuar
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* OPTION B: NEW GUEST */}
+                                    <div className={`rounded-xl border-2 overflow-hidden transition-all ${partnerType === 'new' ? 'border-emerald-500 bg-emerald-50 shadow-md' : 'border-slate-100'}`}>
+                                        <button 
+                                            onClick={() => setPartnerType(partnerType === 'new' ? null : 'new')}
+                                            className="w-full p-4 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors"
+                                        >
+                                            <div className="bg-white p-2 rounded-full shadow-sm"><UserPlus size={20} className="text-emerald-500"/></div>
+                                            <div>
+                                                <div className="font-bold text-slate-800">Registrar Amigo</div>
+                                                <div className="text-xs text-slate-500">Es nuevo</div>
+                                            </div>
+                                        </button>
+
+                                        {partnerType === 'new' && (
+                                            <div className="px-4 pb-4 space-y-3 animate-fade-in">
+                                                <div className="h-px bg-emerald-200 w-full mb-3"></div>
+                                                <div className="bg-emerald-100 p-2 rounded text-[10px] text-emerald-800 flex gap-2 items-center">
+                                                    <Search size={12}/> Si el email/teléfono ya existe, se vinculará automáticamente.
+                                                </div>
+                                                <input 
+                                                    placeholder="Nombre completo" 
+                                                    value={partnerName} 
+                                                    onChange={e => setPartnerName(e.target.value)}
+                                                    className="w-full p-3 border rounded-lg text-sm outline-none focus:border-emerald-500 bg-white"
+                                                    autoFocus
+                                                />
+                                                
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="relative">
+                                                        <Phone size={14} className="absolute left-3 top-3.5 text-slate-400"/>
+                                                        <input 
+                                                            placeholder="Teléfono (Opc.)" 
+                                                            value={partnerPhone} 
+                                                            onChange={e => setPartnerPhone(e.target.value)}
+                                                            className="w-full pl-9 p-3 border rounded-lg text-sm outline-none focus:border-emerald-500 bg-white"
+                                                        />
+                                                    </div>
+                                                    <div className="relative">
+                                                        <AtSign size={14} className="absolute left-3 top-3.5 text-slate-400"/>
+                                                        <input 
+                                                            placeholder="Email (Opc.)" 
+                                                            value={partnerEmail} 
+                                                            onChange={e => setPartnerEmail(e.target.value)}
+                                                            className="w-full pl-9 p-3 border rounded-lg text-sm outline-none focus:border-emerald-500 bg-white"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Partner Position */}
+                                                <div className="flex bg-slate-100 p-1 rounded-lg">
+                                                    <button onClick={() => setPartnerPosition('right')} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPosition === 'right' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><ArrowRightCircle size={12}/> Der.</button>
+                                                    <button onClick={() => setPartnerPosition('backhand')} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPosition === 'backhand' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><ArrowLeftCircle size={12}/> Rev.</button>
+                                                    <button onClick={() => setPartnerPosition('both')} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPosition === 'both' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><Repeat size={12}/> Ambas</button>
+                                                </div>
+
+                                                {/* CATEGORY SELECTOR */}
+                                                <div>
+                                                    <label className="text-xs font-bold text-emerald-800 uppercase mb-2 block">Categoría Base</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {TOURNAMENT_CATEGORIES.map(cat => (
+                                                            <button 
+                                                                key={cat} 
+                                                                onClick={() => togglePartnerCategory(cat)} 
+                                                                className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${partnerCategories.includes(cat) ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-500 border-slate-300'}`}
+                                                            >
+                                                                {cat}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                <button 
+                                                    onClick={handleNext}
+                                                    disabled={!partnerName}
+                                                    className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
+                                                >
+                                                    Confirmar Amigo
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* OPTION C: SEND LINK */}
+                                    <button 
+                                        onClick={() => { setPartnerType('link'); handleNext(); }}
+                                        className={`p-4 rounded-xl border-2 text-left transition-all ${partnerType === 'link' ? 'border-purple-500 bg-purple-50 shadow-sm' : 'border-slate-100 hover:border-slate-300'}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-white p-2 rounded-full shadow-sm"><LinkIcon size={20} className="text-purple-500"/></div>
+                                            <div>
+                                                <div className="font-bold text-slate-800">Mandar Enlace</div>
+                                                <div className="text-xs text-slate-500">Enviar por Whatsapp</div>
+                                            </div>
+                                            <div className="ml-auto">
+                                                <Share2 size={20} className="text-slate-300"/>
+                                            </div>
+                                        </div>
+                                    </button>
+
+                                    {/* OPTION D: SOLO */}
+                                    <button 
+                                        onClick={() => { setPartnerType('solo'); handleNext(); }}
+                                        className={`p-4 rounded-xl border-2 text-left transition-all ${partnerType === 'solo' ? 'border-amber-500 bg-amber-50 shadow-sm' : 'border-slate-100 hover:border-slate-300'}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-white p-2 rounded-full shadow-sm"><User size={20} className="text-amber-500"/></div>
+                                            <div>
+                                                <div className="font-bold text-slate-800">Voy Solo</div>
+                                                <div className="text-xs text-slate-500">Busco pareja</div>
+                                            </div>
+                                            <div className="ml-auto">
+                                                <ArrowRight size={20} className="text-slate-300"/>
+                                            </div>
+                                        </div>
+                                    </button>
+                                </div>
+                            )}
 
                             <button onClick={() => setStep(prev => prev - 1)} className="w-full py-3 bg-white border border-slate-200 text-slate-500 font-bold rounded-xl hover:bg-slate-50 transition-colors mt-4">
                                 Atrás
@@ -677,12 +760,18 @@ const JoinTournament: React.FC = () => {
                                 </div>
                                 <div className="border-t border-slate-200 pt-4">
                                     <div className="text-xs font-bold text-slate-400 uppercase mb-1">Jugador 2</div>
-                                    <div className="text-lg font-bold text-slate-900">
-                                        {partnerType === 'solo' ? <span className="text-amber-500 italic">Buscando Pareja...</span> : 
-                                         partnerType === 'search' ? (state.players.find(p => p.id === selectedPartnerId)?.name) : 
-                                         partnerName}
-                                    </div>
-                                    {/* Partner Categories Display */}
+                                    {invitationData ? (
+                                        <div className="text-lg font-bold text-emerald-600 flex items-center gap-2">
+                                            {invitationData.p1Name} <span className="bg-emerald-100 px-2 rounded text-[10px] uppercase">Host</span>
+                                        </div>
+                                    ) : (
+                                        <div className="text-lg font-bold text-slate-900">
+                                            {partnerType === 'solo' ? <span className="text-amber-500 italic">Buscando Pareja...</span> : 
+                                             partnerType === 'link' ? <span className="text-purple-500 italic">Se unirá por Enlace...</span> :
+                                             partnerType === 'search' ? (state.players.find(p => p.id === selectedPartnerId)?.name) : 
+                                             partnerName}
+                                        </div>
+                                    )}
                                     {partnerType === 'new' && (
                                         <div className="text-xs text-slate-500 mt-1">{partnerCategories.join(', ')}</div>
                                     )}
@@ -693,6 +782,13 @@ const JoinTournament: React.FC = () => {
                                 <div className="bg-amber-50 p-3 rounded-xl text-xs text-amber-800 flex items-start gap-2 text-left border border-amber-100">
                                     <AlertTriangle size={16} className="shrink-0 mt-0.5"/>
                                     <span>Entrarás en la bolsa de jugadores individuales. El organizador te asignará una pareja si hay disponibilidad.</span>
+                                </div>
+                            )}
+                            
+                            {partnerType === 'link' && (
+                                <div className="bg-purple-50 p-3 rounded-xl text-xs text-purple-800 flex items-start gap-2 text-left border border-purple-100">
+                                    <Share2 size={16} className="shrink-0 mt-0.5"/>
+                                    <span>Al confirmar, recibirás un enlace para compartir con tu compañero por WhatsApp.</span>
                                 </div>
                             )}
 
@@ -724,6 +820,18 @@ const JoinTournament: React.FC = () => {
                         </div>
                         <h3 className="text-xl font-black text-slate-900 mb-2">{alertMessage.type === 'error' ? 'Atención' : 'Todo listo'}</h3>
                         <p className="text-slate-500 mb-6">{alertMessage.message}</p>
+                        
+                        {/* SHOW LINK IF GENERATED */}
+                        {generatedLink && (
+                            <div className="mb-6 bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col gap-2">
+                                <p className="text-xs text-slate-500 font-bold uppercase text-left">Enlace para tu compañero:</p>
+                                <div className="flex items-center gap-2">
+                                    <input readOnly value={generatedLink} className="flex-1 text-xs p-2 bg-white border rounded text-slate-600 truncate"/>
+                                    <button onClick={copyToClipboard} className="p-2 bg-slate-200 hover:bg-slate-300 rounded"><Copy size={16}/></button>
+                                </div>
+                            </div>
+                        )}
+
                         <button onClick={closeAlert} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
                             {alertMessage.type === 'error' ? 'Revisar' : 'Continuar'}
                         </button>
