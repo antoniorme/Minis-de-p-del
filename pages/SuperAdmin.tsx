@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, Mail, Key } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { createClient } from '@supabase/supabase-js';
 
 interface Club {
     id: string;
@@ -116,16 +117,24 @@ const SuperAdmin: React.FC = () => {
         const tempPass = "PadelPro" + Math.floor(1000 + Math.random() * 9000);
 
         try {
-            // 2. Sign Up User (Client Side)
-            const { data: authData, error: authError } = await supabase.auth.signUp({
+            // CRITICAL: We must create a SEPARATE client instance to sign up the new user.
+            // If we use the main `supabase` client, `auth.signUp` will detect a session change and LOG OUT the admin.
+            // By using a fresh client, we keep the admin session intact.
+            const tempClient = createClient(
+                import.meta.env.VITE_SUPABASE_URL,
+                import.meta.env.VITE_SUPABASE_ANON_KEY
+            );
+
+            // 2. Sign Up User (Using Temp Client)
+            const { data: authData, error: authError } = await tempClient.auth.signUp({
                 email: quickEmail,
                 password: tempPass,
             });
 
             if (authError) throw authError;
-            if (!authData.user) throw new Error("No se pudo crear el usuario.");
+            if (!authData.user) throw new Error("No se pudo crear el usuario (Auth Error).");
 
-            // 3. Create Club Entry
+            // 3. Create Club Entry (Using MAIN Admin Client - requires authenticated session)
             const { error: clubError } = await supabase.from('clubs').insert([{
                 owner_id: authData.user.id,
                 name: quickClubName,
@@ -134,8 +143,8 @@ const SuperAdmin: React.FC = () => {
 
             if (clubError) throw clubError;
 
-            // 4. Trigger Password Reset Email (So they get a link)
-            await supabase.auth.resetPasswordForEmail(quickEmail, {
+            // 4. Trigger Password Reset Email (Optional, uses Temp Client context)
+            await tempClient.auth.resetPasswordForEmail(quickEmail, {
                 redirectTo: window.location.origin + '/#/auth?type=recovery'
             });
 
@@ -146,7 +155,7 @@ const SuperAdmin: React.FC = () => {
             fetchClubs();
 
         } catch (err: any) {
-            setCreateError(err.message);
+            setCreateError(err.message || "Error al crear usuario.");
         }
     };
 
