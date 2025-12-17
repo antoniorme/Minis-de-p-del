@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, Mail, Key, Trash2, X, Copy, Edit2, Send, Save } from 'lucide-react';
+import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, Mail, Key, Trash2, X, Copy, Edit2, Send, Save, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
@@ -58,6 +58,10 @@ const SuperAdmin: React.FC = () => {
     const [newName, setNewName] = useState('');
     const [resendingId, setResendingId] = useState<string | null>(null); // For loading state of email resend
     
+    // REPAIR / MANUAL EMAIL MODAL STATE
+    const [clubToRepair, setClubToRepair] = useState<Club | null>(null);
+    const [manualEmailInput, setManualEmailInput] = useState('');
+
     // CAPTCHA STATE FOR ADMIN ACTIONS
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
     const captchaRef = useRef<HCaptcha>(null);
@@ -149,7 +153,6 @@ const SuperAdmin: React.FC = () => {
 
         try {
             // 3. Create SEPARATE client instance to sign up the new user
-            // CRITICAL FIX: Enable autoRefreshToken: false and persistSession: false
             const tempClient = createClient(
                 import.meta.env.VITE_SUPABASE_URL,
                 import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -183,23 +186,22 @@ const SuperAdmin: React.FC = () => {
 
             if (clubError) throw clubError;
 
-            // 6. CRITICAL: Create Player Record (To store email for future lookups/resets)
-            // This is safe because AuthContext checks 'clubs' table FIRST for role assignment.
+            // 6. CRITICAL: Create Player Record
             await supabase.from('players').insert([{
                 user_id: authData.user.id,
                 email: quickEmail,
-                name: quickClubName, // Use club name as initial player name
+                name: quickClubName, 
                 categories: ['Admin'],
                 manual_rating: 5
             }]);
 
-            // 7. Trigger Password Reset Email (Optional but helpful)
+            // 7. Trigger Password Reset Email
             try {
                 await tempClient.auth.resetPasswordForEmail(quickEmail, {
                     redirectTo: window.location.origin + '/#/auth?type=recovery'
                 });
             } catch (e) {
-                console.warn("Could not trigger reset email (SMTP might not be configured)", e);
+                console.warn("Could not trigger reset email", e);
             }
 
             // 8. SHOW CREDENTIALS MODAL
@@ -280,8 +282,6 @@ const SuperAdmin: React.FC = () => {
 
         try {
             // 1. Find the email associated with this club (owner_id -> player -> email)
-            let targetEmail = '';
-            
             const { data: playerData } = await supabase
                 .from('players')
                 .select('email')
@@ -289,52 +289,78 @@ const SuperAdmin: React.FC = () => {
                 .maybeSingle();
 
             if (playerData?.email) {
-                targetEmail = playerData.email;
+                // Email found, send directly
+                const { error: resetError } = await supabase.auth.resetPasswordForEmail(playerData.email, {
+                    redirectTo: window.location.origin + '/#/auth?type=recovery'
+                });
+                if (resetError) throw resetError;
+                setSuccessMessage(`Email de recuperación enviado a ${playerData.email}`);
+                setResendingId(null);
             } else {
-                // FALLBACK: If email is missing (old record), prompt the admin to enter it manually
-                // This allows self-repair of the database.
-                const manualEmail = prompt(`⚠️ ATENCIÓN: No se encontró el email asociado a "${club.name}" en la base de datos.\n\nPor favor, introduce el email del administrador para enviarle las claves y reparar su ficha:`);
-                
-                if (!manualEmail) {
-                    setResendingId(null);
-                    return;
-                }
-
-                // Verify basic email format
-                if (!manualEmail.includes('@') || !manualEmail.includes('.')) {
-                    throw new Error("Email inválido.");
-                }
-
-                // AUTO-REPAIR: Create the missing player record
-                const { error: repairError } = await supabase.from('players').insert([{
-                    user_id: club.owner_id,
-                    email: manualEmail,
-                    name: club.name,
-                    categories: ['Admin'],
-                    manual_rating: 5
-                }]);
-
-                if (repairError) {
-                    console.warn("Could not repair player record:", repairError);
-                    // Continue anyway to try sending the email
-                }
-
-                targetEmail = manualEmail;
+                // FALLBACK: Email missing, open UI Modal to ask for it + Captcha
+                setClubToRepair(club);
+                setManualEmailInput('');
+                if(captchaRef.current) captchaRef.current.resetCaptcha();
+                setCaptchaToken(null);
+                setResendingId(null);
             }
 
-            // 2. Trigger Password Reset
-            const { error: resetError } = await supabase.auth.resetPasswordForEmail(targetEmail, {
-                redirectTo: window.location.origin + '/#/auth?type=recovery'
+        } catch (err: any) {
+            setCreateError(err.message || "Error al reenviar correo.");
+            setResendingId(null);
+        }
+    };
+
+    // --- HANDLE REPAIR SUBMIT (FROM MODAL) ---
+    const handleRepairAndSend = async () => {
+        if (!clubToRepair || !manualEmailInput) return;
+        setCreateError(null);
+
+        // Verify email format
+        if (!manualEmailInput.includes('@') || !manualEmailInput.includes('.')) {
+            setCreateError("Email inválido.");
+            return;
+        }
+
+        // Verify Captcha if online
+        if (!isOfflineMode && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+            setCreateError("Por favor completa el Captcha.");
+            return;
+        }
+
+        try {
+            // 1. AUTO-REPAIR: Create the missing player record
+            const { error: repairError } = await supabase.from('players').insert([{
+                user_id: clubToRepair.owner_id,
+                email: manualEmailInput,
+                name: clubToRepair.name,
+                categories: ['Admin'],
+                manual_rating: 5
+            }]);
+
+            if (repairError) {
+                console.warn("Could not repair player record (might exist now?):", repairError);
+            }
+
+            // 2. Trigger Password Reset (Using Captcha if provided)
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(manualEmailInput, {
+                redirectTo: window.location.origin + '/#/auth?type=recovery',
+                captchaToken: captchaToken || undefined
             });
 
             if (resetError) throw resetError;
 
-            setSuccessMessage(`Email de recuperación enviado a ${targetEmail}`);
+            setSuccessMessage(`Ficha reparada y email enviado a ${manualEmailInput}`);
+            
+            // Close modal
+            setClubToRepair(null);
+            setManualEmailInput('');
+            setCaptchaToken(null);
 
         } catch (err: any) {
-            setCreateError(err.message || "Error al reenviar correo.");
-        } finally {
-            setResendingId(null);
+            setCreateError(err.message || "Error al procesar la solicitud.");
+            if(captchaRef.current) captchaRef.current.resetCaptcha();
+            setCaptchaToken(null);
         }
     };
 
@@ -427,6 +453,67 @@ const SuperAdmin: React.FC = () => {
                         >
                             He copiado los datos, cerrar
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* --- REPAIR / MANUAL EMAIL MODAL --- */}
+            {clubToRepair && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-scale-in">
+                    <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl relative">
+                        <button onClick={() => setClubToRepair(null)} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200">
+                            <X size={20}/>
+                        </button>
+
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600">
+                                <AlertTriangle size={32}/>
+                            </div>
+                            <h3 className="text-xl font-black text-slate-900 mb-2">Faltan Datos</h3>
+                            <p className="text-sm text-slate-500">
+                                No encontramos el email de <strong>{clubToRepair.name}</strong> en la base de datos.
+                            </p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-xs text-amber-800">
+                                Introduce el email del administrador para reparar su ficha y enviarle un enlace de acceso.
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-1">Email del Administrador</label>
+                                <input 
+                                    type="email"
+                                    value={manualEmailInput}
+                                    onChange={e => setManualEmailInput(e.target.value)}
+                                    placeholder="admin@club.com"
+                                    className="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-amber-500 font-bold text-slate-800"
+                                    autoFocus
+                                />
+                            </div>
+
+                            {/* CAPTCHA INSIDE MODAL */}
+                            {(!isOfflineMode && HCAPTCHA_SITE_TOKEN) ? (
+                                <div className="flex justify-center min-h-[78px]">
+                                    <HCaptcha
+                                        sitekey={HCAPTCHA_SITE_TOKEN}
+                                        onVerify={token => setCaptchaToken(token)}
+                                        ref={captchaRef}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="bg-slate-100 p-2 rounded text-center text-xs text-slate-400 font-mono">
+                                    Captcha Omitido (Modo Local/Offline)
+                                </div>
+                            )}
+
+                            <button 
+                                onClick={handleRepairAndSend}
+                                className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:bg-slate-800 flex items-center justify-center gap-2"
+                            >
+                                <ShieldCheck size={18}/> Reparar y Enviar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
