@@ -142,9 +142,18 @@ const SuperAdmin: React.FC = () => {
 
         try {
             // 3. Create SEPARATE client instance to sign up the new user
+            // CRITICAL FIX: Enable autoRefreshToken: false and persistSession: false
+            // This prevents the new user session from overwriting the Admin's session in localStorage.
             const tempClient = createClient(
                 import.meta.env.VITE_SUPABASE_URL,
-                import.meta.env.VITE_SUPABASE_ANON_KEY
+                import.meta.env.VITE_SUPABASE_ANON_KEY,
+                {
+                    auth: {
+                        persistSession: false,
+                        autoRefreshToken: false,
+                        detectSessionInUrl: false
+                    }
+                }
             );
 
             // 4. Sign Up User (Using Temp Client + Captcha)
