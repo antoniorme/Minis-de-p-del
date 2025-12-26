@@ -245,13 +245,18 @@ const Dashboard: React.FC = () => {
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Trophy size={120} /></div>
               <div className="relative z-10 space-y-2">
-                  <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${isSetupMode ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
-                          {isSetupMode ? 'Inscripción' : 'En Juego'}
-                      </span>
-                      <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
-                          <Calendar size={12}/> {dateObj.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'long' })}, {timeStr}
-                      </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${isSetupMode ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                            {isSetupMode ? 'Inscripción' : 'En Juego'}
+                        </span>
+                        <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
+                            <Calendar size={12}/> {dateObj.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'long' })}, {timeStr}
+                        </span>
+                    </div>
+                    <button onClick={() => navigate('/setup')} className="p-2 bg-slate-50 text-slate-400 hover:text-blue-500 rounded-lg transition-colors">
+                        <Edit size={16}/>
+                    </button>
                   </div>
                   <h1 className="text-2xl font-black text-slate-900 leading-tight">{state.title || 'Torneo Sin Título'}</h1>
                   <div className="flex flex-wrap gap-2 pt-1">
@@ -268,7 +273,7 @@ const Dashboard: React.FC = () => {
           {isActiveMode ? (
               <StatCard title="Ronda Actual" value={`Ronda ${state.currentRound}`} icon={Clock} color="text-emerald-400" active={true} onClick={() => navigate('/active')} />
           ) : (
-              <StatCard title="Formato" value={`Mini ${currentLimit}`} icon={LayoutGrid} color="text-indigo-400" active={true} />
+              <StatCard title="Formato" value={`Mini ${currentLimit}`} icon={LayoutGrid} color="text-indigo-400" active={true} onClick={() => navigate('/setup')} />
           )}
       </div>
 

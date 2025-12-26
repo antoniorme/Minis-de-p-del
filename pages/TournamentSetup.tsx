@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { FileText, Gift, Euro, Plus, X, Play, ArrowLeft, Save, AlertTriangle, Check } from 'lucide-react';
+import { FileText, Gift, Euro, Plus, X, Play, ArrowLeft, Save, AlertTriangle, Check, LayoutGrid, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { TournamentFormat } from '../types';
 
 const TournamentSetup: React.FC = () => {
     const { createNewTournament, updateTournamentSettings, state } = useTournament();
@@ -16,6 +17,7 @@ const TournamentSetup: React.FC = () => {
     const [title, setTitle] = useState('');
     const [date, setDate] = useState(new Date().toISOString().slice(0, 16)); // YYYY-MM-DDTHH:mm
     const [price, setPrice] = useState(15);
+    const [format, setFormat] = useState<TournamentFormat>('16_mini');
     const [description, setDescription] = useState('');
     const [levelRange, setLevelRange] = useState('');
     const [prizes, setPrizes] = useState<string[]>([]);
@@ -33,6 +35,7 @@ const TournamentSetup: React.FC = () => {
                 } catch(e) {}
             }
             setPrice(state.price || 15);
+            setFormat(state.format || '16_mini');
             setDescription(state.description || '');
             setLevelRange(state.levelRange || '');
             setPrizes(state.prizes || []);
@@ -41,6 +44,13 @@ const TournamentSetup: React.FC = () => {
     }, [isEditing, state]);
 
     const suggestedExtras = ['Bolas Nuevas', 'Agua', 'Fruta', 'Cerveza', 'Camiseta', 'Grip'];
+    
+    const formats: { id: TournamentFormat, label: string, desc: string }[] = [
+        { id: '16_mini', label: '16 Parejas', desc: '4 Grupos de 4' },
+        { id: '12_mini', label: '12 Parejas', desc: '3 Grupos de 4' },
+        { id: '10_mini', label: '10 Parejas', desc: '2 Grupos de 5' },
+        { id: '8_mini', label: '8 Parejas', desc: '2 Grupos de 4' },
+    ];
 
     const handleAddPrize = () => {
         if(prizeInput.trim()) {
@@ -68,6 +78,7 @@ const TournamentSetup: React.FC = () => {
             title,
             startDate: date,
             price,
+            format,
             description,
             levelRange: levelRange || 'Abierto',
             prizes,
@@ -94,10 +105,39 @@ const TournamentSetup: React.FC = () => {
         <div className="space-y-6 pb-20">
             <div className="flex items-center gap-4">
                 <button onClick={() => navigate('/dashboard')} className="p-2 bg-white border border-slate-200 rounded-full text-slate-600"><ArrowLeft size={20} /></button>
-                <h2 className="text-2xl font-bold text-slate-900">{isEditing ? 'Editar Torneo' : 'Crear Nuevo Torneo'}</h2>
+                <h2 className="text-2xl font-bold text-slate-900">{isEditing ? 'Configuración' : 'Nuevo Torneo'}</h2>
             </div>
 
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6 animate-fade-in">
+                  
+                  {/* TIPO DE MINI (FORMATO) */}
+                  <div>
+                      <div className="flex items-center gap-2 mb-4 text-slate-400 font-bold text-xs uppercase tracking-wider">
+                          <LayoutGrid size={16}/> Tipo de Mini (Cupo de Parejas)
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {formats.map(f => (
+                              <button 
+                                key={f.id}
+                                disabled={state.status === 'active'}
+                                onClick={() => setFormat(f.id)}
+                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all ${format === f.id ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9] shadow-md' : 'border-slate-100 text-slate-400 hover:border-slate-200 bg-white'} ${state.status === 'active' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                  <Users size={24} strokeWidth={format === f.id ? 3 : 2}/>
+                                  <span className="text-sm font-black whitespace-nowrap">{f.label}</span>
+                                  <span className="text-[9px] font-bold opacity-60 uppercase">{f.desc}</span>
+                              </button>
+                          ))}
+                      </div>
+                      {state.status === 'active' && (
+                          <p className="text-[10px] text-rose-500 font-bold mt-2 uppercase flex items-center gap-1">
+                              <AlertTriangle size={10}/> El formato no se puede cambiar con el torneo en curso.
+                          </p>
+                      )}
+                  </div>
+
+                  <div className="h-px bg-slate-100 w-full"></div>
+
                   <div className="flex items-center gap-2 mb-2 text-slate-400 font-bold text-xs uppercase tracking-wider">
                       <FileText size={16}/> Datos del Evento (Público)
                   </div>
@@ -107,7 +147,7 @@ const TournamentSetup: React.FC = () => {
                       <div>
                           <label className="text-xs font-bold text-slate-500 uppercase mb-1">Título del Torneo</label>
                           <input 
-                            autoFocus
+                            autoFocus={!isEditing}
                             value={title} 
                             onChange={e => setTitle(e.target.value)} 
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-800 outline-none focus:border-[#575AF9]" 
@@ -162,7 +202,7 @@ const TournamentSetup: React.FC = () => {
                       <div className="flex gap-2 mb-2">
                           <input value={prizeInput} onChange={e => setPrizeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPrize()} className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm outline-none focus:border-[#575AF9]" placeholder="Ej. Palas Nox AT10"/>
                           <button onClick={handleAddPrize} className="bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 font-bold text-xs uppercase tracking-wide whitespace-nowrap">
-                              Añadir Premio
+                              Añadir
                           </button>
                       </div>
                       <div className="flex flex-col gap-1">
@@ -172,7 +212,6 @@ const TournamentSetup: React.FC = () => {
                                   <button onClick={() => removePrize(idx)} className="text-amber-400 hover:text-amber-600"><X size={14}/></button>
                               </div>
                           ))}
-                          {prizes.length === 0 && <p className="text-xs text-slate-400 italic p-2">No hay premios añadidos.</p>}
                       </div>
                   </div>
 
@@ -182,7 +221,7 @@ const TournamentSetup: React.FC = () => {
                     className="w-full py-5 rounded-xl font-bold text-white text-lg shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 hover:opacity-90 mt-4"
                   >
                       {isEditing ? <Save size={24}/> : <Play size={24} fill="currentColor" />} 
-                      {isEditing ? 'GUARDAR CAMBIOS' : 'PUBLICAR Y ABRIR INSCRIPCIONES'}
+                      {isEditing ? 'GUARDAR CONFIGURACIÓN' : 'PUBLICAR Y ABRIR INSCRIPCIONES'}
                   </button>
             </div>
 

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { TournamentState, TournamentAction, Player, Pair, Match, Group, TournamentFormat, GenerationMethod, TournamentSummary } from '../types';
 import { supabase } from '../lib/supabase';
@@ -359,14 +358,15 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (state.id) {
              await supabase.from('tournaments').update({ 
                  title: settings.title, price: settings.price, prizes: settings.prizes,
-                 description: settings.description, level_range: settings.levelRange, included_items: settings.includedItems
+                 description: settings.description, level_range: settings.levelRange, 
+                 included_items: settings.includedItems, format: settings.format
             }).eq('id', state.id);
         }
     };
 
     const createNewTournament = async (metadata: Partial<TournamentState>) => {
         const defaults: TournamentState = {
-            status: 'setup', currentRound: 0, format: '16_mini', players: state.players, pairs: [], matches: [], groups: [], courts: state.courts, loading: false, tournamentList: state.tournamentList,
+            status: 'setup', currentRound: 0, format: metadata.format || '16_mini', players: state.players, pairs: [], matches: [], groups: [], courts: state.courts, loading: false, tournamentList: state.tournamentList,
             title: metadata.title || 'Nuevo Torneo', price: metadata.price || 15, prizes: metadata.prizes || [],
             description: metadata.description || '', levelRange: metadata.levelRange || 'Abierto', includedItems: metadata.includedItems || [],
             startDate: metadata.startDate || new Date().toISOString()
@@ -381,7 +381,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         if (user) {
             const { data, error } = await supabase.from('tournaments').insert([{ 
-                user_id: user.id, status: 'setup', format: '16_mini',
+                user_id: user.id, status: 'setup', format: metadata.format || '16_mini',
                 title: metadata.title, price: metadata.price, prizes: metadata.prizes,
                 description: metadata.description, level_range: metadata.levelRange,
                 included_items: metadata.includedItems, date: metadata.startDate
@@ -543,6 +543,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         await supabase.from('matches').delete().eq('tournament_id', state.id);
         await supabase.from('tournaments').update({ status: 'active', current_round: 1, format: state.format }).eq('id', state.id);
         
+        /* Fixed: Using camelCase property names from Partial<Match> to avoid TS errors */
         const matchesDB = matches.map(m => ({ tournament_id: state.id, round: m.round, phase: m.phase, bracket: m.bracket, court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, score_a: m.scoreA, score_b: m.scoreB, is_finished: m.isFinished }));
         const { error } = await supabase.from('matches').insert(matchesDB);
         if (error) { if (error.message.includes('phase')) { const matchesNoPhase = matchesDB.map(({ phase, ...rest }) => rest); const { error: retryError } = await supabase.from('matches').insert(matchesNoPhase); if (retryError) throw retryError; } else { throw error; } }
@@ -555,6 +556,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const newMatches = Logic.generateNextRoundMatches(state, clubData.courtCount);
         if (newMatches.length > 0) {
              if (!isOfflineMode) {
+                 /* Fixed: Using camelCase property names from Partial<Match> to avoid TS errors */
                  const matchesDB = newMatches.map(m => ({ tournament_id: state.id, round: m.round, phase: m.phase, bracket: m.bracket, court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, score_a: m.scoreA, score_b: m.scoreB, is_finished: m.isFinished }));
                 await supabase.from('matches').insert(matchesDB);
              } 
