@@ -3,10 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldAlert, ShieldCheck, Terminal, Eye, EyeOff } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldCheck, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
-type AuthView = 'login' | 'register' | 'recovery';
+type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
 
 let HCAPTCHA_SITE_TOKEN = "";
 let IS_DEV_ENV = false;
@@ -15,20 +15,13 @@ try {
     // @ts-ignore
     if (import.meta && import.meta.env) {
         // @ts-ignore
-        if (import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) {
-            // @ts-ignore
-            HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN;
-        }
+        if (import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN;
         // @ts-ignore
-        if (import.meta.env.DEV) {
-            // @ts-ignore
-            IS_DEV_ENV = import.meta.env.DEV;
-        }
+        if (import.meta.env.DEV) IS_DEV_ENV = import.meta.env.DEV;
     }
 } catch (e) {}
 
-const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const IS_LOCAL = isLocalHost || IS_DEV_ENV;
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || IS_DEV_ENV;
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -46,17 +39,20 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
   const [showDevTools, setShowDevTools] = useState(false);
-  const [showDiagnose, setShowDiagnose] = useState(false);
 
   useEffect(() => {
       // @ts-ignore
       const isPlaceholder = (supabase as any).supabaseUrl === 'https://placeholder.supabase.co';
-      if (isOfflineMode || isPlaceholder) {
-          setShowDevTools(true);
-      }
+      if (isOfflineMode || isPlaceholder) setShowDevTools(true);
   }, [isOfflineMode]);
 
+  // DETECTAR SI VENIMOS DE UN EMAIL DE RECUPERACIÓN
   useEffect(() => {
+    const type = searchParams.get('type');
+    if (type === 'recovery') {
+      setView('update-password');
+      setSuccessMsg("Enlace verificado. Introduce tu nueva contraseña.");
+    }
     if (searchParams.get('mode') === 'register') {
       setView('register');
     }
@@ -70,19 +66,19 @@ const AuthPage: React.FC = () => {
       if(captchaRef.current) captchaRef.current.resetCaptcha();
   };
 
-  const handlePasswordReset = async (e: React.FormEvent) => {
+  // SOLICITAR RECUPERACIÓN (Mandar Email)
+  const handlePasswordResetRequest = async (e: React.FormEvent) => {
       e.preventDefault();
       setLoading(true);
       setError(null);
       
-      if (!IS_LOCAL && (!HCAPTCHA_SITE_TOKEN || !captchaToken)) {
-          setError("Por seguridad, debes completar el captcha.");
+      if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+          setError("Por seguridad, completa el captcha.");
           setLoading(false);
           return;
       }
 
-      // IMPORTANTE: Construimos la URL de retorno dinámicamente
-      // Usamos el origin actual + el path de auth para que Supabase sepa volver exactamente aquí
+      // IMPORTANTE: Para HashRouter, la URL de retorno debe incluir el /#/
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -91,7 +87,7 @@ const AuthPage: React.FC = () => {
               captchaToken: captchaToken || undefined 
           });
           if (error) throw error;
-          setSuccessMsg("Si el email existe, recibirás un enlace para entrar.");
+          setSuccessMsg("Si el email está registrado, recibirás un enlace en unos instantes.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -101,16 +97,35 @@ const AuthPage: React.FC = () => {
       }
   };
 
+  // ACTUALIZAR CONTRASEÑA (Después de clicar el link)
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setLoading(true);
+      setError(null);
+
+      if (password !== confirmPassword) {
+          setError("Las contraseñas no coinciden.");
+          setLoading(false);
+          return;
+      }
+
+      try {
+          const { error } = await supabase.auth.updateUser({ password });
+          if (error) throw error;
+          
+          setSuccessMsg("¡Contraseña actualizada! Iniciando sesión...");
+          setTimeout(() => navigate('/dashboard'), 1500);
+      } catch (err: any) {
+          setError(err.message || "Error al actualizar la contraseña.");
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
-    if (!IS_LOCAL && !HCAPTCHA_SITE_TOKEN) {
-        setError("ERROR CONFIG: Falta VITE_HCAPTCHA_SITE_TOKEN.");
-        setLoading(false);
-        return;
-    }
 
     if (HCAPTCHA_SITE_TOKEN && !captchaToken && !IS_LOCAL) {
         setError("Completa el Captcha para continuar.");
@@ -141,8 +156,6 @@ const AuthPage: React.FC = () => {
 
       if (result.data.user && view === 'register' && !result.data.session) {
            setSuccessMsg("¡Cuenta creada! Revisa tu email para confirmarla.");
-           if(captchaRef.current) captchaRef.current.resetCaptcha(); 
-           setCaptchaToken(null);
            setView('login');
       }
 
@@ -153,12 +166,6 @@ const AuthPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleBypass = (role: 'admin' | 'player' | 'superadmin') => {
-      loginWithDevBypass(role);
-      if (role === 'player') navigate('/p/dashboard');
-      else navigate('/dashboard');
   };
 
   return (
@@ -173,16 +180,20 @@ const AuthPage: React.FC = () => {
              <Trophy size={48} className="text-[#575AF9]" />
           </div>
           <h1 className="text-3xl font-black text-slate-900 mb-2">
-            {view === 'login' ? 'Bienvenido' : view === 'recovery' ? 'Recuperar' : 'Crear Cuenta'}
+            {view === 'login' ? 'Bienvenido' : 
+             view === 'recovery' ? 'Recuperar' : 
+             view === 'update-password' ? 'Nueva Clave' : 'Crear Cuenta'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'login' ? 'Introduce tus credenciales' : view === 'recovery' ? 'Enlace de acceso por email' : 'Únete a la comunidad'}
+            {view === 'login' ? 'Introduce tus credenciales' : 
+             view === 'recovery' ? 'Enlace de acceso por email' : 
+             view === 'update-password' ? 'Escribe tu nueva contraseña' : 'Únete a la comunidad'}
           </p>
         </div>
 
         {successMsg && (
-            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold shadow-sm animate-fade-in">
-                {successMsg}
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold shadow-sm animate-fade-in flex items-center justify-center gap-2">
+                <CheckCircle2 size={18}/> {successMsg}
             </div>
         )}
 
@@ -192,8 +203,26 @@ const AuthPage: React.FC = () => {
           </div>
         )}
 
-        {view === 'recovery' ? (
-            <form onSubmit={handlePasswordReset} className="space-y-4">
+        {/* VISTA: ACTUALIZAR CONTRASEÑA (TRAS CLICK EN EMAIL) */}
+        {view === 'update-password' ? (
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+                 <div className="relative">
+                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                    <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña"/>
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
+                        {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                    </button>
+                </div>
+                <div className="relative">
+                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                    <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Nueva Contraseña"/>
+                </div>
+                <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex justify-center items-center gap-2">
+                    {loading ? <Loader2 className="animate-spin" /> : <>Cambiar Contraseña <Key size={18}/></>}
+                </button>
+            </form>
+        ) : view === 'recovery' ? (
+            <form onSubmit={handlePasswordResetRequest} className="space-y-4">
                 <div className="relative">
                     <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
                     <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Email"/>
@@ -255,8 +284,8 @@ const AuthPage: React.FC = () => {
             <div className="mt-12 pt-8 border-t border-slate-200 animate-fade-in">
                 <div className="flex items-center justify-center gap-2 text-slate-400 text-xs font-bold uppercase mb-4"><Code2 size={16}/> Simulación (Offline)</div>
                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => handleBypass('admin')} className="py-3 bg-slate-800 text-white rounded-xl font-bold text-xs">CLUB</button>
-                    <button onClick={() => handleBypass('player')} className="py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs">JUGADOR</button>
+                    <button onClick={() => loginWithDevBypass('admin')} className="py-3 bg-slate-800 text-white rounded-xl font-bold text-xs">CLUB</button>
+                    <button onClick={() => loginWithDevBypass('player')} className="py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs">JUGADOR</button>
                 </div>
             </div>
         )}
