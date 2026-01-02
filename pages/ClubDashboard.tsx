@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
-import { Calendar, Users, Plus, ChevronRight, Play, Settings } from 'lucide-react';
+import { Calendar, Users, Plus, ChevronRight, Play, Settings, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const ClubDashboard: React.FC = () => {
@@ -23,74 +23,83 @@ const ClubDashboard: React.FC = () => {
     return (
         <div className="space-y-8 pb-20 animate-fade-in">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-slate-900">Mis Torneos</h2>
+                <h2 className="text-2xl font-black text-white">Mis Torneos</h2>
                 <button 
                     onClick={() => navigate('/setup')} 
                     style={{ backgroundColor: THEME.cta }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-white font-bold text-sm shadow-md active:scale-95 transition-transform"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm shadow-lg active:scale-95 transition-transform hover:opacity-90"
                 >
-                    <Plus size={18}/> Nuevo
+                    <Plus size={20}/> NUEVO
                 </button>
             </div>
 
             {activeTournaments.length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-                    <Calendar size={48} className="mx-auto text-slate-300 mb-4"/>
-                    <h3 className="text-lg font-bold text-slate-700">No hay torneos activos</h3>
-                    <p className="text-slate-400 text-sm mb-6">Crea un torneo para empezar a promocionarlo.</p>
+                <div className="text-center py-20 bg-slate-900 rounded-[2.5rem] border-2 border-dashed border-slate-800">
+                    <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-700">
+                        <Calendar size={40}/>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-200">No hay torneos activos</h3>
+                    <p className="text-slate-400 text-sm mb-8 max-w-xs mx-auto">Crea un torneo para empezar a gestionar inscripciones y el directo.</p>
                     <button 
                         onClick={() => navigate('/setup')}
-                        className="text-[#575AF9] font-bold text-sm hover:underline"
+                        className="px-8 py-3 bg-white text-slate-950 font-black rounded-xl text-sm hover:bg-slate-100 transition-colors"
                     >
-                        Crear Primer Torneo
+                        CREAR PRIMER TORNEO
                     </button>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {activeTournaments.map(t => {
-                        const color = getFormatColor(t.format);
+                        // We use the primary format color but ensure it's readable on dark
+                        const formatColor = getFormatColor(t.format);
                         const isSetup = t.status === 'setup';
                         
                         return (
                             <div 
                                 key={t.id} 
                                 onClick={() => handleSelect(t.id)}
-                                className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all group relative"
+                                className="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden cursor-pointer hover:border-[#575AF9]/50 transition-all group relative"
                             >
-                                <div className="p-5">
+                                <div className="p-6">
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="w-3/4">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className={`w-2 h-2 rounded-full ${isSetup ? 'bg-slate-400' : 'bg-rose-500 animate-pulse'}`}></span>
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                                    {isSetup ? 'Inscripción' : 'En Juego'}
+                                            <div className="flex items-center gap-2 mb-2">
+                                                {/* DOT COLOR: Changed to Orange for Setup */}
+                                                <span className={`w-2.5 h-2.5 rounded-full ${isSetup ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]' : 'bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.5)]'}`}></span>
+                                                <span className={`text-[10px] font-black uppercase tracking-widest ${isSetup ? 'text-orange-400' : 'text-rose-400'}`}>
+                                                    {isSetup ? 'Inscripción Abierta' : 'Torneo en Directo'}
                                                 </span>
                                             </div>
-                                            <h3 className="font-black text-slate-900 text-lg leading-tight group-hover:text-[#575AF9] transition-colors truncate">{t.title}</h3>
-                                            <div className="flex items-center gap-1 mt-1 text-slate-400 text-xs font-medium">
-                                                <Calendar size={12}/>
-                                                {new Date(t.date).toLocaleDateString('es-ES', {weekday: 'short', day: 'numeric', month: 'short'})}
+                                            <h3 className="font-black text-white text-xl leading-tight group-hover:text-[#575AF9] transition-colors truncate">{t.title}</h3>
+                                            <div className="flex items-center gap-1.5 mt-2 text-slate-400 text-xs font-bold">
+                                                <Calendar size={14} className="text-slate-500"/>
+                                                {new Date(t.date).toLocaleDateString('es-ES', {weekday: 'long', day: 'numeric', month: 'short'}).toUpperCase()}
                                             </div>
                                         </div>
                                         
-                                        {/* PAIR COUNT - PROMINENT */}
-                                        <div className="flex flex-col items-center justify-center bg-slate-50 rounded-xl p-2 min-w-[60px] border border-slate-100">
-                                            <span className="text-2xl font-black text-slate-700 leading-none">{t.playerCount || 0}</span>
-                                            <span className="text-[9px] font-bold uppercase text-slate-400 mt-0.5">Parejas</span>
+                                        <div className="flex flex-col items-center justify-center bg-slate-800 rounded-2xl p-3 min-w-[70px] border border-slate-700 shadow-inner">
+                                            <span className="text-2xl font-black text-white leading-none">{t.playerCount || 0}</span>
+                                            <span className="text-[9px] font-black uppercase text-slate-400 mt-1">Parejas</span>
                                         </div>
                                     </div>
                                     
-                                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                                        <span style={{ color }} className="text-[10px] font-bold px-2 py-1 rounded bg-slate-100 border border-slate-200">
-                                            {t.format.replace('_mini', '').toUpperCase()}
+                                    <div className="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between">
+                                        {/* LABEL CONTRAST FIX: Increased color intensity and used solid backgrounds or brighter text */}
+                                        <span style={{ 
+                                            color: '#fff', 
+                                            backgroundColor: isSetup ? '#334155' : '#1e293b',
+                                            borderColor: formatColor
+                                        }} className="text-[10px] font-black px-3 py-1.5 rounded-xl border-2 uppercase tracking-wider shadow-sm">
+                                            {t.format.replace('_mini', '').toUpperCase()} PAREJAS
                                         </span>
+
                                         {isSetup ? (
-                                            <span className="text-xs font-bold text-slate-400 flex items-center gap-1 group-hover:text-[#575AF9] transition-colors">
-                                                <Settings size={14}/> Gestionar <ChevronRight size={14}/>
+                                            <span className="text-xs font-black text-slate-400 flex items-center gap-1 group-hover:text-[#575AF9] transition-colors">
+                                                GESTIONAR <ChevronRight size={16}/>
                                             </span>
                                         ) : (
-                                            <span className="text-xs font-bold text-rose-500 flex items-center gap-1 group-hover:underline">
-                                                <Play size={14}/> Directo <ChevronRight size={14}/>
+                                            <span className="text-xs font-black text-rose-400 flex items-center gap-1 group-hover:underline">
+                                                VER DIRECTO <ChevronRight size={16}/>
                                             </span>
                                         )}
                                     </div>

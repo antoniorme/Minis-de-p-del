@@ -2,10 +2,11 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
+import { LeagueProvider } from './store/LeagueContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
 import { HistoryProvider, useHistory } from './store/HistoryContext';
 import { TimerProvider } from './store/TimerContext';
-import { NotificationProvider } from './store/NotificationContext'; // NEW
+import { NotificationProvider } from './store/NotificationContext';
 import { Layout } from './components/Layout';
 import { PlayerLayout } from './components/PlayerLayout';
 
@@ -26,9 +27,15 @@ import Onboarding from './pages/Onboarding';
 import JoinTournament from './pages/public/JoinTournament';
 import TournamentSetup from './pages/TournamentSetup';
 import SuperAdmin from './pages/SuperAdmin'; 
-import Notifications from './pages/Notifications'; // NEW
-import NotificationSettings from './pages/NotificationSettings'; // NEW
-import PendingVerification from './pages/PendingVerification'; // NEW
+import Notifications from './pages/Notifications';
+import NotificationSettings from './pages/NotificationSettings';
+import PendingVerification from './pages/PendingVerification';
+
+// League Pages
+import LeagueDashboard from './pages/LeagueDashboard';
+import LeagueSetup from './pages/LeagueSetup';
+import LeagueGroups from './pages/LeagueGroups';
+import LeagueActive from './pages/LeagueActive';
 
 // Player Pages
 import PlayerDashboard from './pages/player/PlayerDashboard';
@@ -46,23 +53,18 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   
   if (!user) return <Navigate to="/" replace />;
   
-  // Pending Check (If role is pending and not on pending page)
   if (role === 'pending' && location.pathname !== '/pending') {
       return <Navigate to="/pending" replace />;
   }
 
-  // SUPER ADMIN PROTECTION
   if (requireSuperAdmin && role !== 'superadmin') {
       return <Navigate to="/dashboard" replace />;
   }
 
-  // ADMIN PROTECTION (Clubs)
-  // Super Admins can access Admin routes
   if (requireAdmin && role !== 'admin' && role !== 'superadmin') {
       return <Navigate to="/p/dashboard" replace />;
   }
 
-  // Force Onboarding for Admins if generic name (only for admin routes)
   if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding' && role !== 'superadmin') {
       return <Navigate to="/onboarding" replace />;
   }
@@ -73,7 +75,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 const AppRoutes = () => {
   const { user, role, loading } = useAuth();
 
-  if (loading) return null; // Wait for auth check
+  if (loading) null;
 
   const getHomeRoute = () => {
       if (!user) return <Landing />;
@@ -85,30 +87,14 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-        {/* Entry Point */}
         <Route path="/" element={getHomeRoute()} />
-        
-        {/* Auth */}
         <Route path="/auth" element={user ? getHomeRoute() : <AuthPage />} />
-        
-        {/* Pending Verification */}
-        <Route path="/pending" element={
-            <ProtectedRoute>
-                <PendingVerification />
-            </ProtectedRoute>
-        } />
-        
-        {/* Public Registration Wizard (No Auth Required) */}
+        <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
-
-        {/* Fullscreen Onboarding (Admin Only) */}
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
-
-        {/* SHARED ROUTES (Notifications) - Accessible by both layouts basically */}
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
         <Route path="/notifications/settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
 
-        {/* PLAYER APP ROUTES (Accessible to Players, Admins and SuperAdmins) */}
         <Route path="/p/*" element={
             <ProtectedRoute>
                 <PlayerLayout>
@@ -124,7 +110,6 @@ const AppRoutes = () => {
             </ProtectedRoute>
         } />
 
-        {/* SUPER ADMIN ROUTES */}
         <Route path="/superadmin" element={
             <Layout>
                 <ProtectedRoute requireSuperAdmin>
@@ -133,7 +118,6 @@ const AppRoutes = () => {
             </Layout>
         } />
 
-        {/* ADMIN ROUTES (Club) */}
         <Route path="/*" element={
             <Layout>
                 <Routes>
@@ -143,6 +127,12 @@ const AppRoutes = () => {
                     <Route path="/checkin" element={<ProtectedRoute requireAdmin><CheckIn /></ProtectedRoute>} />
                     <Route path="/active" element={<ProtectedRoute requireAdmin><ActiveTournament /></ProtectedRoute>} />
                     <Route path="/results" element={<ProtectedRoute requireAdmin><Results /></ProtectedRoute>} />
+                    
+                    {/* LEAGUE ROUTES */}
+                    <Route path="/league" element={<ProtectedRoute requireAdmin><LeagueDashboard /></ProtectedRoute>} />
+                    <Route path="/league/setup" element={<ProtectedRoute requireAdmin><LeagueSetup /></ProtectedRoute>} />
+                    <Route path="/league/groups/:categoryId" element={<ProtectedRoute requireAdmin><LeagueGroups /></ProtectedRoute>} />
+                    <Route path="/league/active" element={<ProtectedRoute requireAdmin><LeagueActive /></ProtectedRoute>} />
                     
                     <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
                     <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><AdminPlayerProfile /></ProtectedRoute>} />
@@ -164,11 +154,13 @@ const App: React.FC = () => {
       <HistoryProvider>
         <NotificationProvider>
             <TournamentProvider>
-                <TimerProvider>
-                    <HashRouter>
-                    <AppRoutes />
-                    </HashRouter>
-                </TimerProvider>
+                <LeagueProvider>
+                    <TimerProvider>
+                        <HashRouter>
+                        <AppRoutes />
+                        </HashRouter>
+                    </TimerProvider>
+                </LeagueProvider>
             </TournamentProvider>
         </NotificationProvider>
       </HistoryProvider>

@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { getFormatColor } from '../utils/theme';
-import { Trophy, Grid, GitMerge, ArrowLeft, Edit2, AlertTriangle } from 'lucide-react';
+import { Trophy, Grid, GitMerge, ArrowLeft, Edit2, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { PosterGenerator } from '../components/PosterGenerator';
 
 const Results: React.FC = () => {
   const { state, updateScoreDB, formatPlayerName } = useTournament();
@@ -27,12 +28,26 @@ const Results: React.FC = () => {
   const [scoreB, setScoreB] = useState('');
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
+  // Poster Logic
+  const [showPoster, setShowPoster] = useState(false);
+  const [posterData, setPosterData] = useState<any>(null);
+
   const getPairName = (id: string) => {
     const pair = state.pairs.find(p => p.id === id);
     if (!pair) return '...';
     const p1 = state.players.find(p => p.id === pair.player1Id);
     const p2 = state.players.find(p => p.id === pair.player2Id);
     return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
+  };
+
+  const handleOpenPoster = (winnerName: string) => {
+      setPosterData({
+          title: state.title || "Mini Torneo",
+          winnerNames: winnerName,
+          category: state.levelRange || "Abierto",
+          type: 'champions'
+      });
+      setShowPoster(true);
   };
 
   const getSortedGroupPairs = (groupId: string) => {
@@ -45,15 +60,25 @@ const Results: React.FC = () => {
       });
   };
 
-  const BracketMatch = ({ title, p1, p2, scoreA, scoreB }: any) => {
+  const BracketMatch = ({ title, p1, p2, scoreA, scoreB, isFinal }: any) => {
       const hasResult = scoreA !== null && scoreB !== null;
       const winner = hasResult ? (scoreA > scoreB ? 'p1' : 'p2') : null;
 
       return (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden mb-2">
-            <div className="bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-100 flex justify-between">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden mb-2 relative group">
+            <div className="bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-100 flex justify-between items-center">
                 <span>{title}</span>
-                {hasResult && <span className="text-slate-500">{scoreA} - {scoreB}</span>}
+                <div className="flex items-center gap-2">
+                    {hasResult && <span className="text-slate-500">{scoreA} - {scoreB}</span>}
+                    {isFinal && hasResult && (
+                        <button 
+                            onClick={() => handleOpenPoster(winner === 'p1' ? p1 : p2)}
+                            className="p-1 text-amber-500 hover:scale-110 transition-transform"
+                        >
+                            <ImageIcon size={14}/>
+                        </button>
+                    )}
+                </div>
             </div>
             <div className="p-3 text-sm">
                 <div className={`flex justify-between p-1 rounded ${winner === 'p1' ? 'bg-emerald-50' : ''}`}>
@@ -125,16 +150,9 @@ const Results: React.FC = () => {
   }
   else if (isMini12) {
       roundQF = 4; roundSF = 5; roundFinal = 6; roundFinalCons = 5;
-      // Main QF (R4)
       qf1 = getMatchData(4, 1); qf2 = getMatchData(4, 2); qf3 = getMatchData(4, 3); qf4 = getMatchData(4, 4);
-      // Main SF (R5)
-      sf1 = getMatchData(5, 1); sf2 = getMatchData(5, 2);
-      // Main Final (R6)
-      finalMain = getMatchData(6, 1);
-      // Cons SF (R4)
-      sfC1 = getMatchData(4, 5); sfC2 = getMatchData(4, 6);
-      // Cons Final (R5)
-      finalCons = getMatchData(5, 3);
+      sf1 = getMatchData(5, 1); sf2 = getMatchData(5, 2); finalMain = getMatchData(6, 1);
+      sfC1 = getMatchData(4, 5); sfC2 = getMatchData(4, 6); finalCons = getMatchData(5, 3);
   }
   else {
       // 16 Pairs (Default)
@@ -196,18 +214,6 @@ const Results: React.FC = () => {
                         </div>
                     </div>
                )}
-               {alertMessage && (
-                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-                      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
-                          <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
-                              <AlertTriangle size={32} />
-                          </div>
-                          <h3 className="text-xl font-black text-slate-900 mb-2">Error</h3>
-                          <p className="text-slate-500 mb-6">{alertMessage}</p>
-                          <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
-                      </div>
-                  </div>
-              )}
           </div>
       );
   }
@@ -258,12 +264,12 @@ const Results: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* MAIN BRACKET - INVERTED ORDER (FINAL -> SF -> QF) */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                  <h3 className="text-emerald-600 font-bold mb-4 text-center flex items-center justify-center gap-2"><Trophy size={18}/> Cuadro Principal</h3>
+                  <h3 className="text-emerald-600 font-bold mb-4 text-center flex items-center justify-center gap-2"><Trophy size={18}/> Cuadrante Oro</h3>
                   <div className="space-y-6 relative flex flex-col-reverse">
                       
                       {/* QF */}
                       <div>
-                          <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS DE FINAL</p>
+                          <p className="text-xs text-slate-400 font-bold mb-2 uppercase tracking-widest">Cuartos</p>
                           <BracketMatch title="QF1" {...qf1} />
                           <BracketMatch title="QF2" {...qf2} />
                           <BracketMatch title="QF3" {...qf3} />
@@ -273,7 +279,7 @@ const Results: React.FC = () => {
                       {/* SF */}
                       {state.currentRound >= roundSF && (
                           <div className="animate-fade-in mb-4">
-                              <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
+                              <p className="text-xs text-slate-400 font-bold mb-2 uppercase tracking-widest">Semis</p>
                               <BracketMatch title="SF1" {...sf1} />
                               <BracketMatch title="SF2" {...sf2} />
                           </div>
@@ -282,9 +288,9 @@ const Results: React.FC = () => {
                       {/* FINAL */}
                       {state.currentRound >= roundFinal && (
                           <div className="animate-fade-in mb-4">
-                              <p className="text-xs text-emerald-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> GRAN FINAL</p>
-                              <div className="border-2 border-emerald-100 rounded-lg shadow-sm">
-                                  <BracketMatch title="FINAL" {...finalMain} />
+                              <p className="text-xs text-emerald-600 font-bold mb-2 flex items-center gap-1 uppercase tracking-widest"><Trophy size={12}/> Gran Final</p>
+                              <div className="border-2 border-amber-300 rounded-lg shadow-lg">
+                                  <BracketMatch title="FINAL ORO" {...finalMain} isFinal={true} />
                               </div>
                           </div>
                       )}
@@ -293,82 +299,26 @@ const Results: React.FC = () => {
 
               {/* CONSOLATION BRACKET - INVERTED ORDER */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                  <h3 className="text-blue-500 font-bold mb-4 text-center flex items-center justify-center gap-2"><Grid size={18}/> Consolación</h3>
+                  <h3 className="text-blue-500 font-bold mb-4 text-center flex items-center justify-center gap-2"><Grid size={18}/> Cuadrante Plata</h3>
                   <div className="space-y-6 relative flex flex-col-reverse">
                       
                       {isMini10 ? (
                           /* --- MINI 10 CONSOLATION (Direct Final) --- */
                           <div>
-                              <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
+                              <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1 uppercase tracking-widest"><Trophy size={12}/> Final Consolación</p>
                               <div className="border-2 border-blue-100 rounded-lg shadow-sm">
-                                  <BracketMatch title="FINAL CONS." {...finalCons} />
+                                  <BracketMatch title="FINAL PLATA" {...finalCons} isFinal={true} />
                               </div>
                           </div>
-                      ) : isMini12 ? (
-                           /* --- MINI 12 CONSOLATION (Start SF) --- */
-                           <>
-                            {state.currentRound >= 4 && (
-                                <div className="animate-fade-in">
-                                    <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
-                                    <BracketMatch title="SF C1" {...sfC1} />
-                                    <BracketMatch title="SF C2" {...sfC2} />
-                                </div>
-                            )}
-                            {state.currentRound >= 5 && (
-                                <div className="animate-fade-in mb-4">
-                                    <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
-                                    <div className="border-2 border-blue-100 rounded-lg shadow-sm">
-                                        <BracketMatch title="FINAL CONS." {...finalCons} />
-                                    </div>
-                                </div>
-                            )}
-                           </>
-                      ) : isMini8 ? (
-                           /* --- MINI 8 CONSOLATION (Losers of QF -> SF) --- */
-                           <>
-                             {state.currentRound >= 5 && (
-                                <div className="animate-fade-in">
-                                    <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
-                                    <BracketMatch title="SF C1" {...sfC1} />
-                                    <BracketMatch title="SF C2" {...sfC2} />
-                                </div>
-                             )}
-                             {state.currentRound >= 6 && (
-                                <div className="animate-fade-in mb-4">
-                                    <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
-                                    <div className="border-2 border-blue-100 rounded-lg shadow-sm">
-                                        <BracketMatch title="FINAL CONS." {...finalCons} />
-                                    </div>
-                                </div>
-                             )}
-                           </>
                       ) : (
-                          /* --- MINI 16 CONSOLATION (Full Bracket) --- */
+                          /* --- OTHERS --- */
                           <>
-                            {/* QF */}
-                            <div>
-                                <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS DE FINAL</p>
-                                <BracketMatch title="QF C1" {...qfC1} />
-                                <BracketMatch title="QF C2" {...qfC2} />
-                                <BracketMatch title="QF C3" {...qfC3} />
-                                <BracketMatch title="QF C4" {...qfC4} />
-                            </div>
-
-                            {/* SF */}
-                            {state.currentRound >= 7 && (
-                                <div className="animate-fade-in mb-4">
-                                    <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
-                                    <BracketMatch title="SF C1" {...sfC1} />
-                                    <BracketMatch title="SF C2" {...sfC2} />
-                                </div>
-                            )}
-
                              {/* FINAL */}
-                             {state.currentRound >= 8 && (
+                             {state.currentRound >= roundFinalCons && (
                                 <div className="animate-fade-in mb-4">
-                                    <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
-                                    <div className="border-2 border-blue-100 rounded-lg shadow-sm">
-                                        <BracketMatch title="FINAL CONS." {...finalCons} />
+                                    <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1 uppercase tracking-widest"><Trophy size={12}/> Final Plata</p>
+                                    <div className="border-2 border-blue-200 rounded-lg shadow-sm">
+                                        <BracketMatch title="FINAL PLATA" {...finalCons} isFinal={true} />
                                     </div>
                                 </div>
                             )}
@@ -378,6 +328,12 @@ const Results: React.FC = () => {
               </div>
           </div>
       )}
+
+      <PosterGenerator 
+        isOpen={showPoster} 
+        onClose={() => setShowPoster(false)} 
+        data={posterData} 
+      />
     </div>
   );
 };

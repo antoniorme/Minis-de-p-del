@@ -8,29 +8,23 @@ export interface Player {
   email?: string;
   phone?: string;
   categories?: string[]; // Categorías declaradas
-  
-  // POSITION LOGIC
-  preferred_position?: 'right' | 'backhand'; // Solo Derecha o Revés
-  play_both_sides?: boolean; // Versatilidad (Puede jugar en el otro lado)
-  
-  // ADVANCED ELO SYSTEM
-  global_rating?: number; // Rating transversal (amortiguado)
-  category_ratings?: Record<string, number>; // Mapa: { "3ª CAT": 1450, "4ª CAT": 1500 }
-  main_category?: string; // Categoría "casa"
-  matches_played?: number; // Added for tracking match count
-  
-  // Legacy / Visual
+  preferred_position?: 'right' | 'backhand';
+  play_both_sides?: boolean;
+  global_rating?: number;
+  category_ratings?: Record<string, number>;
+  main_category?: string;
+  matches_played?: number;
   manual_rating?: number; 
-  rankingPoints?: number; // Valor visual final calculado
-  
+  rankingPoints?: number;
   created_at?: string;
 }
 
 export interface Pair {
   id: string; 
   tournament_id?: string;
+  league_id?: string; 
   player1Id: string; 
-  player2Id: string | null; // UPDATED: Can be null for solo players
+  player2Id: string | null;
   name: string; 
   waterReceived: boolean;
   paidP1: boolean;
@@ -41,10 +35,63 @@ export interface Pair {
     gameDiff: number; 
   };
   groupId?: string; 
+  category_id?: string; // NEW: Explicit category link
   isReserve?: boolean; 
   status?: 'confirmed' | 'pending' | 'rejected'; 
 }
 
+// --- LEAGUE MODULE TYPES ---
+
+export type LeaguePhase = 'registration' | 'groups' | 'playoffs' | 'finished';
+
+export interface LeagueCategory {
+    id: string;
+    name: string; 
+    prize_winner: string;
+    prize_runnerup: string;
+    pairs_count: number;
+}
+
+export interface LeagueGroup {
+    id: string;
+    category_id: string;
+    name: string; // Grupo A, B...
+    pairIds: string[];
+}
+
+export interface LeagueMatch {
+    id: string;
+    league_id: string;
+    category_id: string;
+    group_id?: string; 
+    phase: 'group' | 'playoff';
+    pairAId: string;
+    pairBId: string;
+    setsA: number | null;
+    setsB: number | null;
+    // gamesDetail: { set: number; a: number; b: number }[]; // Simplificado para esta versión
+    score_text?: string; // Ej: "6/4 6/2"
+    isFinished: boolean;
+    date_scheduled?: string;
+    winnerId?: string;
+}
+
+export interface LeagueState {
+    id?: string;
+    title: string;
+    status: LeaguePhase;
+    startDate: string;
+    endDate: string;
+    playoffDate: string;
+    categories: LeagueCategory[];
+    groups: LeagueGroup[];
+    matches: LeagueMatch[];
+    pairs: Pair[];
+    loading: boolean;
+    is_module_active?: boolean;
+}
+
+// REST OF TYPES...
 export interface Match {
   id: string; 
   tournament_id?: string;
@@ -66,17 +113,15 @@ export interface Group {
 }
 
 export type TournamentFormat = '16_mini' | '10_mini' | '12_mini' | '8_mini';
-
 export type GenerationMethod = 'elo-balanced' | 'elo-mixed' | 'manual' | 'arrival';
 
-// NEW: Lightweight summary for the Club Dashboard list
 export interface TournamentSummary {
     id: string;
     title: string;
     date: string;
     status: 'setup' | 'active' | 'finished';
     format: TournamentFormat;
-    playerCount: number; // or pairCount
+    playerCount: number;
 }
 
 export interface TournamentState {
@@ -90,27 +135,25 @@ export interface TournamentState {
   groups: Group[]; 
   courts: { id: number; ballsGiven: boolean }[];
   loading: boolean; 
-  
-  // List of active tournaments for the dashboard
   tournamentList: TournamentSummary[];
-
-  // METADATA FOR PUBLIC LISTING
   title?: string;
   description?: string;
   price?: number;
-  levelRange?: string; // e.g. "Nivel 4.0 - 5.0"
+  levelRange?: string;
   prizes?: string[];
-  includedItems?: string[]; // e.g. ["Agua", "Bolas", "Fruta"]
+  includedItems?: string[];
   startDate?: string;
 }
 
 export interface ClubData {
+    id?: string;
     name: string;
     courtCount: number;
     address?: string;
-    mapsUrl?: string; // NEW: Google Maps Link
+    mapsUrl?: string;
     phone?: string;
     logoUrl?: string;
+    league_enabled?: boolean; 
 }
 
 export interface PastTournament {
@@ -123,39 +166,37 @@ export interface PastTournament {
     data?: TournamentState; 
 }
 
-// NEW: For the Public Browser
 export interface PublicTournament {
     id: string;
     clubId: string;
     clubName: string;
-    clubLogo?: string; // Emoji or URL
-    address?: string; // NEW
-    mapsUrl?: string; // NEW
+    clubLogo?: string;
+    address?: string;
+    mapsUrl?: string;
     name: string;
-    description?: string; // NEW
-    date: string; // ISO
+    description?: string;
+    date: string;
     format: TournamentFormat;
     status: 'open' | 'full' | 'active';
     spotsTaken: number;
     spotsTotal: number;
-    level: string; // e.g. "Nivel Medio-Alto"
+    level: string;
     price: number;
-    prizes?: string[]; // NEW: List of prizes
+    prizes?: string[];
 }
 
-// --- NOTIFICATIONS ---
 export type NotificationType = 'invite' | 'match_start' | 'result' | 'system' | 'alert';
 
 export interface AppNotification {
     id: string;
-    userId: string; // Recipient ID (Player ID or User ID)
+    userId: string;
     type: NotificationType;
     title: string;
     message: string;
-    link?: string; // Internal route to navigate to
+    link?: string;
     read: boolean;
     createdAt: string;
-    meta?: any; // Extra data (e.g., matchId, tournamentId)
+    meta?: any;
 }
 
 export interface NotificationSettings {

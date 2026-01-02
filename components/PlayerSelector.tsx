@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Player } from '../types';
 import { TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { User, X, Search, Plus, Phone, Check, Database, ArrowRightCircle, ArrowLeftCircle, Shuffle } from 'lucide-react';
+import { User, X, Search, Plus, Phone, Check, Database, ArrowRightCircle, ArrowLeftCircle, Shuffle, Mail } from 'lucide-react';
 
 interface PlayerSelectorProps {
     label: string;
@@ -24,6 +24,7 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
         name: '', 
         nickname: '', 
         phone: '', 
+        email: '',
         categories: [] as string[], 
         preferred_position: undefined as 'right' | 'backhand' | undefined,
         play_both_sides: false,
@@ -47,6 +48,7 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
             name: newPlayer.name,
             nickname: newPlayer.nickname,
             phone: newPlayer.phone,
+            email: newPlayer.email,
             categories: newPlayer.categories,
             preferred_position: newPlayer.preferred_position,
             play_both_sides: newPlayer.play_both_sides,
@@ -55,7 +57,7 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
 
         if(newId) { 
             onSelect(newId); 
-            setNewPlayer({ name: '', nickname: '', phone: '', categories: [], preferred_position: undefined, play_both_sides: false, saveRecord: true, manual_rating: 5 }); 
+            setNewPlayer({ name: '', nickname: '', phone: '', email: '', categories: [], preferred_position: undefined, play_both_sides: false, saveRecord: true, manual_rating: 5 }); 
             setTab('search'); 
         }
     };
@@ -115,17 +117,21 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
                         </div>
                     ) : (
                         <div className="space-y-3 animate-fade-in">
-                            <input placeholder="Nombre completo" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
+                            <input placeholder="Nombre completo" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400 shadow-sm" />
                             
                             <div className="grid grid-cols-2 gap-2">
-                                <input placeholder="Apodo" value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
                                 <div className="relative">
                                     <Phone size={14} className="absolute left-3 top-3.5 text-slate-400"/>
-                                    <input placeholder="Teléfono" value={newPlayer.phone} onChange={e => setNewPlayer({...newPlayer, phone: e.target.value})} className="w-full pl-9 p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
+                                    <input placeholder="Teléfono" value={newPlayer.phone} onChange={e => setNewPlayer({...newPlayer, phone: e.target.value})} className="w-full pl-9 p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400 shadow-sm" />
+                                </div>
+                                <div className="relative">
+                                    <Mail size={14} className="absolute left-3 top-3.5 text-slate-400"/>
+                                    <input placeholder="Email" value={newPlayer.email} onChange={e => setNewPlayer({...newPlayer, email: e.target.value})} className="w-full pl-9 p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400 shadow-sm" />
                                 </div>
                             </div>
 
-                            {/* Position Selector */}
+                            <input placeholder="Apodo (Opcional)" value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400 shadow-sm" />
+
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Posición Predilecta</label>
                                 <div className="flex gap-2">
@@ -141,15 +147,6 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
                                     >
                                         <ArrowLeftCircle size={14}/> Revés
                                     </button>
-                                </div>
-                                <div 
-                                    onClick={() => setNewPlayer({...newPlayer, play_both_sides: !newPlayer.play_both_sides})}
-                                    className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border transition-colors ${newPlayer.play_both_sides ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-transparent hover:bg-slate-50'}`}
-                                >
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${newPlayer.play_both_sides ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
-                                        {newPlayer.play_both_sides && <Check size={10} className="text-white"/>}
-                                    </div>
-                                    <span className={`text-xs font-bold ${newPlayer.play_both_sides ? 'text-emerald-700' : 'text-slate-500'}`}>Se adapta al otro lado (Versátil)</span>
                                 </div>
                             </div>
                             
@@ -168,17 +165,7 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
 
                             <div className="flex flex-wrap gap-1.5">{TOURNAMENT_CATEGORIES.map(c => (<button key={c} onClick={() => toggleNewCat(c)} className={`px-2.5 py-1.5 text-[10px] font-bold rounded-md border transition-all ${newPlayer.categories.includes(c) ? 'bg-[#575AF9] text-white border-[#575AF9] shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200'}`}>{c}</button>))}</div>
                             
-                            <div 
-                                onClick={() => setNewPlayer({...newPlayer, saveRecord: !newPlayer.saveRecord})}
-                                className="flex items-center gap-2 cursor-pointer p-2 hover:bg-slate-50 rounded-lg"
-                            >
-                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${newPlayer.saveRecord ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-slate-300'}`}>
-                                    {newPlayer.saveRecord && <Check size={14} className="text-white"/>}
-                                </div>
-                                <span className="text-xs font-bold text-slate-600 flex items-center gap-1"><Database size={12}/> Guardar en base de datos</span>
-                            </div>
-
-                            <button onClick={handleCreatePlayer} style={{ backgroundColor: THEME.cta }} className="w-full py-3 text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2 hover:opacity-90"><Check size={16}/> Crear y Usar Jugador</button>
+                            <button onClick={handleCreatePlayer} style={{ backgroundColor: THEME.cta }} className="w-full py-4 text-white rounded-xl text-sm font-black shadow-lg transition-all flex items-center justify-center gap-2 hover:opacity-90 active:scale-95"><Check size={20} strokeWidth={3}/> CREAR Y USAR JUGADOR</button>
                         </div>
                     )}
                 </>
