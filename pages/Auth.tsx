@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldCheck, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldCheck, Eye, EyeOff, CheckCircle2, ShieldAlert } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
@@ -34,6 +34,7 @@ const AuthPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [verifyingSession, setVerifyingSession] = useState(false); // Nuevo estado
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -46,13 +47,30 @@ const AuthPage: React.FC = () => {
       if (isOfflineMode || isPlaceholder) setShowDevTools(true);
   }, [isOfflineMode]);
 
-  // DETECTAR SI VENIMOS DE UN EMAIL DE RECUPERACIÓN
+  // LOGICA PARA GESTIONAR EL LINK DE RECUPERACIÓN
   useEffect(() => {
-    const type = searchParams.get('type');
-    if (type === 'recovery') {
-      setView('update-password');
-      setSuccessMsg("Enlace verificado. Introduce tu nueva contraseña.");
-    }
+    const handleRecoveryFlow = async () => {
+        const type = searchParams.get('type');
+        
+        if (type === 'recovery') {
+            setVerifyingSession(true);
+            setView('update-password');
+            
+            // CRÍTICO: Forzamos a Supabase a procesar el token de la URL
+            const { data, error: sessionError } = await supabase.auth.getSession();
+            
+            if (sessionError || !data.session) {
+                setError("El enlace ha caducado o es inválido. Solicita uno nuevo.");
+                setView('recovery');
+            } else {
+                setSuccessMsg("Identidad verificada. Ya puedes cambiar tu contraseña.");
+            }
+            setVerifyingSession(false);
+        }
+    };
+
+    handleRecoveryFlow();
+
     if (searchParams.get('mode') === 'register') {
       setView('register');
     }
@@ -66,7 +84,7 @@ const AuthPage: React.FC = () => {
       if(captchaRef.current) captchaRef.current.resetCaptcha();
   };
 
-  // SOLICITAR RECUPERACIÓN (Mandar Email)
+  // MANDAR EMAIL DE RECUPERACIÓN
   const handlePasswordResetRequest = async (e: React.FormEvent) => {
       e.preventDefault();
       setLoading(true);
@@ -78,7 +96,6 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // IMPORTANTE: Para HashRouter, la URL de retorno debe incluir el /#/
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -97,7 +114,7 @@ const AuthPage: React.FC = () => {
       }
   };
 
-  // ACTUALIZAR CONTRASEÑA (Después de clicar el link)
+  // GUARDAR NUEVA CONTRASEÑA
   const handleUpdatePassword = async (e: React.FormEvent) => {
       e.preventDefault();
       setLoading(true);
@@ -110,10 +127,14 @@ const AuthPage: React.FC = () => {
       }
 
       try {
+          // Nos aseguramos de tener sesión justo antes de intentar el cambio
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error("Sesión no encontrada. Por favor, vuelve a usar el enlace del email.");
+
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña actualizada! Iniciando sesión...");
+          setSuccessMsg("¡Contraseña actualizada con éxito!");
           setTimeout(() => navigate('/dashboard'), 1500);
       } catch (err: any) {
           setError(err.message || "Error al actualizar la contraseña.");
@@ -180,31 +201,36 @@ const AuthPage: React.FC = () => {
              <Trophy size={48} className="text-[#575AF9]" />
           </div>
           <h1 className="text-3xl font-black text-slate-900 mb-2">
-            {view === 'login' ? 'Bienvenido' : 
+            {verifyingSession ? 'Verificando...' : 
+             view === 'login' ? 'Bienvenido' : 
              view === 'recovery' ? 'Recuperar' : 
              view === 'update-password' ? 'Nueva Clave' : 'Crear Cuenta'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'login' ? 'Introduce tus credenciales' : 
+            {verifyingSession ? 'Validando enlace de seguridad' :
+             view === 'login' ? 'Introduce tus credenciales' : 
              view === 'recovery' ? 'Enlace de acceso por email' : 
              view === 'update-password' ? 'Escribe tu nueva contraseña' : 'Únete a la comunidad'}
           </p>
         </div>
 
-        {successMsg && (
+        {successMsg && !verifyingSession && (
             <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold shadow-sm animate-fade-in flex items-center justify-center gap-2">
                 <CheckCircle2 size={18}/> {successMsg}
             </div>
         )}
 
-        {error && (
-          <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm mb-6 text-center font-medium shadow-sm break-words">
-            {error}
+        {error && !verifyingSession && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm mb-6 text-center font-medium shadow-sm break-words flex items-center gap-2">
+            <ShieldAlert size={18} className="shrink-0"/> {error}
           </div>
         )}
 
-        {/* VISTA: ACTUALIZAR CONTRASEÑA (TRAS CLICK EN EMAIL) */}
-        {view === 'update-password' ? (
+        {verifyingSession ? (
+            <div className="flex justify-center py-10">
+                <Loader2 className="animate-spin text-[#575AF9]" size={40}/>
+            </div>
+        ) : view === 'update-password' ? (
             <form onSubmit={handleUpdatePassword} className="space-y-4">
                  <div className="relative">
                     <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
@@ -218,7 +244,7 @@ const AuthPage: React.FC = () => {
                     <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Nueva Contraseña"/>
                 </div>
                 <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex justify-center items-center gap-2">
-                    {loading ? <Loader2 className="animate-spin" /> : <>Cambiar Contraseña <Key size={18}/></>}
+                    {loading ? <Loader2 className="animate-spin" /> : <>Guardar Cambios <Key size={18}/></>}
                 </button>
             </form>
         ) : view === 'recovery' ? (
@@ -274,13 +300,15 @@ const AuthPage: React.FC = () => {
             </form>
         )}
 
-        <div className="mt-8 text-center">
-          <button onClick={() => switchView(view === 'login' ? 'register' : 'login')} className="text-slate-500 text-sm font-medium hover:text-[#575AF9]">
-            {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
-          </button>
-        </div>
+        {view !== 'update-password' && (
+            <div className="mt-8 text-center">
+                <button onClick={() => switchView(view === 'login' ? 'register' : 'login')} className="text-slate-500 text-sm font-medium hover:text-[#575AF9]">
+                    {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
+                </button>
+            </div>
+        )}
 
-        {showDevTools && (
+        {showDevTools && !verifyingSession && (
             <div className="mt-12 pt-8 border-t border-slate-200 animate-fade-in">
                 <div className="flex items-center justify-center gap-2 text-slate-400 text-xs font-bold uppercase mb-4"><Code2 size={16}/> Simulación (Offline)</div>
                 <div className="grid grid-cols-2 gap-3">
