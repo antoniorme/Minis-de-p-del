@@ -9,6 +9,8 @@ import { THEME } from '../../utils/theme';
 import { Activity, TrendingUp, Award, Calendar, ChevronRight, LogOut, UserCircle, Bell, ShieldAlert, ArrowLeft, Terminal } from 'lucide-react';
 import { calculateDisplayRanking } from '../../utils/Elo';
 
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
 const PlayerDashboard: React.FC = () => {
     const navigate = useNavigate();
     const { state, formatPlayerName } = useTournament();
@@ -61,11 +63,6 @@ const PlayerDashboard: React.FC = () => {
         return result;
     }, [currentPlayer, pastTournaments, state, myPlayerId]);
 
-    const handleExit = async () => {
-        if (isAdmin) navigate('/dashboard');
-        else { await signOut(); navigate('/'); }
-    };
-
     // Si el usuario llega aquí y no es admin, pero tampoco tiene perfil de jugador creado aún,
     // mostramos una pantalla de espera informativa en lugar de un dropdown.
     if (!currentPlayer && !isAdmin) {
@@ -90,8 +87,8 @@ const PlayerDashboard: React.FC = () => {
     return (
         <div className="p-6 space-y-8 relative pb-24">
             
-            {/* Header de Administrador (Modo Depuración) */}
-            {isAdmin && (
+            {/* Header de Administrador - SOLO EN LOCAL PARA DEPURACIÓN */}
+            {isAdmin && IS_LOCAL && (
                 <div className="bg-slate-900 -mx-6 -mt-6 p-4 flex items-center justify-between border-b border-white/5">
                     <div className="flex items-center gap-2 text-indigo-400">
                         <Terminal size={16}/>
@@ -113,6 +110,7 @@ const PlayerDashboard: React.FC = () => {
                     </div>
                     <h3 className="text-slate-400 font-bold text-sm uppercase tracking-wider">Acceso de Administrador Detectado</h3>
                     <p className="text-xs text-slate-500 px-10">Como administrador, puedes ver esta sección pero no tienes una ficha de jugador vinculada para mostrar estadísticas personales.</p>
+                    <button onClick={() => navigate('/dashboard')} className="px-6 py-2 bg-indigo-500 text-white rounded-xl font-bold text-xs">VOLVER AL PANEL DE CLUB</button>
                 </div>
             ) : (
                 <>

@@ -17,14 +17,15 @@ try {
     }
 } catch (e) {}
 
-const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+// Identificador estricto de entorno local
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('192.168.');
 
 const translateError = (msg: string) => {
     if (msg.includes('different from the old password')) return "La nueva contraseña debe ser diferente a la anterior.";
     if (msg.includes('at least 6 characters')) return "La contraseña debe tener al menos 6 caracteres.";
     if (msg.includes('Invalid login credentials')) return "Email o contraseña incorrectos.";
     if (msg.includes('User already registered')) return "Este email ya está registrado.";
-    if (msg.includes('Captcha')) return "Error en la verificación del Captcha.";
+    if (msg.includes('captcha') || msg.includes('Captcha')) return "Error de verificación: Pulsa el cuadro de seguridad (Captcha).";
     if (msg.includes('refresh_token_not_found')) return "La sesión ha caducado. Solicita un nuevo enlace.";
     return msg;
 };
@@ -45,18 +46,12 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const addLog = (msg: string) => {
-      setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
-  };
-
   useEffect(() => {
     const url = window.location.href;
     const isRecovery = url.includes('type=recovery') || url.includes('recovery_verified') || searchParams.get('type') === 'recovery' || url.includes('access_token=');
     
     if (session && isRecovery) {
         if (view !== 'update-password') {
-            addLog("Sesión de recuperación activa.");
             setView('update-password');
         }
     } else if (session && view !== 'update-password') {
@@ -69,7 +64,6 @@ const AuthPage: React.FC = () => {
       setError(null);
       setSuccessMsg(null);
       setCaptchaToken(null);
-      setDebugLogs([]);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
   };
 
@@ -77,7 +71,6 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
-      addLog("Solicitando cambio de contraseña...");
 
       if (password !== confirmPassword) {
           setError("Las contraseñas no coinciden.");
@@ -91,41 +84,20 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      const accessToken = session?.access_token;
-      if (!accessToken) {
-          setError("La sesión ha expirado. Solicita un nuevo enlace.");
-          setLoading(false);
-          return;
-      }
-
-      // @ts-ignore
-      const sbUrl = supabase.supabaseUrl;
-      // @ts-ignore
-      const sbKey = supabase.supabaseKey;
-
       try {
-          const response = await fetch(`${sbUrl}/auth/v1/user`, {
-              method: 'PUT',
-              headers: {
-                  'Content-Type': 'application/json',
-                  'apikey': sbKey,
-                  'Authorization': `Bearer ${accessToken}`,
-                  'x-captcha-token': captchaToken || ''
-              },
-              body: JSON.stringify({ password })
+          const { error: updateError } = await supabase.auth.updateUser({ 
+              password: password,
+          }, { 
+              captchaToken: captchaToken || undefined 
           });
 
-          const result = await response.json();
-          if (!response.ok) {
-              const rawMsg = result.msg || result.error_description || "Error desconocido";
-              throw new Error(translateError(rawMsg));
-          }
+          if (updateError) throw updateError;
 
           setSuccessMsg("¡Contraseña actualizada con éxito!");
           setTimeout(() => { navigate('/dashboard'); }, 1500);
 
       } catch (err: any) {
-          setError(err.message);
+          setError(translateError(err.message));
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
           setLoading(false);
@@ -136,19 +108,38 @@ const AuthPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // Validación previa de captcha en producción
+    if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+        setError("Por favor, marca el cuadro de 'No soy un robot'.");
+        setLoading(false);
+        return;
+    }
+
     try {
       let result;
       if (view === 'login') {
-        result = await supabase.auth.signInWithPassword({ email, password });
+        result = await supabase.auth.signInWithPassword({ 
+            email, 
+            password,
+            options: { captchaToken: captchaToken || undefined } // FIJADO: Ahora envía el token
+        });
       } else {
         if (password !== confirmPassword) throw new Error("Las contraseñas no coinciden");
-        result = await supabase.auth.signUp({ email, password, options: { captchaToken: captchaToken || undefined } });
+        result = await supabase.auth.signUp({ 
+            email, 
+            password, 
+            options: { captchaToken: captchaToken || undefined } 
+        });
       }
+      
       if (result.error) throw result.error;
+      
     } catch (err: any) {
       setError(translateError(err.message || 'Error de acceso'));
       setLoading(false);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
+      setCaptchaToken(null);
     }
   };
 
@@ -158,12 +149,16 @@ const AuthPage: React.FC = () => {
       setError(null);
       try {
           const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
-          const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo, captchaToken: captchaToken || undefined });
+          const { error } = await supabase.auth.resetPasswordForEmail(email, { 
+              redirectTo, 
+              captchaToken: captchaToken || undefined 
+          });
           if (error) throw error;
           setSuccessMsg("¡Enlace enviado! Revisa tu correo.");
       } catch (err: any) {
           setError(translateError(err.message || "Error al solicitar recuperación."));
           if(captchaRef.current) captchaRef.current.resetCaptcha();
+          setCaptchaToken(null);
       } finally {
           setLoading(false);
       }
@@ -202,85 +197,87 @@ const AuthPage: React.FC = () => {
           </div>
         )}
 
-        {view === 'update-password' ? (
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
-                 <div className="relative">
+        <div className="space-y-4">
+            {view === 'update-password' ? (
+                <form onSubmit={handleUpdatePassword} className="space-y-4">
+                    <div className="relative">
+                        <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                        <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña"/>
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
+                            {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                        </button>
+                    </div>
+                    <div className="relative">
+                        <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                        <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Nueva Contraseña"/>
+                    </div>
+
+                    {HCAPTCHA_SITE_TOKEN && (
+                        <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                            <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={(t) => setCaptchaToken(t)} ref={captchaRef}/>
+                        </div>
+                    )}
+
+                    <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
+                        {loading ? <Loader2 className="animate-spin" size={20} /> : <>ACTUALIZAR Y ENTRAR <Key size={20}/></>}
+                    </button>
+                </form>
+            ) : view === 'recovery' ? (
+                <form onSubmit={handlePasswordResetRequest} className="space-y-4">
+                    <div className="relative">
+                        <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
+                        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email"/>
+                    </div>
+                    {HCAPTCHA_SITE_TOKEN && (
+                        <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                            <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                        </div>
+                    )}
+                    <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
+                        {loading ? <Loader2 className="animate-spin" size={18} /> : <>MANDAR ENLACE <Send size={18}/></>}
+                    </button>
+                    <div className="text-center mt-4">
+                        <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al Login</button>
+                    </div>
+                </form>
+            ) : (
+                <form onSubmit={handleAuth} className="space-y-4">
+                <div className="relative">
+                    <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
+                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Email"/>
+                </div>
+                <div className="relative">
                     <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                    <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña"/>
+                    <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Contraseña"/>
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
                         {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                     </button>
                 </div>
-                <div className="relative">
-                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                    <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Nueva Contraseña"/>
-                </div>
 
-                {HCAPTCHA_SITE_TOKEN && (
-                    <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={(t) => setCaptchaToken(t)} ref={captchaRef}/>
+                {view === 'register' && (
+                    <div className="relative animate-slide-up">
+                        <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                        <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Confirmar contraseña"/>
                     </div>
                 )}
 
-                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
-                    {loading ? <Loader2 className="animate-spin" size={20} /> : <>ACTUALIZAR Y ENTRAR <Key size={20}/></>}
-                </button>
-            </form>
-        ) : view === 'recovery' ? (
-            <form onSubmit={handlePasswordResetRequest} className="space-y-4">
-                <div className="relative">
-                    <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email"/>
-                </div>
+                {view === 'login' && (
+                    <div className="text-right">
+                        <button type="button" onClick={() => switchView('recovery')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">¿Olvidaste tu contraseña?</button>
+                    </div>
+                )}
+
                 {HCAPTCHA_SITE_TOKEN && (
                     <div className="flex justify-center my-2 scale-90 min-h-[78px]">
                         <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                     </div>
                 )}
-                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
-                    {loading ? <Loader2 className="animate-spin" size={18} /> : <>MANDAR ENLACE <Send size={18}/></>}
+                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg active:scale-95 transition-all">
+                    {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
                 </button>
-                <div className="text-center mt-4">
-                    <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al Login</button>
-                </div>
-            </form>
-        ) : (
-            <form onSubmit={handleAuth} className="space-y-4">
-              <div className="relative">
-                <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Email"/>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Contraseña"/>
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
-                    {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                </button>
-              </div>
-
-              {view === 'register' && (
-                  <div className="relative animate-slide-up">
-                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                    <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Confirmar contraseña"/>
-                  </div>
-              )}
-
-              {view === 'login' && (
-                  <div className="text-right">
-                      <button type="button" onClick={() => switchView('recovery')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">¿Olvidaste tu contraseña?</button>
-                  </div>
-              )}
-
-              {HCAPTCHA_SITE_TOKEN && (
-                  <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                      <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
-                  </div>
-              )}
-              <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg active:scale-95 transition-all">
-                {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
-              </button>
-            </form>
-        )}
+                </form>
+            )}
+        </div>
 
         {view !== 'update-password' && (
             <div className="mt-8 text-center space-y-12">
@@ -288,23 +285,25 @@ const AuthPage: React.FC = () => {
                     {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
                 </button>
 
-                {/* DEV BYPASS SECTION */}
-                <div className="bg-slate-100 p-6 rounded-3xl border border-slate-200 space-y-4 shadow-inner">
-                    <div className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] justify-center">
-                        <Terminal size={14}/> Accesos Rápidos (DEV)
+                {/* DEV BYPASS SECTION - AHORA SOLO VISIBLE EN LOCAL */}
+                {IS_LOCAL && (
+                    <div className="bg-slate-100 p-6 rounded-3xl border border-slate-200 space-y-4 shadow-inner">
+                        <div className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] justify-center">
+                            <Terminal size={14}/> Accesos Rápidos (DEV)
+                        </div>
+                        <div className="grid grid-cols-1 gap-2">
+                            <button onClick={() => loginWithDevBypass('admin')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs flex items-center justify-center gap-2 hover:bg-indigo-50 hover:border-indigo-200 transition-all">
+                                <Shield size={14} className="text-blue-500"/> CLUB ADMIN
+                            </button>
+                            <button onClick={() => loginWithDevBypass('player')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs flex items-center justify-center gap-2 hover:bg-emerald-50 hover:border-emerald-200 transition-all">
+                                <User size={14} className="text-emerald-500"/> APP JUGADOR
+                            </button>
+                            <button onClick={() => loginWithDevBypass('superadmin')} className="w-full py-3 bg-slate-900 border border-slate-800 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-all">
+                                <Crown size={14} className="text-amber-400"/> SUPER ADMIN
+                            </button>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-2">
-                        <button onClick={() => loginWithDevBypass('admin')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs flex items-center justify-center gap-2 hover:bg-indigo-50 hover:border-indigo-200 transition-all">
-                            <Shield size={14} className="text-blue-500"/> CLUB ADMIN
-                        </button>
-                        <button onClick={() => loginWithDevBypass('player')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs flex items-center justify-center gap-2 hover:bg-emerald-50 hover:border-emerald-200 transition-all">
-                            <User size={14} className="text-emerald-500"/> APP JUGADOR
-                        </button>
-                        <button onClick={() => loginWithDevBypass('superadmin')} className="w-full py-3 bg-slate-900 border border-slate-800 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-all">
-                            <Crown size={14} className="text-amber-400"/> SUPER ADMIN
-                        </button>
-                    </div>
-                </div>
+                )}
             </div>
         )}
       </div>
