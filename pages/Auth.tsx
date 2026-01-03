@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Terminal } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
@@ -21,7 +21,7 @@ const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hos
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, user: authUser } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -35,12 +35,22 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
+  // Monitor de errores en pantalla
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const addLog = (msg: string) => {
+      console.log(`[DEBUG] ${msg}`);
+      setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
+  };
+
   useEffect(() => {
     const url = window.location.href;
     const isRecovery = url.includes('type=recovery') || url.includes('recovery_verified') || searchParams.get('type') === 'recovery' || url.includes('access_token=');
     
     if (session && isRecovery) {
-        setView('update-password');
+        if (view !== 'update-password') {
+            addLog("Modo recuperación detectado. Sesión activa.");
+            setView('update-password');
+        }
     } else if (session && view !== 'update-password') {
         navigate('/dashboard');
     }
@@ -51,91 +61,77 @@ const AuthPage: React.FC = () => {
       setError(null);
       setSuccessMsg(null);
       setCaptchaToken(null);
+      setDebugLogs([]);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
-  };
-
-  const handlePasswordResetRequest = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setLoading(true);
-      setError(null);
-      
-      if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-          setError("Completa el captcha.");
-          setLoading(false);
-          return;
-      }
-
-      const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
-
-      try {
-          const { error } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo,
-              captchaToken: captchaToken || undefined 
-          });
-          if (error) throw error;
-          setSuccessMsg("¡Enlace enviado! Revisa tu email.");
-      } catch (err: any) {
-          setError(err.message || "Error al solicitar recuperación.");
-          if(captchaRef.current) captchaRef.current.resetCaptcha();
-          setCaptchaToken(null);
-      } finally {
-          setLoading(false);
-      }
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
       e.preventDefault();
       setLoading(true);
       setError(null);
+      setDebugLogs([]);
+      addLog("Iniciando flujo de actualización...");
 
       if (password !== confirmPassword) {
+          addLog("Error: Las contraseñas no coinciden");
           setError("Las contraseñas no coinciden.");
           setLoading(false);
           return;
       }
 
-      // Timeout de seguridad: si en 10 segundos no responde, forzamos salida
-      const safetyTimeout = setTimeout(() => {
-          if (loading) {
-              setLoading(false);
-              setError("La conexión está tardando demasiado. Reintenta o refresca la página.");
-          }
-      }, 10000);
+      if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+          addLog("Error: Captcha pendiente");
+          setError("Por seguridad, completa el captcha.");
+          setLoading(false);
+          return;
+      }
+
+      addLog(`Estado actual: User=${authUser?.id ? 'OK' : 'NULL'}, Token=${captchaToken ? 'PRESENTE' : 'AUSENTE'}`);
+
+      // Timeout de seguridad manual
+      const safetyTimer = setTimeout(() => {
+          addLog("CRÍTICO: La petición lleva 15 segundos sin responder.");
+      }, 15000);
 
       try {
-          console.log("Iniciando actualización de clave...");
+          addLog("Enviando petición a supabase.auth.updateUser...");
           
-          // Enviamos el captchaToken tanto en data como en options por si acaso
-          const { data, error } = await supabase.auth.updateUser(
-              { 
-                  password,
-                  // @ts-ignore
-                  captchaToken: captchaToken || undefined 
-              },
-              { 
-                  // @ts-ignore
-                  captchaToken: captchaToken || undefined 
-              }
-          );
+          const payload = { password };
+          const options = { captchaToken: captchaToken || undefined };
           
-          if (error) throw error;
+          addLog(`Payload: { password: '***' }`);
+          addLog(`Options: { captchaToken: '${captchaToken?.substring(0, 10)}...' }`);
+
+          const { data, error: sbError } = await supabase.auth.updateUser(payload, options);
           
-          clearTimeout(safetyTimeout);
-          setSuccessMsg("¡Contraseña actualizada! Entrando...");
+          clearTimeout(safetyTimer);
+
+          if (sbError) {
+              addLog(`Supabase ha respondido con ERROR: ${sbError.status} - ${sbError.message}`);
+              throw sbError;
+          }
+
+          addLog("Supabase ha respondido con ÉXITO.");
+          addLog(`Datos devueltos: UserID=${data.user?.id}`);
           
+          setSuccessMsg("¡Contraseña actualizada con éxito!");
+          
+          addLog("Limpiando URL y redirigiendo al Dashboard en 2s...");
           setTimeout(() => {
-              window.location.href = window.location.origin + '/#/dashboard';
+              window.history.replaceState(null, '', window.location.origin + '/#/dashboard');
               window.location.reload();
-          }, 1500);
+          }, 2000);
 
       } catch (err: any) {
-          clearTimeout(safetyTimeout);
-          console.error("Error en update password:", err);
-          setError(err.message || "Error desconocido al actualizar.");
+          clearTimeout(safetyTimer);
+          addLog(`EXCEPCIÓN CAPTURADA: ${err.name} - ${err.message}`);
+          if (err.stack) addLog(`Stack trace disponible en consola del navegador.`);
+          setError(err.message || "Error al actualizar clave.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
       } finally {
           setLoading(false);
+          addLog("Proceso finalizado (Loading=false)");
       }
   };
 
@@ -143,36 +139,15 @@ const AuthPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
-    if (HCAPTCHA_SITE_TOKEN && !captchaToken && !IS_LOCAL) {
-        setError("Completa el Captcha.");
-        setLoading(false);
-        return;
-    }
-
     try {
       let result;
-      const redirectTo = `${window.location.origin}/#/auth`;
       const attributes = { email, password };
-      const options = { 
-          captchaToken: captchaToken || undefined,
-          emailRedirectTo: redirectTo
-      };
-
       if (view === 'login') {
         result = await supabase.auth.signInWithPassword(attributes);
       } else {
-        if (password !== confirmPassword) throw new Error("Las contraseñas no coinciden.");
-        result = await supabase.auth.signUp({ ...attributes, options });
+        result = await supabase.auth.signUp({ ...attributes, options: { captchaToken: captchaToken || undefined } });
       }
-
       if (result.error) throw result.error;
-
-      if (result.data.user && view === 'register' && !result.data.session) {
-           setSuccessMsg("Cuenta creada. Confirma el email recibido.");
-           setView('login');
-      }
-
     } catch (err: any) {
       setError(err.message || 'Error de acceso');
       if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -180,6 +155,22 @@ const AuthPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePasswordResetRequest = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setLoading(true);
+      setError(null);
+      try {
+          const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
+          const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo, captchaToken: captchaToken || undefined });
+          if (error) throw error;
+          setSuccessMsg("¡Enlace enviado! Revisa tu email.");
+      } catch (err: any) {
+          setError(err.message || "Error al solicitar recuperación.");
+      } finally {
+          setLoading(false);
+      }
   };
 
   return (
@@ -199,14 +190,12 @@ const AuthPage: React.FC = () => {
              view === 'update-password' ? 'Nueva Clave' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'login' ? 'Introduce tus credenciales' : 
-             view === 'recovery' ? 'Escribe tu email registrado' : 
-             view === 'update-password' ? 'Define tu nueva contraseña de acceso' : 'Crea tu cuenta de club'}
+            {view === 'update-password' ? 'Define tu nueva contraseña de acceso' : 'Introduce tus credenciales'}
           </p>
         </div>
 
         {successMsg && (
-            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold shadow-sm animate-fade-in flex items-center justify-center gap-2">
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold animate-fade-in flex items-center justify-center gap-2">
                 <CheckCircle2 size={18}/> {successMsg}
             </div>
         )}
@@ -233,13 +222,34 @@ const AuthPage: React.FC = () => {
 
                 {HCAPTCHA_SITE_TOKEN && (
                     <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={(t) => { addLog("Captcha verificado"); setCaptchaToken(t); }} ref={captchaRef}/>
                     </div>
                 )}
 
-                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg">
+                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg transition-all active:scale-95">
                     {loading ? <Loader2 className="animate-spin" size={20} /> : <>ACTUALIZAR Y ENTRAR <Key size={20}/></>}
                 </button>
+
+                {/* DEBUG CONSOLE IN-SCREEN */}
+                <div className="mt-8 p-4 bg-slate-900 rounded-2xl border border-slate-700 shadow-inner overflow-hidden">
+                    <div className="flex items-center gap-2 text-indigo-400 font-bold text-[10px] uppercase tracking-widest mb-3">
+                        <Terminal size={14}/> Monitor de Depuración
+                    </div>
+                    <div className="space-y-1 max-h-40 overflow-y-auto no-scrollbar">
+                        {debugLogs.length === 0 ? (
+                            <p className="text-slate-600 text-[10px] italic">Esperando acciones...</p>
+                        ) : (
+                            debugLogs.map((log, i) => (
+                                <p key={i} className="text-slate-300 text-[10px] font-mono leading-tight border-l border-indigo-500/30 pl-2">
+                                    {log}
+                                </p>
+                            ))
+                        )}
+                    </div>
+                    {debugLogs.length > 0 && (
+                        <button type="button" onClick={() => setDebugLogs([])} className="mt-3 text-[9px] text-slate-500 hover:text-white uppercase font-bold underline">Limpiar</button>
+                    )}
+                </div>
             </form>
         ) : view === 'recovery' ? (
             <form onSubmit={handlePasswordResetRequest} className="space-y-4">
