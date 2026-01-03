@@ -46,7 +46,7 @@ const AuthPage: React.FC = () => {
     
     if (session && isRecovery) {
         if (view !== 'update-password') {
-            addLog("Sesión de recuperación lista.");
+            addLog("Sesión de recuperación activa detectada.");
             setView('update-password');
         }
     } else if (session && view !== 'update-password') {
@@ -67,7 +67,7 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
-      addLog("Iniciando bypass del SDK...");
+      addLog("Iniciando bypass del SDK para actualización segura...");
 
       if (password !== confirmPassword) {
           setError("Las contraseñas no coinciden.");
@@ -83,20 +83,19 @@ const AuthPage: React.FC = () => {
 
       const accessToken = session?.access_token;
       if (!accessToken) {
-          addLog("ERROR: No hay token de acceso en la sesión.");
+          addLog("ERROR: Sesión sin token. Reintenta desde el email.");
           setError("La sesión ha expirado. Solicita un nuevo enlace.");
           setLoading(false);
           return;
       }
 
-      // Extraemos URL y Key de la instancia de Supabase
       // @ts-ignore
       const sbUrl = supabase.supabaseUrl;
       // @ts-ignore
       const sbKey = supabase.supabaseKey;
 
       try {
-          addLog("Llamando a API REST directamente (/auth/v1/user)...");
+          addLog("PUT -> /auth/v1/user (API Directa)");
           
           const response = await fetch(`${sbUrl}/auth/v1/user`, {
               method: 'PUT',
@@ -109,17 +108,16 @@ const AuthPage: React.FC = () => {
               body: JSON.stringify({ password })
           });
 
-          addLog(`Respuesta recibida: HTTP ${response.status}`);
-          
+          addLog(`Respuesta: HTTP ${response.status}`);
           const result = await response.json();
 
           if (!response.ok) {
-              addLog(`Error de API: ${result.msg || result.error_description || 'Error desconocido'}`);
+              addLog(`Fallo: ${result.msg || result.error_description}`);
               throw new Error(result.msg || result.error_description || "Error al actualizar");
           }
 
-          addLog("¡Contraseña actualizada por API REST!");
-          setSuccessMsg("¡Contraseña actualizada! Redirigiendo...");
+          addLog("¡ÉXITO TOTAL!");
+          setSuccessMsg("¡Contraseña actualizada! Entrando...");
           
           setTimeout(() => {
               window.location.href = window.location.origin + '/#/dashboard';
@@ -127,7 +125,7 @@ const AuthPage: React.FC = () => {
           }, 2000);
 
       } catch (err: any) {
-          addLog(`FALLO: ${err.message}`);
+          addLog(`Error crítico: ${err.message}`);
           setError(err.message);
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
@@ -144,12 +142,14 @@ const AuthPage: React.FC = () => {
       if (view === 'login') {
         result = await supabase.auth.signInWithPassword({ email, password });
       } else {
+        if (password !== confirmPassword) throw new Error("Las contraseñas no coinciden");
         result = await supabase.auth.signUp({ email, password, options: { captchaToken: captchaToken || undefined } });
       }
       if (result.error) throw result.error;
     } catch (err: any) {
       setError(err.message || 'Error de acceso');
       setLoading(false);
+      if(captchaRef.current) captchaRef.current.resetCaptcha();
     }
   };
 
@@ -161,9 +161,10 @@ const AuthPage: React.FC = () => {
           const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
           const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo, captchaToken: captchaToken || undefined });
           if (error) throw error;
-          setSuccessMsg("¡Enlace enviado! Revisa tu email.");
+          setSuccessMsg("¡Enlace enviado! Revisa tu correo.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
+          if(captchaRef.current) captchaRef.current.resetCaptcha();
       } finally {
           setLoading(false);
       }
@@ -186,18 +187,18 @@ const AuthPage: React.FC = () => {
              view === 'update-password' ? 'Nueva Clave' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'update-password' ? 'Define tu nueva contraseña de acceso' : 'Introduce tus credenciales'}
+            {view === 'update-password' ? 'Define tu nueva contraseña de acceso' : 'Introduce tus datos'}
           </p>
         </div>
 
         {successMsg && (
-            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold flex items-center justify-center gap-2">
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold flex items-center justify-center gap-2 animate-fade-in">
                 <CheckCircle2 size={18}/> {successMsg}
             </div>
         )}
 
         {error && (
-          <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm mb-6 text-center font-medium shadow-sm flex items-center gap-2">
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm mb-6 text-center font-medium shadow-sm flex items-center gap-2 animate-fade-in">
             <ShieldAlert size={18} className="shrink-0"/> {error}
           </div>
         )}
@@ -222,7 +223,7 @@ const AuthPage: React.FC = () => {
                     </div>
                 )}
 
-                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg">
+                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
                     {loading ? <Loader2 className="animate-spin" size={20} /> : <>ACTUALIZAR Y ENTRAR <Key size={20}/></>}
                 </button>
 
@@ -232,7 +233,7 @@ const AuthPage: React.FC = () => {
                     </div>
                     <div className="space-y-1 max-h-40 overflow-y-auto no-scrollbar">
                         {debugLogs.length === 0 ? (
-                            <p className="text-slate-600 text-[10px] italic">Esperando peticiones HTTP...</p>
+                            <p className="text-slate-600 text-[10px] italic">Esperando peticiones...</p>
                         ) : (
                             debugLogs.map((log, i) => (
                                 <p key={i} className="text-slate-300 text-[10px] font-mono leading-tight border-l border-indigo-500/30 pl-2">
@@ -254,9 +255,12 @@ const AuthPage: React.FC = () => {
                         <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                     </div>
                 )}
-                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex items-center justify-center gap-2">
+                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
                     {loading ? <Loader2 className="animate-spin" size={18} /> : <>MANDAR ENLACE <Send size={18}/></>}
                 </button>
+                <div className="text-center mt-4">
+                    <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al Login</button>
+                </div>
             </form>
         ) : (
             <form onSubmit={handleAuth} className="space-y-4">
@@ -271,13 +275,27 @@ const AuthPage: React.FC = () => {
                     {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                 </button>
               </div>
+
+              {view === 'register' && (
+                  <div className="relative animate-slide-up">
+                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                    <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Confirmar contraseña"/>
+                  </div>
+              )}
+
+              {view === 'login' && (
+                  <div className="text-right">
+                      <button type="button" onClick={() => switchView('recovery')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">¿Olvidaste tu contraseña?</button>
+                  </div>
+              )}
+
               {HCAPTCHA_SITE_TOKEN && (
                   <div className="flex justify-center my-2 scale-90 min-h-[78px]">
                       <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                   </div>
               )}
-              <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg">
-                {loading ? <Loader2 className="animate-spin" size={24} /> : 'ENTRAR'}
+              <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg active:scale-95 transition-all">
+                {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
               </button>
             </form>
         )}
