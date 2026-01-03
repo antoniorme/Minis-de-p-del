@@ -10,7 +10,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   role: UserRole;
-  authStatus: string; // Nuevo: mensaje descriptivo del estado
+  authStatus: string;
   signOut: () => Promise<void>;
   isOfflineMode: boolean;
   checkUserRole: (uid: string, email?: string) => Promise<UserRole>;
@@ -40,73 +40,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
       if (!uid) return null;
-      setAuthStatus(`Verificando permisos para ${userEmail || 'usuario'}...`);
+      setAuthStatus(`Buscando permisos para: ${userEmail || 'UID ' + uid.substring(0,5)}...`);
       
-      if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
+      if (userEmail === 'antoniorme@gmail.com') {
+          setAuthStatus("Rol detectado: SUPERADMIN");
+          return 'superadmin';
+      }
       
       // @ts-ignore
       if (supabase.supabaseUrl.includes('placeholder')) return 'admin';
 
       try {
-          // Timeout interno para la base de datos (3 segundos)
-          const dbPromise = (async () => {
-              const { data: saData } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
-              if (saData) return 'superadmin';
+          // 1. Prioridad: ¿Es SuperAdmin en la tabla?
+          const { data: saData } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
+          if (saData) {
+              setAuthStatus("Rol detectado: SUPERADMIN (Tabla)");
+              return 'superadmin';
+          }
 
-              const { data: clubData } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
-              if (clubData) return 'admin';
+          // 2. ¿Es dueño de un Club? (Administrador)
+          // Hacemos una búsqueda limpia por owner_id
+          const { data: clubData, error: clubError } = await supabase
+              .from('clubs')
+              .select('id, name')
+              .eq('owner_id', uid)
+              .maybeSingle();
+          
+          if (clubData) {
+              setAuthStatus(`Rol detectado: ADMIN de ${clubData.name}`);
+              return 'admin';
+          }
 
-              return 'player';
-          })();
+          if (clubError) {
+              console.error("Error buscando club:", clubError);
+              setAuthStatus(`Error DB: ${clubError.message}`);
+          }
 
-          const timeoutPromise = new Promise<UserRole>((resolve) => 
-              setTimeout(() => resolve('player'), 3500)
-          );
-
-          return await Promise.race([dbPromise, timeoutPromise]);
-      } catch (e) {
-          console.error("Role check failed", e);
+          // 3. Fallback a Jugador
+          setAuthStatus("No se encontró club. Asignando rol: JUGADOR");
+          return 'player';
+      } catch (e: any) {
+          console.error("Excepción en checkUserRole:", e);
+          setAuthStatus(`Error crítico: ${e.message || 'Desconocido'}`);
           return 'player';
       }
   }, []);
 
   useEffect(() => {
-    // Seguridad: Si en 8 segundos no hemos quitado el loading, lo quitamos por la fuerza
+    // Aumentamos el timeout de seguridad a 12 segundos para dar tiempo a la DB
     timeoutRef.current = setTimeout(() => {
         if (loading) {
-            console.warn("Safety timeout reached. Forcing app load.");
-            setAuthStatus("Carga lenta detectada, forzando entrada...");
+            console.warn("Safety timeout reached.");
+            setAuthStatus("La base de datos no responde. Comprueba tu conexión.");
             setLoading(false);
         }
-    }, 8000);
+    }, 12000);
 
     const initSession = async () => {
-        setAuthStatus("Buscando sesión activa...");
-        const url = window.location.href;
-        
-        if (url.includes('access_token=')) {
-            setAuthStatus("Procesando token de acceso...");
-            try {
-                const parts = url.split('#');
-                const tokenPart = parts.find(p => p.includes('access_token='));
-                if (tokenPart) {
-                    const params = new URLSearchParams(tokenPart.startsWith('/') ? tokenPart.split('?')[1] : tokenPart);
-                    const access_token = params.get('access_token');
-                    if (access_token) {
-                        const { data } = await supabase.auth.setSession({ access_token, refresh_token: '' });
-                        if (data.session) {
-                            setSession(data.session);
-                            setUser(data.session.user);
-                            const r = await checkUserRole(data.session.user.id, data.session.user.email);
-                            setRole(r);
-                        }
-                    }
-                }
-            } catch (e) { console.error(e); }
-            finally { setLoading(false); }
-            return;
-        }
-
+        setAuthStatus("Verificando sesión...");
         try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
             if (currentSession) {
@@ -114,11 +105,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setUser(currentSession.user);
                 const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
                 setRole(r);
+            } else {
+                setAuthStatus("Sin sesión activa");
             }
         } catch (error) {
-            console.warn("Auth init error", error);
+            setAuthStatus("Error al recuperar sesión");
         } finally {
-            setAuthStatus("Listo");
             setLoading(false);
         }
     };
@@ -126,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setAuthStatus(`Evento detectado: ${event}`);
+      setAuthStatus(`Cambio de estado: ${event}`);
       setSession(session);
       const currentUser = session?.user ?? null;
       setUser(currentUser);
