@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
 import { LeagueProvider } from './store/LeagueContext';
@@ -9,6 +9,7 @@ import { TimerProvider } from './store/TimerContext';
 import { NotificationProvider } from './store/NotificationContext';
 import { Layout } from './components/Layout';
 import { PlayerLayout } from './components/PlayerLayout';
+import { ShieldAlert, RefreshCw } from 'lucide-react';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -43,48 +44,67 @@ import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
 
-// Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role } = useAuth();
   const { clubData } = useHistory();
   const location = useLocation();
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold italic">Cargando...</div>;
-  
+  if (loading) return null; // El componente padre maneja el loading
   if (!user) return <Navigate to="/" replace />;
   
-  if (role === 'pending' && location.pathname !== '/pending') {
-      return <Navigate to="/pending" replace />;
-  }
-
-  if (requireSuperAdmin && role !== 'superadmin') {
-      return <Navigate to="/dashboard" replace />;
-  }
-
-  if (requireAdmin && role !== 'admin' && role !== 'superadmin') {
-      return <Navigate to="/p/dashboard" replace />;
-  }
-
-  if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding' && role !== 'superadmin') {
-      return <Navigate to="/onboarding" replace />;
-  }
+  if (role === 'pending' && location.pathname !== '/pending') return <Navigate to="/pending" replace />;
+  if (requireSuperAdmin && role !== 'superadmin') return <Navigate to="/dashboard" replace />;
+  if (requireAdmin && role !== 'admin' && role !== 'superadmin') return <Navigate to="/p/dashboard" replace />;
+  if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding' && role !== 'superadmin') return <Navigate to="/onboarding" replace />;
 
   return <>{children}</>;
 };
 
 const AppRoutes = () => {
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, authStatus } = useAuth();
   const location = useLocation();
+  const [showForceButton, setShowForceButton] = useState(false);
 
-  // FIX: Si estamos en la página de Auth, permitimos el renderizado aunque esté "loading"
-  // para evitar que el proceso de Supabase se quede colgado en blanco
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          if (loading) setShowForceButton(true);
+      }, 5000);
+      return () => clearTimeout(timer);
+  }, [loading]);
+
   const isAuthPage = location.pathname.includes('/auth');
 
   if (loading && !isAuthPage) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-400 font-bold p-10 text-center">
-        <div className="w-12 h-12 border-4 border-[#575AF9] border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="animate-pulse">Cargando aplicación...</p>
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 p-10 text-center font-sans">
+        <div className="relative mb-8">
+            <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-8 h-8 bg-indigo-500/10 rounded-full animate-pulse"></div>
+            </div>
+        </div>
+        
+        <h2 className="text-white font-black text-xl mb-2 tracking-tight uppercase">PadelPro</h2>
+        <p className="text-indigo-400 font-bold text-xs uppercase tracking-[0.2em] mb-8 animate-pulse">
+            {authStatus}
+        </p>
+
+        {showForceButton && (
+            <div className="mt-4 animate-slide-up space-y-4 max-w-xs">
+                <div className="bg-rose-900/20 border border-rose-500/30 p-4 rounded-2xl flex items-start gap-3 text-left">
+                    <ShieldAlert className="text-rose-500 shrink-0" size={20}/>
+                    <p className="text-[10px] text-rose-200 leading-relaxed font-medium">
+                        La conexión está tardando más de lo esperado. Puede ser debido a tu red o a los servidores de Supabase.
+                    </p>
+                </div>
+                <button 
+                    onClick={() => window.location.reload()}
+                    className="w-full py-3 bg-white text-slate-950 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-100 transition-all active:scale-95"
+                >
+                    <RefreshCw size={14}/> REINTENTAR CONEXIÓN
+                </button>
+            </div>
+        )}
       </div>
     );
   }
@@ -139,19 +159,15 @@ const AppRoutes = () => {
                     <Route path="/checkin" element={<ProtectedRoute requireAdmin><CheckIn /></ProtectedRoute>} />
                     <Route path="/active" element={<ProtectedRoute requireAdmin><ActiveTournament /></ProtectedRoute>} />
                     <Route path="/results" element={<ProtectedRoute requireAdmin><Results /></ProtectedRoute>} />
-                    
-                    {/* LEAGUE ROUTES */}
                     <Route path="/league" element={<ProtectedRoute requireAdmin><LeagueDashboard /></ProtectedRoute>} />
                     <Route path="/league/setup" element={<ProtectedRoute requireAdmin><LeagueSetup /></ProtectedRoute>} />
                     <Route path="/league/groups/:categoryId" element={<ProtectedRoute requireAdmin><LeagueGroups /></ProtectedRoute>} />
                     <Route path="/league/active" element={<ProtectedRoute requireAdmin><LeagueActive /></ProtectedRoute>} />
-                    
                     <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
                     <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><AdminPlayerProfile /></ProtectedRoute>} />
                     <Route path="/history" element={<ProtectedRoute requireAdmin><History /></ProtectedRoute>} />
                     <Route path="/club" element={<ProtectedRoute requireAdmin><ClubProfile /></ProtectedRoute>} />
                     <Route path="/help" element={<ProtectedRoute requireAdmin><Help /></ProtectedRoute>} />
-
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
             </Layout>
