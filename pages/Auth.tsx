@@ -50,34 +50,39 @@ const AuthPage: React.FC = () => {
   // Captura de sesión de Supabase (especialmente para recovery)
   useEffect(() => {
     const checkRecoveryFlow = async () => {
-        const url = window.location.href;
-        const hash = window.location.hash;
+        // En HashRouter, Supabase a veces mete el token antes de la # o después
+        const fullUrl = window.location.href;
         
-        // Supabase manda tokens después de #, el navegador los oculta al servidor pero JS los ve
-        const hasToken = hash.includes('access_token=') || url.includes('access_token=');
-        const isRecovery = searchParams.get('type') === 'recovery' || url.includes('type=recovery') || hash.includes('type=recovery');
+        // Buscamos el access_token en cualquier parte de la URL
+        const hasToken = fullUrl.includes('access_token=');
+        const isRecovery = searchParams.get('type') === 'recovery' || fullUrl.includes('type=recovery');
 
         if (hasToken && isRecovery) {
             setVerifyingSession(true);
             try {
                 // Pequeña pausa para que el SDK procese el fragmento
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                const { data: { session } } = await supabase.auth.getSession();
                 
                 if (session) {
                     setView('update-password');
                     setSuccessMsg("Identidad verificada. Introduce tu nueva clave.");
                 } else {
-                    // Rescate manual si el SDK no lo pilló automáticamente
-                    const params = new URLSearchParams(hash.replace('#', '?'));
+                    // Si el SDK falla por la estructura de la #, extraemos manualmente
+                    const hashPart = fullUrl.split('#')[1] || fullUrl.split('?')[1] || '';
+                    const params = new URLSearchParams(hashPart.replace(/^[/?#]+/, ''));
                     const accessToken = params.get('access_token');
                     const refreshToken = params.get('refresh_token');
+                    
                     if (accessToken) {
-                        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken || '' });
+                        await supabase.auth.setSession({ 
+                            access_token: accessToken, 
+                            refresh_token: refreshToken || '' 
+                        });
                         setView('update-password');
                     }
                 }
             } catch (err) {
-                console.error("Recovery detection failed", err);
+                console.error("Error detectando sesión de recuperación", err);
             } finally {
                 setVerifyingSession(false);
             }
@@ -105,8 +110,8 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // En BrowserRouter NO usamos el # para redirigir
-      const redirectTo = `${window.location.origin}/auth?type=recovery`;
+      // IMPORTANTE: URL con # para HashRouter
+      const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -141,9 +146,10 @@ const AuthPage: React.FC = () => {
           
           setSuccessMsg("¡Contraseña guardada con éxito!");
           
-          // FORZAMOS RECARGA para limpiar el estado de Auth y entrar al Dashboard limpio
+          // Limpieza y redirección forzada al dashboard
           setTimeout(() => {
-              window.location.href = window.location.origin + '/dashboard';
+              window.location.hash = '#/dashboard';
+              window.location.reload(); // Recarga para asegurar estado limpio
           }, 1500);
 
       } catch (err: any) {
@@ -165,7 +171,8 @@ const AuthPage: React.FC = () => {
 
     try {
       let result;
-      const redirectTo = `${window.location.origin}/auth`;
+      // URL con #
+      const redirectTo = `${window.location.origin}/#/auth`;
       const authOptions = { 
           email, 
           password, 

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
 import { LeagueProvider } from './store/LeagueContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
@@ -156,9 +156,9 @@ const App: React.FC = () => {
             <TournamentProvider>
                 <LeagueProvider>
                     <TimerProvider>
-                        <BrowserRouter>
+                        <HashRouter>
                         <AppRoutes />
-                        </BrowserRouter>
+                        </HashRouter>
                     </TimerProvider>
                 </LeagueProvider>
             </TournamentProvider>
