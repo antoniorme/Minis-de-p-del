@@ -76,10 +76,9 @@ const AppRoutes = () => {
   const { user, role, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return null;
+  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold">Cargando aplicación...</div>;
 
   // DETECCIÓN CRÍTICA DE RECUPERACIÓN
-  // Miramos la URL completa del navegador, no solo lo que react-router ve
   const fullUrl = window.location.href;
   const isRecoveryMode = fullUrl.includes('access_token=') || 
                         fullUrl.includes('type=recovery') || 
