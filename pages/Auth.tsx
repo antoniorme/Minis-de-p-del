@@ -16,9 +16,14 @@ try {
     }
 } catch (e) {}
 
-// DETECCIÓN UNIVERSAL (Sincronizada con App.tsx)
-const IS_PROD = window.location.hostname === 'minisdepadel.com';
-const IS_DEV_ENV = !IS_PROD || window.location.port !== '' || window.location.hostname.includes('google') || window.location.hostname.includes('webcontainer');
+// DETECCIÓN REFINADA (Sincronizada con App.tsx)
+const hostname = window.location.hostname;
+const IS_DEV_ENV = 
+  hostname === 'localhost' || 
+  hostname === '127.0.0.1' || 
+  hostname.includes('googleusercontent') || 
+  hostname.includes('webcontainer') ||
+  hostname.includes('idx.google.com');
 
 const translateError = (msg: string) => {
     if (msg.includes('different from the old password')) return "La nueva contraseña debe ser diferente a la anterior.";
@@ -284,18 +289,21 @@ const AuthPage: React.FC = () => {
                     {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
                 </button>
 
-                {/* DEV TOOLS - Forzado en cualquier dominio que no sea PROD oficial */}
+                {/* DEV TOOLS - Solo visible en modo desarrollo/google */}
                 {IS_DEV_ENV && (
                     <div className="bg-indigo-500/5 p-6 rounded-3xl border border-indigo-500/10 space-y-4 shadow-inner animate-fade-in">
                         <div className="flex items-center gap-2 text-indigo-400 font-black text-[10px] uppercase tracking-[0.2em] justify-center">
                             <Terminal size={14}/> Sandbox Dev Bypass
                         </div>
                         <div className="grid grid-cols-1 gap-2">
-                            <button onClick={() => loginWithDevBypass('admin')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs flex items-center justify-center gap-2 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm">
+                            <button onClick={() => loginWithDevBypass('admin')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-[10px] flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all shadow-sm">
                                 <Shield size={14} className="text-blue-500"/> CLUB ADMIN (Bypass)
                             </button>
-                            <button onClick={() => loginWithDevBypass('superadmin')} className="w-full py-3 bg-slate-900 border border-slate-800 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-sm">
+                            <button onClick={() => loginWithDevBypass('superadmin')} className="w-full py-3 bg-slate-900 border border-slate-800 rounded-xl font-bold text-white text-[10px] flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-sm">
                                 <Crown size={14} className="text-amber-400"/> SUPER ADMIN (Bypass)
+                            </button>
+                            <button onClick={() => loginWithDevBypass('player')} className="w-full py-3 bg-emerald-600 border border-emerald-500 rounded-xl font-bold text-white text-[10px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-sm">
+                                <User size={14} className="text-white"/> PLAYER (Bypass)
                             </button>
                         </div>
                     </div>

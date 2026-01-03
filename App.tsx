@@ -43,9 +43,14 @@ import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
 
-// DETECCIÓN UNIVERSAL: Si no es el dominio oficial de producción, ES DESARROLLO/SANDBOX
-const IS_PROD = window.location.hostname === 'minisdepadel.com'; // Cambia esto al dominio real cuando lo tengas
-const IS_DEV_ENV = !IS_PROD || window.location.port !== '' || window.location.hostname.includes('google') || window.location.hostname.includes('webcontainer');
+// DETECCIÓN REFINADA: Solo es DEV si es localhost o dominios de sandbox conocidos
+const hostname = window.location.hostname;
+const IS_DEV_ENV = 
+  hostname === 'localhost' || 
+  hostname === '127.0.0.1' || 
+  hostname.includes('googleusercontent') || 
+  hostname.includes('webcontainer') ||
+  hostname.includes('idx.google.com');
 
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role } = useAuth();
@@ -70,7 +75,8 @@ const AppRoutes = () => {
   const isAuthPage = location.pathname.includes('/auth');
 
   if (loading && !isAuthPage) {
-    if (IS_PROD) {
+    // En producción (no dev), mostramos carga limpia
+    if (!IS_DEV_ENV) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
                 <div className="w-20 h-20 bg-white rounded-3xl shadow-xl shadow-indigo-100 flex items-center justify-center mb-8 animate-bounce">
@@ -83,12 +89,13 @@ const AppRoutes = () => {
         );
     }
 
+    // En desarrollo/sandbox, monitor detallado
     return (
       <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center p-6 font-mono overflow-hidden">
         <div className="w-full max-w-md space-y-8">
             <div className="text-center">
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-6">
-                    <Activity size={12} className="animate-pulse"/> Sandbox Monitor v2.5
+                    <Activity size={12} className="animate-pulse"/> Kernel Monitor v2.6
                 </div>
                 <h1 className="text-white font-black text-2xl tracking-tighter italic uppercase">SISTEMA DE <span className="text-indigo-500">GESTIÓN</span></h1>
             </div>
@@ -99,21 +106,22 @@ const AppRoutes = () => {
                         <div className="w-2 h-2 rounded-full bg-rose-500"></div>
                         <div className="w-2 h-2 rounded-full bg-amber-500"></div>
                         <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                        <span className="text-white/20 text-[9px] font-bold uppercase ml-2 tracking-widest">Console Logs</span>
+                        <span className="text-white/20 text-[9px] font-bold uppercase ml-2 tracking-widest">Logs de Identidad</span>
                     </div>
                 </div>
                 
                 <div className="space-y-1.5 h-64 overflow-y-auto no-scrollbar text-[11px] leading-relaxed">
                     {authLogs.map((log, i) => {
-                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('Fallo') || log.includes('No se encontró');
-                        const isSuccess = log.includes('OK') || log.includes('Detectado') || log.includes('concedido');
+                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('Fallo');
+                        const isSuccess = log.includes('OK') || log.includes('Detectado') || log.includes('Concedido');
+                        const isInfo = log.includes('Intentando') || log.includes('Buscando');
                         return (
-                            <div key={i} className={`${isError ? 'text-rose-400 bg-rose-400/5' : isSuccess ? 'text-emerald-400' : 'text-slate-400'} px-2 py-1 rounded`}>
+                            <div key={i} className={`${isError ? 'text-rose-400 bg-rose-400/5' : isSuccess ? 'text-emerald-400' : isInfo ? 'text-blue-400' : 'text-slate-400'} px-2 py-1 rounded`}>
                                 {log}
                             </div>
                         );
                     })}
-                    <div className="text-indigo-500 animate-pulse px-2">_ ANALIZANDO_IDENTIDAD...</div>
+                    <div className="text-indigo-500 animate-pulse px-2">_ ANALIZANDO_DB...</div>
                 </div>
             </div>
 
@@ -123,17 +131,18 @@ const AppRoutes = () => {
                         <RefreshCw size={12}/> REINTENTAR
                     </button>
                     <button onClick={() => signOut()} className="flex-1 py-3 bg-white/5 text-white border border-white/10 rounded-xl font-black text-[10px] flex items-center justify-center gap-2">
-                        <ShieldAlert size={12}/> LOGOUT
+                        <ShieldAlert size={12}/> CERRAR SESIÓN
                     </button>
                 </div>
 
-                <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl mt-4">
-                    <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl mt-4">
+                    <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Terminal size={14}/> Acceso Rápido Sandbox
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => loginWithDevBypass('admin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">SOY CLUB</button>
-                        <button onClick={() => loginWithDevBypass('superadmin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">SOY SA</button>
+                    <div className="grid grid-cols-3 gap-2">
+                        <button onClick={() => loginWithDevBypass('admin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5">CLUB</button>
+                        <button onClick={() => loginWithDevBypass('superadmin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5">SA</button>
+                        <button onClick={() => loginWithDevBypass('player')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5">PLAYER</button>
                     </div>
                 </div>
             </div>

@@ -46,48 +46,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
       if (!uid) {
-          addLog("!!! ERROR: No hay UID de sesión");
+          addLog("!!! ERROR: No hay UID");
           return null;
       }
       
       addLog(`RECONOCIMIENTO: UID [${uid}]`);
       
-      // 0. COMPROBACIÓN MAESTRA (SuperAdmin Fijo)
+      // 1. PRIORIDAD MÁXIMA: SUPERADMIN (HARDCODED)
       if (userEmail === 'antoniorme@gmail.com') {
           addLog("OK: SuperAdmin Maestro Concedido");
           return 'superadmin';
       }
-      
+
+      // 2. PRIORIDAD TABLA: SUPERADMINS DB
       try {
-          // 1. ¿ES DUEÑO DE CLUB? (ADMIN)
-          addLog("CHECK 1: Buscando en 'clubs'...");
-          const { data: clubData, error: clubError } = await supabase
-              .from('clubs')
-              .select('id, name')
-              .eq('owner_id', uid)
-              .maybeSingle();
-
-          if (clubError) {
-              addLog(`!!! ERROR DB CLUBS: ${clubError.message}`);
-          } else if (clubData) {
-              addLog(`OK: Detectado Dueño del Club '${clubData.name}'`);
-              return 'admin';
-          }
-
-          // 2. ¿ES SUPERADMIN EN DB?
-          addLog("CHECK 2: Buscando en 'superadmins'...");
-          const { data: saData } = await supabase
+          addLog("CHECK 1: ¿Eres SuperAdmin en DB?");
+          const { data: saData, error: saError } = await supabase
               .from('superadmins')
               .select('id')
               .eq('email', userEmail)
               .maybeSingle();
           
           if (saData) {
-              addLog("OK: Rol SuperAdmin validado en DB");
+              addLog("OK: Rol SuperAdmin validado en base de datos");
               return 'superadmin';
           }
+          addLog("INFO: No eres SuperAdmin.");
+      } catch (e) {
+          addLog("AVISO: Error comprobando tabla superadmins.");
+      }
+      
+      // 3. CHECK: CLUB OWNER
+      try {
+          addLog("CHECK 2: Buscando en 'clubs'...");
+          const { data: clubData, error: clubError } = await supabase
+              .from('clubs')
+              .select('id, name')
+              .eq('owner_id', uid)
+              .maybeSingle();
 
-          // 3. ¿ES JUGADOR VINCULADO?
+          if (clubData) {
+              addLog(`OK: Detectado Dueño del Club '${clubData.name}'`);
+              return 'admin';
+          }
+          addLog("INFO: No se encontró vinculación en tabla clubs.");
+      } catch (e) {
+          addLog("AVISO: Fallo en consulta de clubs.");
+      }
+
+      // 4. CHECK: PLAYER PROFILE
+      try {
           addLog("CHECK 3: Buscando ficha de jugador...");
           const { data: playerData } = await supabase
               .from('players')
@@ -99,16 +107,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               addLog(`OK: Ficha de jugador encontrada: ${playerData.name}`);
               return 'player';
           }
-
-          // 4. FALLBACK FINAL: SI LLEGAMOS AQUÍ, ES UN JUGADOR NUEVO SIN FICHA
-          addLog("AVISO: Usuario sin vinculación administrativa detectada.");
-          addLog("RESULTADO: Acceso como Jugador Estándar.");
-          return 'player';
-          
-      } catch (e: any) {
-          addLog(`!!! FALLO CRÍTICO EN ROLE CHECK: ${e.message}`);
-          return 'player'; 
+          addLog("INFO: No tienes ficha de jugador vinculada.");
+      } catch (e) {
+          addLog("AVISO: Fallo en consulta de players.");
       }
+
+      // 5. FALLBACK: JUGADOR NUEVO
+      addLog("RESULTADO: Usuario nuevo, asignando rol 'player'");
+      return 'player';
+      
   }, []);
 
   useEffect(() => {
