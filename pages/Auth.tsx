@@ -19,6 +19,15 @@ try {
 
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
+const translateError = (msg: string) => {
+    if (msg.includes('different from the old password')) return "La nueva contraseña debe ser diferente a la anterior.";
+    if (msg.includes('at least 6 characters')) return "La contraseña debe tener al menos 6 caracteres.";
+    if (msg.includes('Invalid login credentials')) return "Email o contraseña incorrectos.";
+    if (msg.includes('User already registered')) return "Este email ya está registrado.";
+    if (msg.includes('Captcha')) return "Error en la verificación del Captcha.";
+    return msg;
+};
+
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
   const { session, user: authUser } = useAuth();
@@ -46,7 +55,7 @@ const AuthPage: React.FC = () => {
     
     if (session && isRecovery) {
         if (view !== 'update-password') {
-            addLog("Sesión de recuperación activa detectada.");
+            addLog("Sesión de recuperación activa.");
             setView('update-password');
         }
     } else if (session && view !== 'update-password') {
@@ -67,7 +76,7 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
-      addLog("Iniciando bypass del SDK para actualización segura...");
+      addLog("Solicitando cambio de contraseña...");
 
       if (password !== confirmPassword) {
           setError("Las contraseñas no coinciden.");
@@ -83,7 +92,7 @@ const AuthPage: React.FC = () => {
 
       const accessToken = session?.access_token;
       if (!accessToken) {
-          addLog("ERROR: Sesión sin token. Reintenta desde el email.");
+          addLog("Sesión inválida.");
           setError("La sesión ha expirado. Solicita un nuevo enlace.");
           setLoading(false);
           return;
@@ -95,7 +104,7 @@ const AuthPage: React.FC = () => {
       const sbKey = supabase.supabaseKey;
 
       try {
-          addLog("PUT -> /auth/v1/user (API Directa)");
+          addLog("Enviando PUT a la API de Auth...");
           
           const response = await fetch(`${sbUrl}/auth/v1/user`, {
               method: 'PUT',
@@ -108,24 +117,24 @@ const AuthPage: React.FC = () => {
               body: JSON.stringify({ password })
           });
 
-          addLog(`Respuesta: HTTP ${response.status}`);
           const result = await response.json();
+          addLog(`Respuesta: HTTP ${response.status}`);
 
           if (!response.ok) {
-              addLog(`Fallo: ${result.msg || result.error_description}`);
-              throw new Error(result.msg || result.error_description || "Error al actualizar");
+              const rawMsg = result.msg || result.error_description || "Error desconocido";
+              addLog(`Error detectado: ${rawMsg}`);
+              throw new Error(translateError(rawMsg));
           }
 
-          addLog("¡ÉXITO TOTAL!");
-          setSuccessMsg("¡Contraseña actualizada! Entrando...");
+          addLog("¡Contraseña actualizada con éxito!");
+          setSuccessMsg("¡Contraseña actualizada! Redirigiendo...");
           
           setTimeout(() => {
               window.location.href = window.location.origin + '/#/dashboard';
               window.location.reload();
-          }, 2000);
+          }, 1500);
 
       } catch (err: any) {
-          addLog(`Error crítico: ${err.message}`);
           setError(err.message);
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
@@ -147,7 +156,7 @@ const AuthPage: React.FC = () => {
       }
       if (result.error) throw result.error;
     } catch (err: any) {
-      setError(err.message || 'Error de acceso');
+      setError(translateError(err.message || 'Error de acceso'));
       setLoading(false);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
     }
@@ -163,7 +172,7 @@ const AuthPage: React.FC = () => {
           if (error) throw error;
           setSuccessMsg("¡Enlace enviado! Revisa tu correo.");
       } catch (err: any) {
-          setError(err.message || "Error al solicitar recuperación.");
+          setError(translateError(err.message || "Error al solicitar recuperación."));
           if(captchaRef.current) captchaRef.current.resetCaptcha();
       } finally {
           setLoading(false);
@@ -229,11 +238,11 @@ const AuthPage: React.FC = () => {
 
                 <div className="mt-8 p-4 bg-slate-900 rounded-2xl border border-slate-700 shadow-inner overflow-hidden">
                     <div className="flex items-center gap-2 text-indigo-400 font-bold text-[10px] uppercase tracking-widest mb-3">
-                        <Globe size={14}/> Monitor de Red Directa
+                        <Globe size={14}/> Monitor de Estado
                     </div>
                     <div className="space-y-1 max-h-40 overflow-y-auto no-scrollbar">
                         {debugLogs.length === 0 ? (
-                            <p className="text-slate-600 text-[10px] italic">Esperando peticiones...</p>
+                            <p className="text-slate-600 text-[10px] italic">Esperando acción...</p>
                         ) : (
                             debugLogs.map((log, i) => (
                                 <p key={i} className="text-slate-300 text-[10px] font-mono leading-tight border-l border-indigo-500/30 pl-2">
