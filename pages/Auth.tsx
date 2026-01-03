@@ -3,25 +3,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, Eye, EyeOff, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
 
 let HCAPTCHA_SITE_TOKEN = "";
-let IS_DEV_ENV = false;
-
 try {
     // @ts-ignore
-    if (import.meta && import.meta.env) {
+    if (import.meta && import.meta.env && import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) {
         // @ts-ignore
-        if (import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN;
-        // @ts-ignore
-        if (import.meta.env.DEV) IS_DEV_ENV = import.meta.env.DEV;
+        HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN;
     }
 } catch (e) {}
 
-const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || IS_DEV_ENV;
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -39,56 +35,49 @@ const AuthPage: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
-  const [showDevTools, setShowDevTools] = useState(false);
-
-  useEffect(() => {
-      // @ts-ignore
-      const isPlaceholder = (supabase as any).supabaseUrl === 'https://placeholder.supabase.co';
-      if (isOfflineMode || isPlaceholder) setShowDevTools(true);
-  }, [isOfflineMode]);
 
   // Captura de sesión de Supabase (especialmente para recovery)
   useEffect(() => {
-    const checkRecoveryFlow = async () => {
-        // En HashRouter, Supabase a veces mete el token antes de la # o después
-        const fullUrl = window.location.href;
+    const checkRecovery = async () => {
+        const url = window.location.href;
+        const hash = window.location.hash;
         
-        // Buscamos el access_token en cualquier parte de la URL
-        const hasToken = fullUrl.includes('access_token=');
-        const isRecovery = searchParams.get('type') === 'recovery' || fullUrl.includes('type=recovery');
+        // Supabase manda tokens en el fragmento (#access_token=...)
+        // En HashRouter, la URL puede verse como .../#/auth?type=recovery#access_token=...
+        const isRecoveryUrl = url.includes('type=recovery') || searchParams.get('type') === 'recovery';
+        const hasAccessToken = url.includes('access_token=');
 
-        if (hasToken && isRecovery) {
+        if (isRecoveryUrl && hasAccessToken) {
             setVerifyingSession(true);
             try {
-                // Pequeña pausa para que el SDK procese el fragmento
-                const { data: { session } } = await supabase.auth.getSession();
+                // Intentamos que el SDK pille la sesión del hash automáticamente
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
                 
                 if (session) {
                     setView('update-password');
-                    setSuccessMsg("Identidad verificada. Introduce tu nueva clave.");
+                    setSuccessMsg("Sesión verificada. Elige tu nueva contraseña.");
                 } else {
-                    // Si el SDK falla por la estructura de la #, extraemos manualmente
-                    const hashPart = fullUrl.split('#')[1] || fullUrl.split('?')[1] || '';
-                    const params = new URLSearchParams(hashPart.replace(/^[/?#]+/, ''));
-                    const accessToken = params.get('access_token');
-                    const refreshToken = params.get('refresh_token');
-                    
-                    if (accessToken) {
-                        await supabase.auth.setSession({ 
-                            access_token: accessToken, 
-                            refresh_token: refreshToken || '' 
-                        });
-                        setView('update-password');
+                    // Intento manual de extracción si el SDK falla por la estructura de la URL
+                    const fragment = url.split('access_token=')[1];
+                    if (fragment) {
+                        const token = fragment.split('&')[0];
+                        // Solo con el token en la URL, Supabase Auth suele activarse,
+                        // si no, forzamos un segundo de espera.
+                        setTimeout(async () => {
+                            const { data: { session: retrySession } } = await supabase.auth.getSession();
+                            if (retrySession) setView('update-password');
+                            else setError("No se ha podido validar el enlace. Intenta solicitar uno nuevo.");
+                        }, 1000);
                     }
                 }
             } catch (err) {
-                console.error("Error detectando sesión de recuperación", err);
+                console.error("Recovery check failed", err);
             } finally {
                 setVerifyingSession(false);
             }
         }
     };
-    checkRecoveryFlow();
+    checkRecovery();
   }, [searchParams]);
 
   const switchView = (newView: AuthView) => {
@@ -110,7 +99,7 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // IMPORTANTE: URL con # para HashRouter
+      // IMPORTANTE: URL con # para que HashRouter lo pille bien
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -119,7 +108,7 @@ const AuthPage: React.FC = () => {
               captchaToken: captchaToken || undefined 
           });
           if (error) throw error;
-          setSuccessMsg("¡Enlace enviado! Revisa tu email.");
+          setSuccessMsg("¡Enlace enviado! Revisa tu bandeja de entrada.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -144,12 +133,12 @@ const AuthPage: React.FC = () => {
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña guardada con éxito!");
+          setSuccessMsg("¡Contraseña actualizada! Entrando...");
           
-          // Limpieza y redirección forzada al dashboard
+          // RECARGA TOTAL para limpiar tokens y fragmentos de la URL
           setTimeout(() => {
-              window.location.hash = '#/dashboard';
-              window.location.reload(); // Recarga para asegurar estado limpio
+              window.location.href = window.location.origin + '/#/dashboard';
+              window.location.reload();
           }, 1500);
 
       } catch (err: any) {
@@ -171,7 +160,6 @@ const AuthPage: React.FC = () => {
 
     try {
       let result;
-      // URL con #
       const redirectTo = `${window.location.origin}/#/auth`;
       const authOptions = { 
           email, 
@@ -239,8 +227,8 @@ const AuthPage: React.FC = () => {
         </div>
 
         {successMsg && (
-            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold shadow-sm animate-fade-in">
-                {successMsg}
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold shadow-sm animate-fade-in flex items-center justify-center gap-2">
+                <CheckCircle2 size={18}/> {successMsg}
             </div>
         )}
 
@@ -325,16 +313,6 @@ const AuthPage: React.FC = () => {
                 <button onClick={() => switchView(view === 'login' ? 'register' : 'login')} className="text-slate-500 text-sm font-medium hover:text-[#575AF9]">
                     {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
                 </button>
-            </div>
-        )}
-
-        {showDevTools && (
-            <div className="mt-12 pt-8 border-t border-slate-200 animate-fade-in">
-                <div className="flex items-center justify-center gap-2 text-slate-400 text-xs font-bold uppercase mb-4"><Code2 size={16}/> SIMULACIÓN (Offline)</div>
-                <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => loginWithDevBypass('admin')} className="py-3 bg-slate-800 text-white rounded-xl font-bold text-xs">CLUB</button>
-                    <button onClick={() => loginWithDevBypass('player')} className="py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs">JUGADOR</button>
-                </div>
             </div>
         )}
       </div>
