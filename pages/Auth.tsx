@@ -47,60 +47,62 @@ const AuthPage: React.FC = () => {
       if (isOfflineMode || isPlaceholder) setShowDevTools(true);
   }, [isOfflineMode]);
 
-  // --- LÓGICA DE RECUPERACIÓN ULTRA-ROBUSTA ---
+  // --- LÓGICA DE RECUPERACIÓN TOTALMENTE REESCRITA PARA DOBLE HASH ---
   useEffect(() => {
-    const processRecovery = async () => {
+    const parseComplexUrl = async () => {
         const fullUrl = window.location.href;
-        const type = searchParams.get('type');
         
-        // Detectamos si es recuperación por parámetro o por presencia de token
-        if (type === 'recovery' || fullUrl.includes('access_token=')) {
+        // Comprobar si hay rastro de token en CUALQUIER parte de la URL (hash o query)
+        const hasToken = fullUrl.includes('access_token=');
+        const isRecoveryType = searchParams.get('type') === 'recovery' || fullUrl.includes('type=recovery');
+
+        if (hasToken || isRecoveryType) {
             setVerifyingSession(true);
             setView('update-password');
             sessionStorage.setItem('recovery_lock', 'true');
 
             try {
-                // 1. Intentamos ver si Supabase ya lo pilló
-                const { data: { session: existingSession } } = await supabase.auth.getSession();
-                
-                if (!existingSession) {
-                    // 2. EXTRACCIÓN MANUAL DE DOBLE HASH
-                    // Separamos por '#' y buscamos el segmento que tenga 'access_token'
-                    const segments = fullUrl.split('#');
-                    const tokenSegment = segments.find(s => s.includes('access_token='));
-                    
-                    if (tokenSegment) {
-                        // Limpiamos posibles prefijos de ruta como /auth?type=recovery
-                        const cleanParams = tokenSegment.includes('?') 
-                            ? tokenSegment.split('?')[1] 
-                            : tokenSegment;
-                        
-                        const params = new URLSearchParams(cleanParams);
-                        const accessToken = params.get('access_token');
-                        const refreshToken = params.get('refresh_token');
+                // 1. EXTRAER TOKEN MANUALMENTE (Ignorando la lógica del router)
+                // Buscamos en el fragmento final de la URL que Supabase suele añadir tras el router
+                const segments = fullUrl.split('#');
+                // Buscamos el segmento que realmente tiene los parámetros
+                const tokenSegment = segments.find(s => s.includes('access_token='));
 
-                        if (accessToken) {
-                            const { error: setErr } = await supabase.auth.setSession({
-                                access_token: accessToken,
-                                refresh_token: refreshToken || '',
-                            });
-                            if (setErr) throw setErr;
-                            setSuccessMsg("Identidad confirmada. Crea tu nueva clave.");
-                        } else {
-                            throw new Error("Token de acceso no encontrado en el enlace.");
-                        }
-                    } else {
-                        // Si no hay token y no hay sesión, al recargar perdemos el acceso
-                        if (!fullUrl.includes('access_token=')) {
-                            throw new Error("Sesión caducada. Solicita un nuevo enlace.");
-                        }
+                if (tokenSegment) {
+                    // Limpiamos posibles prefijos residuales como "/auth?type=recovery" que el HashRouter pueda mezclar
+                    const queryString = tokenSegment.includes('?') 
+                        ? tokenSegment.split('?')[1] 
+                        : tokenSegment.replace(/^\//, ''); // Quitar / inicial si lo hay
+
+                    const params = new URLSearchParams(queryString);
+                    const accessToken = params.get('access_token');
+                    const refreshToken = params.get('refresh_token');
+
+                    if (accessToken) {
+                        // 2. INYECTAR SESIÓN MANUALMENTE
+                        const { error: setErr } = await supabase.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken || '',
+                        });
+
+                        if (setErr) throw setErr;
+
+                        // 3. LIMPIAR URL (Para evitar que al recargar Supabase intente procesarlo de nuevo)
+                        window.history.replaceState(null, '', window.location.origin + window.location.pathname + '#/auth');
+                        
+                        setSuccessMsg("Identidad verificada con éxito.");
                     }
                 } else {
-                    setSuccessMsg("Sesión activa. Introduce la nueva contraseña.");
+                    // Si no hay token en el segmento pero estamos en modo recuperación,
+                    // quizás Supabase ya lo procesó automáticamente al cargar. Comprobamos sesión:
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session && !hasToken) {
+                        throw new Error("El enlace ha caducado o es inválido.");
+                    }
                 }
             } catch (err: any) {
-                console.error("Recovery Critical Error:", err);
-                setError(err.message || "Enlace inválido.");
+                console.error("Critical Recovery Error:", err);
+                setError(err.message || "Error al verificar el enlace.");
                 setView('recovery');
                 sessionStorage.removeItem('recovery_lock');
             } finally {
@@ -109,7 +111,7 @@ const AuthPage: React.FC = () => {
         }
     };
 
-    processRecovery();
+    parseComplexUrl();
   }, [searchParams]);
 
   const switchView = (newView: AuthView) => {
@@ -134,7 +136,7 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // IMPORTANTE: Redirección limpia
+      // Aseguramos que la URL de retorno sea limpia para el HashRouter
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -143,9 +145,9 @@ const AuthPage: React.FC = () => {
               captchaToken: captchaToken || undefined 
           });
           if (error) throw error;
-          setSuccessMsg("Enlace enviado. Mira tu correo.");
+          setSuccessMsg("¡Revisa tu correo! Te hemos mandado un enlace.");
       } catch (err: any) {
-          setError(err.message || "Error al solicitar.");
+          setError(err.message || "Error al solicitar recuperación.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
       } finally {
@@ -168,16 +170,17 @@ const AuthPage: React.FC = () => {
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña guardada!");
+          setSuccessMsg("¡Contraseña actualizada!");
           sessionStorage.removeItem('recovery_lock');
           
+          // RECARGA TOTAL PARA LIMPIAR ESTADOS DE AUTH
           setTimeout(() => {
               window.location.href = window.location.origin + '/#/dashboard';
               window.location.reload(); 
           }, 1000);
 
       } catch (err: any) {
-          setError(err.message || "Error al actualizar.");
+          setError(err.message || "No se ha podido actualizar la contraseña.");
       } finally {
           setLoading(false);
       }
