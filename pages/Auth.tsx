@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Terminal } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Terminal, Globe } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
@@ -35,10 +35,8 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // Monitor de errores en pantalla
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const addLog = (msg: string) => {
-      console.log(`[DEBUG] ${msg}`);
       setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
   };
 
@@ -48,7 +46,7 @@ const AuthPage: React.FC = () => {
     
     if (session && isRecovery) {
         if (view !== 'update-password') {
-            addLog("Modo recuperación detectado. Sesión activa.");
+            addLog("Sesión de recuperación lista.");
             setView('update-password');
         }
     } else if (session && view !== 'update-password') {
@@ -69,69 +67,71 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
-      setDebugLogs([]);
-      addLog("Iniciando flujo de actualización...");
+      addLog("Iniciando bypass del SDK...");
 
       if (password !== confirmPassword) {
-          addLog("Error: Las contraseñas no coinciden");
           setError("Las contraseñas no coinciden.");
           setLoading(false);
           return;
       }
 
       if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-          addLog("Error: Captcha pendiente");
           setError("Por seguridad, completa el captcha.");
           setLoading(false);
           return;
       }
 
-      addLog(`Estado actual: User=${authUser?.id ? 'OK' : 'NULL'}, Token=${captchaToken ? 'PRESENTE' : 'AUSENTE'}`);
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+          addLog("ERROR: No hay token de acceso en la sesión.");
+          setError("La sesión ha expirado. Solicita un nuevo enlace.");
+          setLoading(false);
+          return;
+      }
 
-      // Timeout de seguridad manual
-      const safetyTimer = setTimeout(() => {
-          addLog("CRÍTICO: La petición lleva 15 segundos sin responder.");
-      }, 15000);
+      // Extraemos URL y Key de la instancia de Supabase
+      // @ts-ignore
+      const sbUrl = supabase.supabaseUrl;
+      // @ts-ignore
+      const sbKey = supabase.supabaseKey;
 
       try {
-          addLog("Enviando petición a supabase.auth.updateUser...");
+          addLog("Llamando a API REST directamente (/auth/v1/user)...");
           
-          const payload = { password };
-          const options = { captchaToken: captchaToken || undefined };
-          
-          addLog(`Payload: { password: '***' }`);
-          addLog(`Options: { captchaToken: '${captchaToken?.substring(0, 10)}...' }`);
+          const response = await fetch(`${sbUrl}/auth/v1/user`, {
+              method: 'PUT',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': sbKey,
+                  'Authorization': `Bearer ${accessToken}`,
+                  'x-captcha-token': captchaToken || ''
+              },
+              body: JSON.stringify({ password })
+          });
 
-          const { data, error: sbError } = await supabase.auth.updateUser(payload, options);
+          addLog(`Respuesta recibida: HTTP ${response.status}`);
           
-          clearTimeout(safetyTimer);
+          const result = await response.json();
 
-          if (sbError) {
-              addLog(`Supabase ha respondido con ERROR: ${sbError.status} - ${sbError.message}`);
-              throw sbError;
+          if (!response.ok) {
+              addLog(`Error de API: ${result.msg || result.error_description || 'Error desconocido'}`);
+              throw new Error(result.msg || result.error_description || "Error al actualizar");
           }
 
-          addLog("Supabase ha respondido con ÉXITO.");
-          addLog(`Datos devueltos: UserID=${data.user?.id}`);
+          addLog("¡Contraseña actualizada por API REST!");
+          setSuccessMsg("¡Contraseña actualizada! Redirigiendo...");
           
-          setSuccessMsg("¡Contraseña actualizada con éxito!");
-          
-          addLog("Limpiando URL y redirigiendo al Dashboard en 2s...");
           setTimeout(() => {
-              window.history.replaceState(null, '', window.location.origin + '/#/dashboard');
+              window.location.href = window.location.origin + '/#/dashboard';
               window.location.reload();
           }, 2000);
 
       } catch (err: any) {
-          clearTimeout(safetyTimer);
-          addLog(`EXCEPCIÓN CAPTURADA: ${err.name} - ${err.message}`);
-          if (err.stack) addLog(`Stack trace disponible en consola del navegador.`);
-          setError(err.message || "Error al actualizar clave.");
+          addLog(`FALLO: ${err.message}`);
+          setError(err.message);
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
-      } finally {
           setLoading(false);
-          addLog("Proceso finalizado (Loading=false)");
       }
   };
 
@@ -141,18 +141,14 @@ const AuthPage: React.FC = () => {
     setError(null);
     try {
       let result;
-      const attributes = { email, password };
       if (view === 'login') {
-        result = await supabase.auth.signInWithPassword(attributes);
+        result = await supabase.auth.signInWithPassword({ email, password });
       } else {
-        result = await supabase.auth.signUp({ ...attributes, options: { captchaToken: captchaToken || undefined } });
+        result = await supabase.auth.signUp({ email, password, options: { captchaToken: captchaToken || undefined } });
       }
       if (result.error) throw result.error;
     } catch (err: any) {
       setError(err.message || 'Error de acceso');
-      if(captchaRef.current) captchaRef.current.resetCaptcha();
-      setCaptchaToken(null);
-    } finally {
       setLoading(false);
     }
   };
@@ -195,7 +191,7 @@ const AuthPage: React.FC = () => {
         </div>
 
         {successMsg && (
-            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold animate-fade-in flex items-center justify-center gap-2">
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold flex items-center justify-center gap-2">
                 <CheckCircle2 size={18}/> {successMsg}
             </div>
         )}
@@ -226,18 +222,17 @@ const AuthPage: React.FC = () => {
                     </div>
                 )}
 
-                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg transition-all active:scale-95">
+                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg">
                     {loading ? <Loader2 className="animate-spin" size={20} /> : <>ACTUALIZAR Y ENTRAR <Key size={20}/></>}
                 </button>
 
-                {/* DEBUG CONSOLE IN-SCREEN */}
                 <div className="mt-8 p-4 bg-slate-900 rounded-2xl border border-slate-700 shadow-inner overflow-hidden">
                     <div className="flex items-center gap-2 text-indigo-400 font-bold text-[10px] uppercase tracking-widest mb-3">
-                        <Terminal size={14}/> Monitor de Depuración
+                        <Globe size={14}/> Monitor de Red Directa
                     </div>
                     <div className="space-y-1 max-h-40 overflow-y-auto no-scrollbar">
                         {debugLogs.length === 0 ? (
-                            <p className="text-slate-600 text-[10px] italic">Esperando acciones...</p>
+                            <p className="text-slate-600 text-[10px] italic">Esperando peticiones HTTP...</p>
                         ) : (
                             debugLogs.map((log, i) => (
                                 <p key={i} className="text-slate-300 text-[10px] font-mono leading-tight border-l border-indigo-500/30 pl-2">
@@ -246,9 +241,6 @@ const AuthPage: React.FC = () => {
                             ))
                         )}
                     </div>
-                    {debugLogs.length > 0 && (
-                        <button type="button" onClick={() => setDebugLogs([])} className="mt-3 text-[9px] text-slate-500 hover:text-white uppercase font-bold underline">Limpiar</button>
-                    )}
                 </div>
             </form>
         ) : view === 'recovery' ? (
@@ -262,12 +254,9 @@ const AuthPage: React.FC = () => {
                         <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                     </div>
                 )}
-                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex justify-center items-center gap-2">
+                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex items-center justify-center gap-2">
                     {loading ? <Loader2 className="animate-spin" size={18} /> : <>MANDAR ENLACE <Send size={18}/></>}
                 </button>
-                <div className="text-center mt-4">
-                    <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al Login</button>
-                </div>
             </form>
         ) : (
             <form onSubmit={handleAuth} className="space-y-4">
@@ -282,24 +271,13 @@ const AuthPage: React.FC = () => {
                     {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                 </button>
               </div>
-              {view === 'register' && (
-                  <div className="relative animate-slide-up">
-                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                    <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Confirmar contraseña"/>
-                  </div>
-              )}
               {HCAPTCHA_SITE_TOKEN && (
                   <div className="flex justify-center my-2 scale-90 min-h-[78px]">
                       <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                   </div>
               )}
-              {view === 'login' && (
-                  <div className="text-right">
-                      <button type="button" onClick={() => switchView('recovery')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">¿Olvidaste tu contraseña?</button>
-                  </div>
-              )}
               <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg">
-                {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
+                {loading ? <Loader2 className="animate-spin" size={24} /> : 'ENTRAR'}
               </button>
             </form>
         )}
