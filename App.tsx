@@ -49,7 +49,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   const { clubData } = useHistory();
   const location = useLocation();
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold">Cargando...</div>;
+  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold italic">Cargando...</div>;
   
   if (!user) return <Navigate to="/" replace />;
   
@@ -74,8 +74,20 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 
 const AppRoutes = () => {
   const { user, role, loading } = useAuth();
+  const location = useLocation();
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold">Cargando aplicación...</div>;
+  // FIX: Si estamos en la página de Auth, permitimos el renderizado aunque esté "loading"
+  // para evitar que el proceso de Supabase se quede colgado en blanco
+  const isAuthPage = location.pathname.includes('/auth');
+
+  if (loading && !isAuthPage) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-400 font-bold p-10 text-center">
+        <div className="w-12 h-12 border-4 border-[#575AF9] border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="animate-pulse">Cargando aplicación...</p>
+      </div>
+    );
+  }
 
   const getHomeRoute = () => {
       if (!user) return <Landing />;

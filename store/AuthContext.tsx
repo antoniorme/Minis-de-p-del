@@ -61,6 +61,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initSession = async () => {
+        const url = window.location.href;
+        
+        // 1. DETECCIÓN AGRESIVA DE TOKEN (Fix para HashRouter)
+        if (url.includes('access_token=')) {
+            try {
+                // Extraemos el fragmento después del último #
+                const parts = url.split('#');
+                const tokenPart = parts.find(p => p.includes('access_token='));
+                
+                if (tokenPart) {
+                    const params = new URLSearchParams(tokenPart.startsWith('/') ? tokenPart.split('?')[1] : tokenPart);
+                    const access_token = params.get('access_token');
+                    const refresh_token = params.get('refresh_token');
+
+                    if (access_token) {
+                        const { data } = await supabase.auth.setSession({
+                            access_token,
+                            refresh_token: refresh_token || '',
+                        });
+                        if (data.session) {
+                            setSession(data.session);
+                            setUser(data.session.user);
+                            const r = await checkUserRole(data.session.user.id, data.session.user.email);
+                            setRole(r);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Error in manual token injection", e);
+            } finally {
+                // IMPORTANTE: Siempre desbloqueamos la carga aquí
+                setLoading(false);
+                return;
+            }
+        }
+
+        // 2. MODO OFFLINE / NORMAL
         const storedDevMode = sessionStorage.getItem('padelpro_dev_mode') === 'true';
         // @ts-ignore
         if (storedDevMode || (supabase as any).supabaseUrl === 'https://placeholder.supabase.co') {
@@ -70,42 +107,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         try {
-            const url = window.location.href;
-            
-            // EXTRACTOR MANUAL DE TOKENS (Soporta doble # de HashRouter)
-            // Buscamos access_token en cualquier parte de la URL completa
-            if (url.includes('access_token=')) {
-                console.log("Token detected in URL, performing manual injection...");
-                
-                // Extraer access_token y refresh_token usando URLSearchParams sobre el fragmento final
-                // Supabase pega los tokens después del último '#'
-                const parts = url.split('#');
-                const lastPart = parts[parts.length - 1]; 
-                // Si el último fragmento empieza por access_token o contiene la cadena
-                const params = new URLSearchParams(lastPart.includes('access_token') ? lastPart : lastPart.split('?')[1]);
-                
-                const accessToken = params.get('access_token');
-                const refreshToken = params.get('refresh_token');
-
-                if (accessToken) {
-                    const { data, error } = await supabase.auth.setSession({
-                        access_token: accessToken,
-                        refresh_token: refreshToken || ''
-                    });
-                    
-                    if (!error && data.session) {
-                        console.log("Session manually injected successfully");
-                        setSession(data.session);
-                        setUser(data.session.user);
-                        const r = await checkUserRole(data.session.user.id, data.session.user.email);
-                        setRole(r);
-                        setLoading(false);
-                        return; // Salimos, ya tenemos sesión
-                    }
-                }
-            }
-
-            // Intento estándar si no hubo inyección manual
             const { data: { session: currentSession } } = await supabase.auth.getSession();
             if (currentSession) {
                 setSession(currentSession);
@@ -133,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
               setRole(null);
           }
+          // Garantizamos que tras cualquier cambio de estado, la carga termine
           setLoading(false);
       }
     });
