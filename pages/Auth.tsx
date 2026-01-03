@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldCheck, Eye, EyeOff, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldCheck, Eye, EyeOff, CheckCircle2, ShieldAlert, RefreshCcw } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
@@ -47,71 +47,64 @@ const AuthPage: React.FC = () => {
       if (isOfflineMode || isPlaceholder) setShowDevTools(true);
   }, [isOfflineMode]);
 
-  // --- LÓGICA DE RECUPERACIÓN TOTALMENTE REESCRITA PARA DOBLE HASH ---
+  // --- LÓGICA DE RECUPERACIÓN RADICAL (REGEX) ---
   useEffect(() => {
-    const parseComplexUrl = async () => {
+    const processRecoveryFlow = async () => {
         const fullUrl = window.location.href;
         
-        // Comprobar si hay rastro de token en CUALQUIER parte de la URL (hash o query)
-        const hasToken = fullUrl.includes('access_token=');
-        const isRecoveryType = searchParams.get('type') === 'recovery' || fullUrl.includes('type=recovery');
+        // 1. Detección por Regex (Mucho más fiable que split con HashRouter)
+        const tokenMatch = fullUrl.match(/[#&]access_token=([^&]+)/);
+        const refreshMatch = fullUrl.match(/[#&]refresh_token=([^&]+)/);
+        const isRecoveryUrl = fullUrl.includes('type=recovery') || searchParams.get('type') === 'recovery';
 
-        if (hasToken || isRecoveryType) {
+        if (tokenMatch || isRecoveryUrl) {
             setVerifyingSession(true);
             setView('update-password');
             sessionStorage.setItem('recovery_lock', 'true');
 
+            // Timeout de seguridad de 5 segundos para evitar spinner infinito
+            const safetyTimeout = setTimeout(() => {
+                setVerifyingSession(false);
+                if (!successMsg) setError("La validación está tardando demasiado. Prueba a recargar.");
+            }, 5000);
+
             try {
-                // 1. EXTRAER TOKEN MANUALMENTE (Ignorando la lógica del router)
-                // Buscamos en el fragmento final de la URL que Supabase suele añadir tras el router
-                const segments = fullUrl.split('#');
-                // Buscamos el segmento que realmente tiene los parámetros
-                const tokenSegment = segments.find(s => s.includes('access_token='));
+                if (tokenMatch) {
+                    const accessToken = tokenMatch[1];
+                    const refreshToken = refreshMatch ? refreshMatch[1] : '';
 
-                if (tokenSegment) {
-                    // Limpiamos posibles prefijos residuales como "/auth?type=recovery" que el HashRouter pueda mezclar
-                    const queryString = tokenSegment.includes('?') 
-                        ? tokenSegment.split('?')[1] 
-                        : tokenSegment.replace(/^\//, ''); // Quitar / inicial si lo hay
+                    const { error: setErr } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken,
+                    });
 
-                    const params = new URLSearchParams(queryString);
-                    const accessToken = params.get('access_token');
-                    const refreshToken = params.get('refresh_token');
+                    if (setErr) throw setErr;
 
-                    if (accessToken) {
-                        // 2. INYECTAR SESIÓN MANUALMENTE
-                        const { error: setErr } = await supabase.auth.setSession({
-                            access_token: accessToken,
-                            refresh_token: refreshToken || '',
-                        });
-
-                        if (setErr) throw setErr;
-
-                        // 3. LIMPIAR URL (Para evitar que al recargar Supabase intente procesarlo de nuevo)
-                        window.history.replaceState(null, '', window.location.origin + window.location.pathname + '#/auth');
-                        
-                        setSuccessMsg("Identidad verificada con éxito.");
-                    }
+                    // Limpieza inmediata de la URL para que no interfiera en recargas
+                    window.history.replaceState(null, '', window.location.origin + window.location.pathname + '#/auth');
+                    setSuccessMsg("¡Acceso validado! Cambia tu contraseña ahora.");
                 } else {
-                    // Si no hay token en el segmento pero estamos en modo recuperación,
-                    // quizás Supabase ya lo procesó automáticamente al cargar. Comprobamos sesión:
+                    // Si entramos por recarga (sin token en URL) comprobamos si ya hay sesión activa
                     const { data: { session } } = await supabase.auth.getSession();
-                    if (!session && !hasToken) {
-                        throw new Error("El enlace ha caducado o es inválido.");
-                    }
+                    if (!session) throw new Error("Sesión de recuperación caducada.");
                 }
             } catch (err: any) {
-                console.error("Critical Recovery Error:", err);
-                setError(err.message || "Error al verificar el enlace.");
-                setView('recovery');
-                sessionStorage.removeItem('recovery_lock');
+                console.error("Critical Auth Error:", err);
+                setError(err.message || "Enlace no válido.");
+                // Si falla y no hay sesión, devolvemos a vista de recuperación
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    setView('recovery');
+                    sessionStorage.removeItem('recovery_lock');
+                }
             } finally {
+                clearTimeout(safetyTimeout);
                 setVerifyingSession(false);
             }
         }
     };
 
-    parseComplexUrl();
+    processRecoveryFlow();
   }, [searchParams]);
 
   const switchView = (newView: AuthView) => {
@@ -136,7 +129,6 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // Aseguramos que la URL de retorno sea limpia para el HashRouter
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -173,14 +165,14 @@ const AuthPage: React.FC = () => {
           setSuccessMsg("¡Contraseña actualizada!");
           sessionStorage.removeItem('recovery_lock');
           
-          // RECARGA TOTAL PARA LIMPIAR ESTADOS DE AUTH
+          // RECARGA LIMPIA
           setTimeout(() => {
               window.location.href = window.location.origin + '/#/dashboard';
               window.location.reload(); 
           }, 1000);
 
       } catch (err: any) {
-          setError(err.message || "No se ha podido actualizar la contraseña.");
+          setError(err.message || "Error al actualizar la contraseña.");
       } finally {
           setLoading(false);
       }
@@ -270,9 +262,18 @@ const AuthPage: React.FC = () => {
         )}
 
         {verifyingSession ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-4">
-                <Loader2 className="animate-spin text-[#575AF9]" size={48}/>
-                <span className="text-xs font-bold text-slate-400 animate-pulse uppercase tracking-widest">Validando credenciales...</span>
+            <div className="flex flex-col items-center justify-center py-10 gap-6">
+                <div className="relative">
+                    <Loader2 className="animate-spin text-[#575AF9]" size={64}/>
+                    <ShieldCheck size={24} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-[#575AF9]" />
+                </div>
+                <div className="text-center space-y-2">
+                    <span className="block text-xs font-black text-slate-400 animate-pulse uppercase tracking-[0.2em]">Comprobando Identidad</span>
+                    <p className="text-[10px] text-slate-400 max-w-[200px]">Si tarda demasiado, intenta recargar la página desde tu navegador.</p>
+                </div>
+                <button onClick={() => window.location.reload()} className="mt-4 flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-full text-xs font-bold hover:bg-slate-200">
+                    <RefreshCcw size={14}/> RECARGAR AHORA
+                </button>
             </div>
         ) : view === 'update-password' ? (
             <form onSubmit={handleUpdatePassword} className="space-y-4">
