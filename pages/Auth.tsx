@@ -5,7 +5,7 @@ import { useAuth } from '../store/AuthContext';
 import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Terminal, Activity, ShieldCheck } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
-type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
+type AuthView = 'login' | 'register' | 'recovery';
 
 let HCAPTCHA_SITE_TOKEN = "";
 try {
@@ -27,7 +27,7 @@ const translateError = (msg: string) => {
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session, authLogs, addLog, recoveryMode, role, setRecoveryMode } = useAuth();
+  const { authLogs, addLog, recoveryMode } = useAuth();
   
   const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
@@ -41,68 +41,12 @@ const AuthPage: React.FC = () => {
   const captchaRef = useRef<HCaptcha>(null);
   const [showMonitor, setShowMonitor] = useState(true);
 
-  useEffect(() => {
-    if (recoveryMode) {
-        addLog("VISTA: ACTIVANDO FORMULARIO DE RECUPERACIÓN");
-        setView('update-password');
-        setLoading(false);
-    }
-  }, [recoveryMode, addLog]);
-
   const switchView = (newView: AuthView) => {
       setView(newView);
       setError(null);
       setSuccessMsg(null);
       setCaptchaToken(null);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
-  };
-
-  const handleUpdatePassword = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setLoading(true);
-      setError(null);
-      addLog("INICIANDO ACTUALIZACIÓN...");
-
-      if (password !== confirmPassword) {
-          setError("Las contraseñas no coinciden.");
-          setLoading(false);
-          return;
-      }
-
-      try {
-          addLog("Llamando a API Supabase...");
-          
-          // Aseguramos que tenemos sesión antes de intentar actualizar
-          const { data: { session: currentSession } } = await supabase.auth.getSession();
-          if (!currentSession) {
-              addLog("!!! SESIÓN PERDIDA ANTES DE ACTUALIZAR");
-              throw new Error("Sesión caducada. Solicita un nuevo enlace.");
-          }
-
-          const { error: updateError } = await supabase.auth.updateUser({ 
-              password: password 
-          });
-
-          if (updateError) throw updateError;
-
-          addLog("API RESPONDIÓ OK.");
-          setSuccessMsg("¡Contraseña actualizada!");
-          
-          // Desactivamos modo recovery para que App.tsx nos deje navegar
-          setRecoveryMode(false);
-
-          setTimeout(() => {
-              addLog("Redirigiendo...");
-              // Si no hay rol todavía, mandamos al dashboard de jugador por defecto
-              const target = (role === 'admin' || role === 'superadmin') ? '/dashboard' : '/p/dashboard';
-              navigate(target);
-          }, 1500);
-
-      } catch (err: any) {
-          addLog(`ERROR API: ${err.message}`);
-          setError(translateError(err.message));
-          setLoading(false);
-      }
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -169,11 +113,10 @@ const AuthPage: React.FC = () => {
           </div>
           <h1 className="text-3xl font-black text-slate-900 mb-2">
             {view === 'login' ? 'Hola de nuevo' : 
-             view === 'recovery' ? 'Recuperar' : 
-             view === 'update-password' ? 'Seguridad' : 'Registro'}
+             view === 'recovery' ? 'Recuperar' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'update-password' ? 'Establece tu nueva clave' : 'Introduce tus datos'}
+            Introduce tus datos para continuar
           </p>
         </div>
 
@@ -190,31 +133,7 @@ const AuthPage: React.FC = () => {
         )}
 
         <div className="space-y-4">
-            {view === 'update-password' ? (
-                <form onSubmit={handleUpdatePassword} className="space-y-4">
-                    <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
-                        <ShieldCheck className="text-indigo-600" size={24}/>
-                        <div className="text-[10px] font-bold text-indigo-800 leading-tight uppercase">
-                            Sesión Validada.<br/>Establece tu nueva clave.
-                        </div>
-                    </div>
-                    <div className="relative">
-                        <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                        <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña" autoFocus/>
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
-                            {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                        </button>
-                    </div>
-                    <div className="relative">
-                        <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                        <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Contraseña"/>
-                    </div>
-
-                    <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
-                        {loading ? <Loader2 className="animate-spin" size={20} /> : <>GUARDAR CLAVE <Key size={20}/></>}
-                    </button>
-                </form>
-            ) : view === 'recovery' ? (
+            {view === 'recovery' ? (
                 <form onSubmit={handlePasswordResetRequest} className="space-y-4">
                     <div className="relative">
                         <Mail className="absolute left-4 top-4 text-slate-400" size={20} />

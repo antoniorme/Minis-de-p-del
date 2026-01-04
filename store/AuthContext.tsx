@@ -92,18 +92,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     if (error) {
                         addLog(`ERROR SESIÓN: ${error.message}`);
                     } else if (data.session) {
-                        addLog("¡SESIÓN FORZADA OK!");
+                        addLog("¡SESIÓN VALIDADA! ACTIVANDO MODO RECUPERACIÓN INTERNO");
                         
-                        // IMPORTANTE: Marcamos recovery ANTES de limpiar la URL
                         setRecoveryMode(true);
-                        
                         setSession(data.session);
                         setUser(data.session.user);
                         const r = await checkUserRole(data.session.user.id, data.session.user.email);
                         setRole(r);
 
-                        // Limpiamos URL pero el estado recoveryMode ya es true
-                        window.history.replaceState(null, '', window.location.pathname + '#/auth');
+                        // Limpiamos URL silenciosamente
+                        window.history.replaceState(null, '', window.location.pathname + window.location.search);
                         return true;
                     }
                 } catch (e: any) {
@@ -115,14 +113,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const initSession = async () => {
-        addLog("Iniciando secuencia...");
+        addLog("Secuencia de arranque...");
         const recoveredFromUrl = await handleUrlTokens();
         
         if (!recoveredFromUrl) {
             try {
                 const { data: { session: currentSession } } = await supabase.auth.getSession();
                 if (currentSession) {
-                    addLog("SESIÓN PERSISTENTE OK");
+                    addLog("SESIÓN EXISTENTE OK");
                     setSession(currentSession);
                     setUser(currentSession.user);
                     const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
@@ -133,10 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         }
         
-        // Pequeño retardo para evitar parpadeos de redirección
-        setTimeout(() => {
-            setLoading(false);
-        }, 300);
+        setLoading(false);
     };
 
     initSession();
@@ -145,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addLog(`EVENTO_SDK: ${event}`);
       
       if (event === 'PASSWORD_RECOVERY') {
-          addLog("EVENTO RECOVERY DETECTADO");
+          addLog("RECUPERACIÓN DETECTADA POR EVENTO");
           setRecoveryMode(true);
       }
 

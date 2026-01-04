@@ -8,7 +8,8 @@ import { TimerProvider } from './store/TimerContext';
 import { NotificationProvider } from './store/NotificationContext';
 import { Layout } from './components/Layout';
 import { PlayerLayout } from './components/PlayerLayout';
-import { ShieldAlert, RefreshCw, Terminal, User, Shield, Crown, Code, AlertCircle, Activity, Trophy, Loader2 } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Terminal, User, Shield, Crown, Code, AlertCircle, Activity, Trophy, Loader2, Lock, Eye, EyeOff, CheckCircle2, ShieldCheck, Key } from 'lucide-react';
+import { supabase } from './lib/supabase';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -51,6 +52,91 @@ const IS_DEV_ENV =
   hostname.includes('webcontainer') ||
   hostname.includes('idx.google.com');
 
+// MODAL DE RECUPERACIÓN INTERNO
+const RecoveryModal = () => {
+    const { recoveryMode, setRecoveryMode, addLog } = useAuth();
+    const [password, setPassword] = useState('');
+    const [confirm, setConfirm] = useState('');
+    const [showPass, setShowPass] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState(false);
+
+    if (!recoveryMode) return null;
+
+    const handleUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (password !== confirm) { setError("Las claves no coinciden."); return; }
+        if (password.length < 6) { setError("Mínimo 6 caracteres."); return; }
+        
+        setLoading(true);
+        setError(null);
+        addLog("ACTUALIZANDO CLAVE DESDE MODAL INTERNO...");
+
+        try {
+            const { error: updateError } = await supabase.auth.updateUser({ password });
+            if (updateError) throw updateError;
+            
+            addLog("CLAVE ACTUALIZADA CON ÉXITO.");
+            setSuccess(true);
+            setTimeout(() => {
+                setRecoveryMode(false);
+            }, 2000);
+        } catch (err: any) {
+            addLog(`ERROR MODAL: ${err.message}`);
+            setError(err.message);
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[1000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6">
+            <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-slide-up border border-indigo-100">
+                <div className="text-center mb-8">
+                    <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-[#575AF9]">
+                        <ShieldCheck size={32}/>
+                    </div>
+                    <h2 className="text-2xl font-black text-slate-900 leading-tight">Seguridad de Cuenta</h2>
+                    <p className="text-slate-400 text-sm mt-2 font-medium uppercase tracking-widest text-[10px]">Cambio de Contraseña</p>
+                </div>
+
+                {success ? (
+                    <div className="bg-emerald-50 p-6 rounded-3xl text-center space-y-3 animate-fade-in border border-emerald-100">
+                        <CheckCircle2 size={48} className="mx-auto text-emerald-500 mb-2"/>
+                        <p className="text-emerald-800 font-bold">¡Contraseña Guardada!</p>
+                        <p className="text-emerald-600 text-xs">Ya puedes usar la aplicación normalmente.</p>
+                    </div>
+                ) : (
+                    <form onSubmit={handleUpdate} className="space-y-4">
+                        {error && (
+                            <div className="bg-rose-50 border border-rose-100 text-rose-600 p-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-fade-in">
+                                <AlertCircle size={14}/> {error}
+                            </div>
+                        )}
+                        <div className="relative">
+                            <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                            <input type={showPass ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none font-bold text-lg" placeholder="Nueva Clave" autoFocus/>
+                            <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-4 top-4 text-slate-400">
+                                {showPass ? <EyeOff size={20}/> : <Eye size={20}/>}
+                            </button>
+                        </div>
+                        <div className="relative">
+                            <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                            <input type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none font-bold text-lg" placeholder="Confirmar Clave"/>
+                        </div>
+
+                        <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all mt-4">
+                            {loading ? <Loader2 className="animate-spin" size={24} /> : <>GUARDAR CLAVE <Key size={20}/></>}
+                        </button>
+                    </form>
+                )}
+                
+                <p className="text-center text-[10px] text-slate-400 mt-8 font-medium">SESIÓN VALIDADA POR TOKEN DE SEGURIDAD</p>
+            </div>
+        </div>
+    );
+};
+
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role, recoveryMode } = useAuth();
   const { clubData } = useHistory();
@@ -59,11 +145,6 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   if (loading) return null; 
   if (!user) return <Navigate to="/" replace />;
   
-  // EXCEPCIÓN DE RECUPERACIÓN: Si estamos en modo recovery, no aplicar protecciones normales
-  if (recoveryMode) {
-      return <>{children}</>;
-  }
-
   if (role === 'pending' && location.pathname !== '/pending') return <Navigate to="/pending" replace />;
   if (requireSuperAdmin && role !== 'superadmin') return <Navigate to="/dashboard" replace />;
   if (requireAdmin && role !== 'admin' && role !== 'superadmin') return <Navigate to="/p/dashboard" replace />;
@@ -73,22 +154,9 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 };
 
 const AppRoutes = () => {
-  const { user, role, loading, authStatus, authLogs, signOut, recoveryMode } = useAuth();
+  const { user, role, loading, authStatus, authLogs, signOut } = useAuth();
   const location = useLocation();
-
-  const fullUrl = window.location.href;
-  // Combinamos detección por URL y detección por estado del contexto
-  const isRecoveryMode = recoveryMode || fullUrl.includes('type=recovery') || fullUrl.includes('access_token=');
   const isAuthPage = location.pathname.includes('/auth');
-
-  // Si estamos en medio de una recuperación, FORZAMOS AuthPage independientemente del usuario logueado
-  if (isRecoveryMode) {
-      return (
-          <Routes>
-              <Route path="*" element={<AuthPage />} />
-          </Routes>
-      );
-  }
 
   if (loading && !isAuthPage) {
     if (!IS_DEV_ENV) {
@@ -163,61 +231,64 @@ const AppRoutes = () => {
   };
 
   return (
-    <Routes>
-        <Route path="/" element={getHomeRoute()} />
-        <Route path="/auth" element={<AuthPage />} />
-        <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
-        <Route path="/join/:clubId" element={<JoinTournament />} />
-        <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
-        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-        <Route path="/notifications/settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
+    <>
+        <RecoveryModal />
+        <Routes>
+            <Route path="/" element={getHomeRoute()} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
+            <Route path="/join/:clubId" element={<JoinTournament />} />
+            <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
+            <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+            <Route path="/notifications/settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
 
-        <Route path="/p/*" element={
-            <ProtectedRoute>
-                <PlayerLayout>
-                    <Routes>
-                        <Route index element={<Navigate to="dashboard" replace />} />
-                        <Route path="dashboard" element={<PlayerDashboard />} />
-                        <Route path="explore" element={<TournamentBrowser />} />
-                        <Route path="tournaments" element={<PlayerTournaments />} />
-                        <Route path="profile" element={<PlayerAppProfile />} />
-                        <Route path="*" element={<Navigate to="dashboard" replace />} />
-                    </Routes>
-                </PlayerLayout>
-            </ProtectedRoute>
-        } />
-
-        <Route path="/superadmin" element={
-            <Layout>
-                <ProtectedRoute requireSuperAdmin>
-                    <SuperAdmin />
+            <Route path="/p/*" element={
+                <ProtectedRoute>
+                    <PlayerLayout>
+                        <Routes>
+                            <Route index element={<Navigate to="dashboard" replace />} />
+                            <Route path="dashboard" element={<PlayerDashboard />} />
+                            <Route path="explore" element={<TournamentBrowser />} />
+                            <Route path="tournaments" element={<PlayerTournaments />} />
+                            <Route path="profile" element={<PlayerAppProfile />} />
+                            <Route path="*" element={<Navigate to="dashboard" replace />} />
+                        </Routes>
+                    </PlayerLayout>
                 </ProtectedRoute>
-            </Layout>
-        } />
+            } />
 
-        <Route path="/*" element={
-            <Layout>
-                <Routes>
-                    <Route path="/dashboard" element={<ProtectedRoute requireAdmin><Dashboard /></ProtectedRoute>} />
-                    <Route path="/setup" element={<ProtectedRoute requireAdmin><TournamentSetup /></ProtectedRoute>} />
-                    <Route path="/registration" element={<ProtectedRoute requireAdmin><Registration /></ProtectedRoute>} />
-                    <Route path="/checkin" element={<ProtectedRoute requireAdmin><CheckIn /></ProtectedRoute>} />
-                    <Route path="/active" element={<ProtectedRoute requireAdmin><ActiveTournament /></ProtectedRoute>} />
-                    <Route path="/results" element={<ProtectedRoute requireAdmin><Results /></ProtectedRoute>} />
-                    <Route path="/league" element={<ProtectedRoute requireAdmin><LeagueDashboard /></ProtectedRoute>} />
-                    <Route path="/league/setup" element={<ProtectedRoute requireAdmin><LeagueSetup /></ProtectedRoute>} />
-                    <Route path="/league/groups/:categoryId" element={<ProtectedRoute requireAdmin><LeagueGroups /></ProtectedRoute>} />
-                    <Route path="/league/active" element={<ProtectedRoute requireAdmin><LeagueActive /></ProtectedRoute>} />
-                    <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
-                    <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><AdminPlayerProfile /></ProtectedRoute>} />
-                    <Route path="/history" element={<ProtectedRoute requireAdmin><History /></ProtectedRoute>} />
-                    <Route path="/club" element={<ProtectedRoute requireAdmin><ClubProfile /></ProtectedRoute>} />
-                    <Route path="/help" element={<ProtectedRoute requireAdmin><Help /></ProtectedRoute>} />
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-            </Layout>
-        } />
-    </Routes>
+            <Route path="/superadmin" element={
+                <Layout>
+                    <ProtectedRoute requireSuperAdmin>
+                        <SuperAdmin />
+                    </ProtectedRoute>
+                </Layout>
+            } />
+
+            <Route path="/*" element={
+                <Layout>
+                    <Routes>
+                        <Route path="/dashboard" element={<ProtectedRoute requireAdmin><Dashboard /></ProtectedRoute>} />
+                        <Route path="/setup" element={<ProtectedRoute requireAdmin><TournamentSetup /></ProtectedRoute>} />
+                        <Route path="/registration" element={<ProtectedRoute requireAdmin><Registration /></ProtectedRoute>} />
+                        <Route path="/checkin" element={<ProtectedRoute requireAdmin><CheckIn /></ProtectedRoute>} />
+                        <Route path="/active" element={<ProtectedRoute requireAdmin><ActiveTournament /></ProtectedRoute>} />
+                        <Route path="/results" element={<ProtectedRoute requireAdmin><Results /></ProtectedRoute>} />
+                        <Route path="/league" element={<ProtectedRoute requireAdmin><LeagueDashboard /></ProtectedRoute>} />
+                        <Route path="/league/setup" element={<ProtectedRoute requireAdmin><LeagueSetup /></ProtectedRoute>} />
+                        <Route path="/league/groups/:categoryId" element={<ProtectedRoute requireAdmin><LeagueGroups /></ProtectedRoute>} />
+                        <Route path="/league/active" element={<ProtectedRoute requireAdmin><LeagueActive /></ProtectedRoute>} />
+                        <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
+                        <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><AdminPlayerProfile /></ProtectedRoute>} />
+                        <Route path="/history" element={<ProtectedRoute requireAdmin><History /></ProtectedRoute>} />
+                        <Route path="/club" element={<ProtectedRoute requireAdmin><ClubProfile /></ProtectedRoute>} />
+                        <Route path="/help" element={<ProtectedRoute requireAdmin><Help /></ProtectedRoute>} />
+                        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                    </Routes>
+                </Layout>
+            } />
+        </Routes>
+    </>
   );
 }
 
