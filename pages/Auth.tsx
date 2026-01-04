@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -27,7 +28,7 @@ const translateError = (msg: string) => {
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { addLog } = useAuth();
+  const { session } = useAuth();
   
   const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
@@ -41,13 +42,18 @@ const AuthPage: React.FC = () => {
   const captchaRef = useRef<HCaptcha>(null);
   const [isSessionReady, setIsSessionReady] = useState(false);
 
-  // DETECCIÓN MANUAL DE TOKENS EN LA URL
+  // DETECCIÓN MANUAL DE ESTADO DE RECUPERACIÓN EN LA URL
   useEffect(() => {
       const fullUrl = window.location.href;
-      if (fullUrl.includes('access_token=') || fullUrl.includes('type=recovery')) {
+      // Si la URL contiene parámetros de recuperación, forzamos la vista de cambio de contraseña
+      if (fullUrl.includes('access_token=') || fullUrl.includes('type=recovery') || fullUrl.includes('recovery')) {
           setView('update-password');
+          // Si ya tenemos sesión activa (gracias al AuthContext), marcamos como listo
+          if (session) {
+              setIsSessionReady(true);
+          }
       }
-  }, []);
+  }, [session]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -91,6 +97,7 @@ const AuthPage: React.FC = () => {
       setError(null);
 
       try {
+          // El redirectTo DEBE coincidir con una de las URLs permitidas en el dashboard de Supabase
           const redirectTo = `${window.location.origin}${window.location.pathname}#/auth?type=recovery`;
           const { error } = await supabase.auth.resetPasswordForEmail(email, { 
               redirectTo, 
@@ -106,7 +113,7 @@ const AuthPage: React.FC = () => {
       }
   };
 
-  // PASO 1 RECUPERACIÓN: Validar la sesión del Magic Link
+  // PASO 1 RECUPERACIÓN: Validar la sesión si no se hizo automáticamente
   const handleStartUpdate = async () => {
       setLoading(true);
       setError(null);
@@ -131,8 +138,6 @@ const AuthPage: React.FC = () => {
           if (sessionError) throw sessionError;
           
           setIsSessionReady(true);
-          // Limpiamos la URL para evitar recargas raras del HashRouter
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
       } catch (err: any) {
           setError(translateError(err.message));
       } finally {

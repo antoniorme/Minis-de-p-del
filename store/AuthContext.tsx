@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -53,6 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Extractor de tokens ultra-agresivo para evitar conflictos con HashRouter
         const getRawParam = (key: string) => {
+            // Buscamos tanto en la query string normal como en el fragmento después del hash
             const regex = new RegExp(`[#?&]${key}=([^&]*)`);
             const match = fullUrl.match(regex);
             return match ? match[1] : null;
@@ -75,10 +77,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const r = await checkUserRole(data.session.user.id, data.session.user.email);
                     setRole(r);
                     
-                    // LIMPIEZA RADICAL DE LA URL
-                    // Al usar window.location.replace('/#/'), forzamos al navegador a olvidar el link sucio
-                    // y cargamos la app limpia en la Home. Al tener sesión activa, el Router hará el resto.
-                    window.location.replace('/#/');
+                    // LIMPIEZA RADICAL DE LA URL PARA EVITAR RE-PROCESAMIENTOS
+                    // Redirigimos a /#/auth pero conservando los parámetros para que AuthPage sepa qué vista mostrar
+                    const cleanPath = fullUrl.includes('type=recovery') ? '/#/auth?type=recovery' : '/#/';
+                    window.location.replace(window.location.origin + window.location.pathname + cleanPath);
                     return; 
                 }
             } catch (e) {
