@@ -9,6 +9,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   role: UserRole;
+  recoveryMode: boolean;
   signOut: () => Promise<void>;
   isOfflineMode: boolean;
   checkUserRole: (uid: string, email?: string) => Promise<UserRole>;
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   role: null,
+  recoveryMode: false,
   signOut: async () => {},
   isOfflineMode: false,
   checkUserRole: async () => null,
@@ -31,6 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
+  const [recoveryMode, setRecoveryMode] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
@@ -48,9 +51,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    const initAuth = async () => {
-        // Al usar BrowserRouter, Supabase detecta automáticamente los tokens en la URL (#access_token=...)
-        // y establece la sesión sin necesidad de scripts manuales.
+    const handleInitialAuth = async () => {
+        // 1. CONSUMIR RESCATE DE INDEX.HTML (Limpiado previamente)
+        const rescued = sessionStorage.getItem('sb-rescuing-session');
+        if (rescued) {
+            try {
+                const { access_token, refresh_token, type } = JSON.parse(rescued);
+                sessionStorage.removeItem('sb-rescuing-session');
+                
+                const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+
+                if (!error && data.session) {
+                    setSession(data.session);
+                    setUser(data.session.user);
+                    // Si el tipo era recovery, activamos el modo cambio de pass
+                    if (type === 'recovery') setRecoveryMode(true);
+                    
+                    const r = await checkUserRole(data.session.user.id, data.session.user.email);
+                    setRole(r);
+                    setLoading(false);
+                    return;
+                }
+            } catch (e) { console.error("Rescate fallido:", e); }
+        }
+
+        // 2. CARGA NORMAL
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         if (currentSession) {
             setSession(currentSession);
@@ -61,9 +86,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
     };
 
-    initAuth();
+    handleInitialAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
+      
       if (session) {
           setSession(session);
           setUser(session.user);
@@ -73,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSession(null);
           setUser(null);
           setRole(null);
+          setRecoveryMode(false);
       }
       setLoading(false);
     });
@@ -83,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     setLoading(true);
     await supabase.auth.signOut();
-    window.location.href = '/';
+    window.location.href = window.location.origin + window.location.pathname;
   };
 
   const loginWithDevBypass = (role: 'admin' | 'player' | 'superadmin') => {
@@ -97,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{ 
-        session, user, loading, role, signOut, 
+        session, user, loading, role, recoveryMode, signOut, 
         isOfflineMode, checkUserRole, loginWithDevBypass
     }}>
       {children}

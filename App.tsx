@@ -49,7 +49,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   const location = useLocation();
 
   if (loading) return null; 
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to="/auth" replace />;
   
   if (role === 'pending' && location.pathname !== '/pending') return <Navigate to="/pending" replace />;
   if (requireSuperAdmin && role !== 'superadmin') return <Navigate to="/dashboard" replace />;
@@ -71,7 +71,7 @@ const AppRoutes = () => {
                 <Trophy size={40} className="text-[#575AF9]" />
             </div>
             <div className="flex items-center gap-3 text-slate-400 font-bold text-sm tracking-widest uppercase">
-                <Loader2 size={18} className="animate-spin text-[#575AF9]"/> Entrando...
+                <Loader2 size={18} className="animate-spin text-[#575AF9]"/> Iniciando...
             </div>
         </div>
     );
@@ -146,6 +146,12 @@ const AppRoutes = () => {
 }
 
 const App: React.FC = () => {
+  // Basename para Google AI Studio: /proxy/[PORT]/
+  // Buscamos si la URL actual empieza por /proxy/ y tiene un puerto
+  const pathParts = window.location.pathname.split('/');
+  const isProxy = pathParts[1] === 'proxy';
+  const basename = isProxy ? `/${pathParts[1]}/${pathParts[2]}` : '/';
+
   return (
     <AuthProvider>
       <HistoryProvider>
@@ -153,7 +159,7 @@ const App: React.FC = () => {
             <TournamentProvider>
                 <LeagueProvider>
                     <TimerProvider>
-                        <BrowserRouter>
+                        <BrowserRouter basename={basename === '/' ? '' : basename}>
                             <AppRoutes />
                         </BrowserRouter>
                     </TimerProvider>

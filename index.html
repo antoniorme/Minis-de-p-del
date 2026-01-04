@@ -30,6 +30,36 @@
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 
+    <!-- SUPABASE & ROUTER RESCUE SCRIPT -->
+    <script>
+      (function() {
+        var h = window.location.hash;
+        // Capturamos tokens de Supabase (Login o Recovery)
+        if (h && h.indexOf('access_token=') !== -1) {
+          var tokenPart = h.substring(h.indexOf('access_token='));
+          var params = new URLSearchParams(tokenPart);
+          
+          var access = params.get('access_token');
+          var refresh = params.get('refresh_token');
+          var type = params.get('type') || 'login'; // 'recovery' si es cambio de pass
+
+          if (access && refresh) {
+            // Guardamos para AuthContext
+            sessionStorage.setItem('sb-rescuing-session', JSON.stringify({
+              access_token: access,
+              refresh_token: refresh,
+              type: type
+            }));
+            
+            // LIMPIEZA INMEDIATA: Borramos el hash para que BrowserRouter no choque
+            // Preservamos el pathname y search pero matamos el hash sucio
+            var cleanUrl = window.location.pathname + window.location.search;
+            window.history.replaceState(null, document.title, cleanUrl);
+          }
+        }
+      })();
+    </script>
+
 <script type="importmap">
 {
   "imports": {

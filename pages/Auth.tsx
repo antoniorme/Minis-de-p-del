@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Sparkles } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Eye, EyeOff, ShieldAlert, CheckCircle2, Sparkles } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
-type AuthView = 'login' | 'register' | 'magic-link';
+type AuthView = 'login' | 'register' | 'magic-link' | 'forgot-password' | 'update-password';
 
 let HCAPTCHA_SITE_TOKEN = "";
 try {
@@ -21,12 +21,12 @@ const translateError = (msg: string) => {
     if (m.includes('invalid login credentials')) return "Email o contraseña incorrectos.";
     if (m.includes('user already registered')) return "El email ya está registrado.";
     if (m.includes('at least 6 characters')) return "Mínimo 6 caracteres.";
-    return "Error de acceso. Reintenta.";
+    return "Error de seguridad. Reintenta.";
 };
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session, loading: authLoading } = useAuth();
+  const { session, loading: authLoading, recoveryMode } = useAuth();
   
   const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
@@ -39,11 +39,17 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
+  // Si entramos en modo recuperación forzamos la vista de actualizar password
   useEffect(() => {
-    if (session && !authLoading) {
+    if (recoveryMode) setView('update-password');
+  }, [recoveryMode]);
+
+  useEffect(() => {
+    // Si ya hay sesión y NO estamos en vista de cambio de password, vamos al inicio
+    if (session && !authLoading && view !== 'update-password') {
       navigate('/');
     }
-  }, [session, authLoading, navigate]);
+  }, [session, authLoading, navigate, view]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,21 +57,36 @@ const AuthPage: React.FC = () => {
     setError(null);
 
     try {
+      if (HCAPTCHA_SITE_TOKEN && !captchaToken) {
+          throw new Error("Por favor, completa el captcha.");
+      }
+
       let result;
       if (view === 'login') {
         result = await supabase.auth.signInWithPassword({ 
             email, password,
             options: { captchaToken: captchaToken || undefined }
         });
-      } else {
+      } else if (view === 'register') {
         if (password !== confirmPassword) throw new Error("Las contraseñas no coinciden");
         result = await supabase.auth.signUp({ 
             email, password, 
             options: { captchaToken: captchaToken || undefined } 
         });
         if (!result.error) setSuccessMsg("¡Registro casi listo! Confirma tu email.");
+      } else if (view === 'update-password') {
+          if (password !== confirmPassword) throw new Error("Las contraseñas no coinciden");
+          const { error } = await supabase.auth.updateUser({ 
+              password: password
+          });
+          if (error) throw error;
+          setSuccessMsg("¡Contraseña actualizada! Ya puedes entrar.");
+          // Redirigir suavemente tras éxito
+          setTimeout(() => navigate('/'), 2000);
+          return;
       }
-      if (result.error) throw result.error;
+      
+      if (result?.error) throw result.error;
     } catch (err: any) {
       setError(translateError(err.message));
       setLoading(false);
@@ -74,27 +95,26 @@ const AuthPage: React.FC = () => {
     }
   };
 
-  const handleMagicLink = async (e: React.FormEvent) => {
+  const handleResetRequest = async (e: React.FormEvent) => {
       e.preventDefault();
       setLoading(true);
       setError(null);
 
       try {
-          const { error } = await supabase.auth.signInWithOtp({
-              email,
-              options: {
-                  // Redirigimos a /auth para que el SDK procese el token en el fragmento
-                  emailRedirectTo: window.location.origin + '/auth',
-                  captchaToken: captchaToken || undefined
-              }
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+              // Apuntamos a /auth para que el script de index.html capte el token de recovery
+              redirectTo: window.location.origin + window.location.pathname + 'auth',
+              captchaToken: captchaToken || undefined
           });
           
           if (error) throw error;
-          setSuccessMsg("¡Enlace enviado! Revisa tu bandeja de entrada.");
+          setSuccessMsg("Enlace de recuperación enviado. Revisa tu email.");
       } catch (err: any) {
           setError(translateError(err.message));
       } finally {
           setLoading(false);
+          if(captchaRef.current) captchaRef.current.resetCaptcha();
+          setCaptchaToken(null);
       }
   };
 
@@ -119,10 +139,11 @@ const AuthPage: React.FC = () => {
           </div>
           <h1 className="text-3xl font-black text-slate-900 mb-2">
             {view === 'login' ? 'Hola de nuevo' : 
-             view === 'magic-link' ? 'Acceso Directo' : 'Crear Cuenta'}
+             view === 'forgot-password' ? 'Recuperar Cuenta' : 
+             view === 'update-password' ? 'Nueva Contraseña' : 'Crear Cuenta'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'magic-link' ? 'Entra a la aplicación sin contraseña' : 'Gestiona tus torneos de padel'}
+            {view === 'update-password' ? 'Escribe tu nueva clave de acceso' : 'Gestiona tus torneos de padel'}
           </p>
         </div>
 
@@ -130,7 +151,7 @@ const AuthPage: React.FC = () => {
             <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-8 rounded-3xl text-sm text-center font-bold flex flex-col items-center gap-4 animate-fade-in shadow-sm">
                 <CheckCircle2 size={48} className="text-emerald-500"/> 
                 <p className="text-lg leading-tight">{successMsg}</p>
-                <button onClick={() => switchView('login')} className="mt-4 text-xs underline opacity-70">Volver al inicio</button>
+                {view !== 'update-password' && <button onClick={() => switchView('login')} className="mt-4 text-xs underline opacity-70">Volver al inicio</button>}
             </div>
         ) : (
             <div className="space-y-6">
@@ -140,26 +161,53 @@ const AuthPage: React.FC = () => {
                     </div>
                 )}
 
-                {view === 'magic-link' && (
-                    <form onSubmit={handleMagicLink} className="space-y-4 animate-slide-up">
+                {/* VISTA: SOLICITAR RECUPERACIÓN */}
+                {view === 'forgot-password' && (
+                    <form onSubmit={handleResetRequest} className="space-y-4 animate-slide-up">
                         <div className="relative">
                             <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email"/>
+                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email registrado"/>
                         </div>
                         {HCAPTCHA_SITE_TOKEN && (
                             <div className="flex justify-center my-2 scale-90 min-h-[78px]">
                                 <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                             </div>
                         )}
-                        <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
-                            {loading ? <Loader2 className="animate-spin" size={24} /> : <>RECIBIR ENLACE <Sparkles size={20}/></>}
+                        <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-3 transition-all">
+                            {loading ? <Loader2 className="animate-spin" size={24} /> : 'ENVIAR ENLACE'}
                         </button>
                         <div className="text-center mt-6">
-                            <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al acceso con contraseña</button>
+                            <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al inicio de sesión</button>
                         </div>
                     </form>
                 )}
 
+                {/* VISTA: CAMBIAR CONTRASEÑA (Triggered by recovery token) */}
+                {view === 'update-password' && (
+                    <form onSubmit={handleAuth} className="space-y-4 animate-slide-up">
+                         <div className="relative">
+                            <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                            <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Nueva contraseña"/>
+                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
+                                {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                            </button>
+                        </div>
+                        <div className="relative">
+                            <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                            <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Repite la contraseña"/>
+                        </div>
+                        {HCAPTCHA_SITE_TOKEN && (
+                            <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                                <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                            </div>
+                        )}
+                        <button type="submit" disabled={loading} className="w-full bg-[#575AF9] text-white py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-all">
+                            {loading ? <Loader2 className="animate-spin mx-auto" size={24} /> : 'ACTUALIZAR Y ENTRAR'}
+                        </button>
+                    </form>
+                )}
+
+                {/* VISTA: LOGIN / REGISTRO */}
                 {(view === 'login' || view === 'register') && (
                     <form onSubmit={handleAuth} className="space-y-4">
                         <div className="relative">
@@ -183,7 +231,7 @@ const AuthPage: React.FC = () => {
 
                         {view === 'login' && (
                             <div className="text-right">
-                                <button type="button" onClick={() => switchView('magic-link')} className="text-xs font-bold text-indigo-500 hover:text-indigo-700">¿Entrar sin contraseña?</button>
+                                <button type="button" onClick={() => switchView('forgot-password')} className="text-xs font-bold text-indigo-500 hover:text-indigo-700">¿Olvidaste la contraseña?</button>
                             </div>
                         )}
 
@@ -210,7 +258,7 @@ const AuthPage: React.FC = () => {
                 )}
             </div>
         )}
-        <p className="text-center text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] mt-12">PadelPro Secure Entry v5.0</p>
+        <p className="text-center text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] mt-12">PadelPro Secure Entry v7.0</p>
       </div>
     </div>
   );
