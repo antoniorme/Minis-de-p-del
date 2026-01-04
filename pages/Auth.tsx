@@ -29,15 +29,15 @@ const translateError = (msg: string) => {
     if (msg.includes('at least 6 characters')) return "La contraseña debe tener al menos 6 caracteres.";
     if (msg.includes('Invalid login credentials')) return "Email o contraseña incorrectos.";
     if (msg.includes('User already registered')) return "Este email ya está registrado.";
-    if (msg.includes('captcha') || msg.includes('Captcha')) return "Fallo en la verificación de seguridad (Captcha).";
-    if (msg.includes('refresh_token_not_found')) return "El enlace es inválido o ha caducado. Solicita uno nuevo.";
+    if (msg.includes('captcha') || msg.includes('Captcha')) return "Error de verificación (Captcha).";
+    if (msg.includes('refresh_token_not_found')) return "El enlace es inválido o ha caducado.";
     return msg;
 };
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { session, user: authUser, loginWithDevBypass } = useAuth();
+  const { session, user: authUser, addLog } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -51,22 +51,46 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // DETECCIÓN CRÍTICA DE RECUPERACIÓN
+  // MANEJO MANUAL DE TOKENS (Solución al "Doble Hash")
   useEffect(() => {
-    const fullUrl = window.location.href;
-    const isRecoveryMode = 
-        fullUrl.includes('type=recovery') || 
-        fullUrl.includes('recovery_verified=true') ||
-        fullUrl.includes('access_token=');
+    const handleUrlSession = async () => {
+        const fullUrl = window.location.href;
+        addLog(`Analizando URL: ${fullUrl.split('#')[0]}...`);
 
-    if (isRecoveryMode) {
-        if (view !== 'update-password') {
+        // Extraer tokens manualmente del fragmento (incluso si hay varios #)
+        const hashPart = fullUrl.split('#').pop() || '';
+        const params = new URLSearchParams(hashPart);
+        
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const type = params.get('type') || searchParams.get('type');
+
+        if (accessToken && type === 'recovery') {
+            addLog("MODO RECOVERY: Detectado token en fragmento URL");
             setView('update-password');
+            
+            // Si no hay sesión activa, la forzamos con el token que acabamos de extraer
+            if (!session) {
+                addLog("Estableciendo sesión manual con tokens...");
+                const { error: setSessionError } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken || '',
+                });
+                
+                if (setSessionError) {
+                    addLog(`ERROR SET_SESSION: ${setSessionError.message}`);
+                    setError("No se pudo validar la sesión de recuperación.");
+                } else {
+                    addLog("SESIÓN MANUAL OK: Lista para actualizar contraseña");
+                }
+            }
+        } else if (session && view !== 'update-password') {
+            navigate('/dashboard');
         }
-    } else if (session && view !== 'update-password') {
-        navigate('/dashboard');
-    }
-  }, [session, view, location, navigate]);
+    };
+
+    handleUrlSession();
+  }, [session, searchParams, navigate, addLog, view]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -80,6 +104,7 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
+      addLog("Intentando actualizar contraseña...");
 
       if (password !== confirmPassword) {
           setError("Las contraseñas no coinciden.");
@@ -94,7 +119,7 @@ const AuthPage: React.FC = () => {
       }
 
       try {
-          const { error: updateError } = await supabase.auth.updateUser({ 
+          const { data, error: updateError } = await supabase.auth.updateUser({ 
               password: password 
           }, { 
               captchaToken: captchaToken || undefined 
@@ -102,15 +127,17 @@ const AuthPage: React.FC = () => {
 
           if (updateError) throw updateError;
 
-          setSuccessMsg("¡Contraseña actualizada! Accediendo...");
+          addLog("ACTUALIZACIÓN OK: Contraseña cambiada correctamente");
+          setSuccessMsg("¡Contraseña actualizada! Redirigiendo...");
           
           setTimeout(() => {
-              // Limpieza total y entrada al sistema
+              // Limpieza definitiva para entrar limpio al dashboard
               window.location.href = window.location.origin + window.location.pathname + '#/dashboard';
               window.location.reload();
           }, 1500);
 
       } catch (err: any) {
+          addLog(`ERROR UPDATE: ${err.message}`);
           setError(translateError(err.message));
           setLoading(false);
           if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -162,13 +189,15 @@ const AuthPage: React.FC = () => {
       setError(null);
 
       if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-          setError("Por favor, completa el captcha para solicitar el email.");
+          setError("Completa el captcha para solicitar el email.");
           setLoading(false);
           return;
       }
 
       try {
           const redirectTo = window.location.origin + window.location.pathname + '#/auth?type=recovery';
+          addLog(`SOLICITANDO RECOVERY: Redirect -> ${redirectTo}`);
+          
           const { error } = await supabase.auth.resetPasswordForEmail(email, { 
               redirectTo, 
               captchaToken: captchaToken || undefined 
@@ -205,7 +234,7 @@ const AuthPage: React.FC = () => {
              view === 'update-password' ? 'Nueva Clave' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'update-password' ? 'Establece tu nueva contraseña de acceso' : 'Introduce tus datos'}
+            {view === 'update-password' ? 'Introduce tu nueva contraseña de acceso' : 'Introduce tus datos'}
           </p>
         </div>
 
@@ -243,7 +272,7 @@ const AuthPage: React.FC = () => {
                     )}
 
                     <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
-                        {loading ? <Loader2 className="animate-spin" size={20} /> : <>GUARDAR NUEVA CLAVE <Key size={20}/></>}
+                        {loading ? <Loader2 className="animate-spin" size={20} /> : <>ESTABLECER CLAVE <Key size={20}/></>}
                     </button>
                 </form>
             ) : view === 'recovery' ? (
@@ -308,25 +337,6 @@ const AuthPage: React.FC = () => {
                 <button onClick={() => switchView(view === 'login' ? 'register' : 'login')} className="text-slate-500 text-sm font-medium hover:text-[#575AF9]">
                     {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
                 </button>
-
-                {IS_DEV_ENV && (
-                    <div className="bg-indigo-500/5 p-6 rounded-3xl border border-indigo-500/10 space-y-4 shadow-inner animate-fade-in">
-                        <div className="flex items-center gap-2 text-indigo-400 font-black text-[10px] uppercase tracking-[0.2em] justify-center">
-                            <Terminal size={14}/> Sandbox Dev Bypass
-                        </div>
-                        <div className="grid grid-cols-1 gap-2">
-                            <button onClick={() => loginWithDevBypass('admin')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-[10px] flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all shadow-sm">
-                                <Shield size={14} className="text-blue-500"/> CLUB ADMIN (Bypass)
-                            </button>
-                            <button onClick={() => loginWithDevBypass('superadmin')} className="w-full py-3 bg-slate-900 border border-slate-800 rounded-xl font-bold text-white text-[10px] flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-sm">
-                                <Crown size={14} className="text-amber-400"/> SUPER ADMIN (Bypass)
-                            </button>
-                            <button onClick={() => loginWithDevBypass('player')} className="w-full py-3 bg-emerald-600 border border-emerald-500 rounded-xl font-bold text-white text-[10px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-sm">
-                                <User size={14} className="text-white"/> PLAYER (Bypass)
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
         )}
       </div>

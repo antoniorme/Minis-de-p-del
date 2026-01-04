@@ -15,6 +15,7 @@ interface AuthContextType {
   isOfflineMode: boolean;
   checkUserRole: (uid: string, email?: string) => Promise<UserRole>;
   loginWithDevBypass: (role: 'admin' | 'player' | 'superadmin') => void;
+  addLog: (msg: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   isOfflineMode: false,
   checkUserRole: async () => null,
   loginWithDevBypass: () => {},
+  addLog: () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -39,93 +41,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [authLogs, setAuthLogs] = useState<string[]>([]);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
-  const addLog = (msg: string) => {
+  const addLog = useCallback((msg: string) => {
       console.log(`[AUTH-SYS] ${msg}`);
-      setAuthLogs(prev => [...prev.slice(-20), `${new Date().toLocaleTimeString().split(' ')[0]} > ${msg}`]);
-  };
+      setAuthLogs(prev => [...prev.slice(-30), `${new Date().toLocaleTimeString().split(' ')[0]} > ${msg}`]);
+  }, []);
 
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
-      if (!uid) {
-          addLog("!!! ERROR: No hay UID");
-          return null;
-      }
+      if (!uid) return null;
       
-      addLog(`RECONOCIMIENTO: UID [${uid}]`);
+      addLog(`CHECK ROL: ${userEmail}`);
       
-      // 1. PRIORIDAD MÁXIMA: SUPERADMIN (HARDCODED)
       if (userEmail === 'antoniorme@gmail.com') {
-          addLog("OK: SuperAdmin Maestro Concedido");
           return 'superadmin';
       }
 
-      // 2. PRIORIDAD TABLA: SUPERADMINS DB
       try {
-          addLog("CHECK 1: ¿Eres SuperAdmin en DB?");
-          const { data: saData, error: saError } = await supabase
-              .from('superadmins')
-              .select('id')
-              .eq('email', userEmail)
-              .maybeSingle();
-          
-          if (saData) {
-              addLog("OK: Rol SuperAdmin validado en base de datos");
-              return 'superadmin';
-          }
-          addLog("INFO: No eres SuperAdmin.");
-      } catch (e) {
-          addLog("AVISO: Error comprobando tabla superadmins.");
-      }
+          const { data: saData } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
+          if (saData) return 'superadmin';
+      } catch (e) {}
       
-      // 3. CHECK: CLUB OWNER
       try {
-          addLog("CHECK 2: Buscando en 'clubs'...");
-          const { data: clubData, error: clubError } = await supabase
-              .from('clubs')
-              .select('id, name')
-              .eq('owner_id', uid)
-              .maybeSingle();
+          const { data: clubData } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
+          if (clubData) return 'admin';
+      } catch (e) {}
 
-          if (clubData) {
-              addLog(`OK: Detectado Dueño del Club '${clubData.name}'`);
-              return 'admin';
-          }
-          addLog("INFO: No se encontró vinculación en tabla clubs.");
-      } catch (e) {
-          addLog("AVISO: Fallo en consulta de clubs.");
-      }
-
-      // 4. CHECK: PLAYER PROFILE
-      try {
-          addLog("CHECK 3: Buscando ficha de jugador...");
-          const { data: playerData } = await supabase
-              .from('players')
-              .select('id, name')
-              .eq('profile_user_id', uid)
-              .maybeSingle();
-          
-          if (playerData) {
-              addLog(`OK: Ficha de jugador encontrada: ${playerData.name}`);
-              return 'player';
-          }
-          addLog("INFO: No tienes ficha de jugador vinculada.");
-      } catch (e) {
-          addLog("AVISO: Fallo en consulta de players.");
-      }
-
-      // 5. FALLBACK: JUGADOR NUEVO
-      addLog("RESULTADO: Usuario nuevo, asignando rol 'player'");
       return 'player';
-      
-  }, []);
+  }, [addLog]);
 
   useEffect(() => {
+    // LOG DE URL INICIAL PARA DEBUG
+    const currentHash = window.location.hash;
+    if (currentHash.includes('access_token')) {
+        addLog("DETECTADO: Hash con tokens de acceso en URL");
+    }
+
     const initSession = async () => {
-        addLog("Conectando con Supabase Auth...");
+        addLog("Consultando sesión actual...");
         try {
-            const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+            const { data: { session: currentSession }, error } = await supabase.auth.getSession();
             
-            if (sessionError) {
-                addLog(`!!! ERROR AL RECUPERAR SESIÓN: ${sessionError.message}`);
+            if (error) {
+                addLog(`ERROR SESIÓN: ${error.message}`);
                 setLoading(false);
                 return;
             }
@@ -133,16 +89,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (currentSession) {
                 setSession(currentSession);
                 setUser(currentSession.user);
-                addLog(`Sesión activa: ${currentSession.user.email}`);
+                addLog(`SESIÓN OK: ${currentSession.user.email}`);
                 const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
                 setRole(r);
-                setLoading(false);
             } else {
-                addLog("No hay sesión. Esperando login...");
-                setLoading(false);
+                addLog("INFO: Sin sesión activa");
             }
         } catch (error: any) {
-            addLog(`!!! FALLO EN INICIALIZACIÓN: ${error.message}`);
+            addLog(`FALLO CRÍTICO: ${error.message}`);
+        } finally {
             setLoading(false);
         }
     };
@@ -150,46 +105,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      addLog(`AUTH_EVENT: ${event}`);
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      addLog(`EVENTO_AUTH: ${event}`);
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
           setSession(session);
           if (session?.user) {
               setUser(session.user);
               const r = await checkUserRole(session.user.id, session.user.email);
               setRole(r);
-              setLoading(false);
           }
       }
       if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
           setRole(null);
-          setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [checkUserRole]);
+  }, [checkUserRole, addLog]);
 
   const signOut = async () => {
     setLoading(true);
-    addLog("Saliendo...");
+    addLog("Cerrando sesión...");
     await supabase.auth.signOut();
     window.location.reload();
   };
 
   const loginWithDevBypass = (targetRole: 'admin' | 'player' | 'superadmin') => {
-      addLog(`BYPASS: Forzando acceso como ${targetRole.toUpperCase()}`);
+      addLog(`BYPASS: ${targetRole}`);
       setIsOfflineMode(true);
-      const devUser = { id: `dev-${targetRole}-${Date.now()}`, email: `${targetRole}@sandbox.test` } as User;
+      const devUser = { id: `dev-${targetRole}`, email: `${targetRole}@sandbox.test` } as User;
       setUser(devUser);
-      setSession({ user: devUser, access_token: 'mock-jwt' } as Session);
+      setSession({ user: devUser, access_token: 'mock' } as Session);
       setRole(targetRole);
       setLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, role, authStatus, authLogs, signOut, isOfflineMode, checkUserRole, loginWithDevBypass }}>
+    <AuthContext.Provider value={{ session, user, loading, role, authStatus, authLogs, signOut, isOfflineMode, checkUserRole, loginWithDevBypass, addLog }}>
       {children}
     </AuthContext.Provider>
   );
