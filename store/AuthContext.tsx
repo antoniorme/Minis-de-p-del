@@ -67,7 +67,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [addLog]);
 
   useEffect(() => {
-    // Extractor infalible por Regex
     const getUrlParam = (url: string, key: string) => {
         const reg = new RegExp(`[#?&]${key}=([^&]*)`);
         const match = url.match(reg);
@@ -77,13 +76,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleUrlTokens = async () => {
         const fullUrl = window.location.href;
         if (fullUrl.includes('access_token=')) {
-            addLog("DETECTADOS TOKENS EN URL. ANALIZANDO ESTRUCTURA...");
+            addLog("DETECTADOS TOKENS. CAPTURANDO...");
             
             const accessToken = getUrlParam(fullUrl, 'access_token');
             const refreshToken = getUrlParam(fullUrl, 'refresh_token');
 
             if (accessToken && refreshToken) {
-                addLog("TOKENS CAPTURADOS. FORZANDO SESIÓN...");
+                addLog("TOKENS OK. VALIDANDO SESIÓN...");
                 try {
                     const { data, error } = await supabase.auth.setSession({
                         access_token: accessToken,
@@ -91,55 +90,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     });
                     
                     if (error) {
-                        addLog(`ERROR CRÍTICO: ${error.message}`);
+                        addLog(`ERROR SESIÓN: ${error.message}`);
                     } else if (data.session) {
-                        addLog("¡SESIÓN ESTABLECIDA POR REEMPLAZO!");
+                        addLog("¡SESIÓN FORZADA OK!");
+                        
+                        // LIMPIEZA DE URL: Muy importante para evitar que el estado se ensucie
+                        window.history.replaceState(null, '', window.location.pathname + '#/auth');
+                        
                         setRecoveryMode(true);
                         setSession(data.session);
                         setUser(data.session.user);
                         const r = await checkUserRole(data.session.user.id, data.session.user.email);
                         setRole(r);
+                        return true;
                     }
                 } catch (e: any) {
-                    addLog(`EXCEPCIÓN: ${e.message}`);
+                    addLog(`EXCEPCIÓN URL: ${e.message}`);
                 }
-            } else {
-                addLog("FALLO: Los tokens no se pudieron extraer de la URL.");
             }
         }
+        return false;
     };
 
     const initSession = async () => {
-        addLog("Iniciando secuencia de arranque...");
+        addLog("Iniciando secuencia...");
+        const recoveredFromUrl = await handleUrlTokens();
         
-        // 1. Prioridad absoluta a los tokens de la URL
-        await handleUrlTokens();
-        
-        // 2. Si no hay sesión tras procesar tokens, buscar sesión persistente
-        try {
-            const { data: { session: currentSession } } = await supabase.auth.getSession();
-            if (currentSession && !session) {
-                addLog("SESIÓN PERSISTENTE RECUPERADA");
-                setSession(currentSession);
-                setUser(currentSession.user);
-                const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
-                setRole(r);
+        if (!recoveredFromUrl) {
+            try {
+                const { data: { session: currentSession } } = await supabase.auth.getSession();
+                if (currentSession) {
+                    addLog("SESIÓN PERSISTENTE OK");
+                    setSession(currentSession);
+                    setUser(currentSession.user);
+                    const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
+                    setRole(r);
+                }
+            } catch (error: any) {
+                addLog(`FALLO GET_SESSION: ${error.message}`);
             }
-        } catch (error: any) {
-            addLog(`FALLO GET_SESSION: ${error.message}`);
-        } finally {
-            setLoading(false);
-            addLog("Secuencia de arranque completada.");
         }
+        setLoading(false);
     };
 
     initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      addLog(`EVENTO_AUTH: ${event}`);
+      addLog(`EVENTO_SDK: ${event}`);
       
       if (event === 'PASSWORD_RECOVERY') {
-          addLog("MODO RECUPERACIÓN CONFIRMADO POR SDK");
           setRecoveryMode(true);
       }
 
@@ -147,8 +146,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (session) {
               setSession(session);
               setUser(session.user);
-              const r = await checkUserRole(session.user.id, session.user.email);
-              setRole(r);
+              if (!role) {
+                  const r = await checkUserRole(session.user.id, session.user.email);
+                  setRole(r);
+              }
           }
       }
       if (event === 'SIGNED_OUT') {
@@ -160,17 +161,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => subscription.unsubscribe();
-  }, [checkUserRole, addLog]);
+  }, [checkUserRole, addLog, role]);
 
   const signOut = async () => {
     setLoading(true);
-    addLog("Cerrando sesión...");
+    addLog("Saliendo...");
     await supabase.auth.signOut();
     window.location.reload();
   };
 
   const loginWithDevBypass = (role: 'admin' | 'player' | 'superadmin') => {
-      addLog(`BYPASS: ${role}`);
       setIsOfflineMode(true);
       const devUser = { id: `dev-${role}`, email: `${role}@sandbox.test` } as User;
       setUser(devUser);

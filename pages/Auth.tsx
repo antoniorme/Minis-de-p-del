@@ -27,7 +27,7 @@ const translateError = (msg: string) => {
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session, authLogs, addLog, recoveryMode, setRecoveryMode } = useAuth();
+  const { session, authLogs, addLog, recoveryMode, role, setRecoveryMode } = useAuth();
   
   const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
@@ -41,26 +41,11 @@ const AuthPage: React.FC = () => {
   const captchaRef = useRef<HCaptcha>(null);
   const [showMonitor, setShowMonitor] = useState(true);
 
-  // DETECTOR DE SESIÓN PARA RECUPERACIÓN
   useEffect(() => {
-    const hasTokens = window.location.href.includes('access_token=');
-    
-    // Si tenemos sesión Y hay tokens en la URL -> Forzar vista de actualización
-    if (session && hasTokens) {
-        addLog("SESIÓN DETECTADA CON TOKENS. ACTIVANDO FORMULARIO...");
-        
-        // Limpiar URL
-        window.history.replaceState(null, '', window.location.pathname + '#/auth');
-        
-        setView('update-password');
-        setRecoveryMode(false);
-    }
-    
-    // Fallback por si el SDK sí disparó el evento pero la URL ya estaba limpia
     if (recoveryMode) {
         setView('update-password');
     }
-  }, [session, recoveryMode, addLog, setRecoveryMode]);
+  }, [recoveryMode]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -74,7 +59,7 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
-      addLog("ACTUALIZANDO CLAVE...");
+      addLog("INICIANDO ACTUALIZACIÓN...");
 
       if (password !== confirmPassword) {
           setError("Las contraseñas no coinciden.");
@@ -83,24 +68,27 @@ const AuthPage: React.FC = () => {
       }
 
       try {
-          const { error: updateError } = await supabase.auth.updateUser({ 
+          addLog("Llamando a API Supabase...");
+          const { data, error: updateError } = await supabase.auth.updateUser({ 
               password: password 
           });
 
           if (updateError) throw updateError;
 
-          addLog("¡ÉXITO! REDIRIGIENDO...");
+          addLog("API RESPONDIÓ OK.");
           setSuccessMsg("¡Contraseña actualizada!");
           
+          // Esperar un poco para que el usuario vea el éxito
           setTimeout(() => {
-              window.location.href = window.location.origin + window.location.pathname + '#/dashboard';
-              window.location.reload();
+              addLog("Redirigiendo...");
+              const target = (role === 'admin' || role === 'superadmin') ? '/dashboard' : '/p/dashboard';
+              navigate(target);
+              // Como la sesión ya cambió en AuthContext, solo navegamos.
           }, 1500);
 
       } catch (err: any) {
-          addLog(`FALLO: ${err.message}`);
+          addLog(`ERROR API: ${err.message}`);
           setError(translateError(err.message));
-      } finally {
           setLoading(false);
       }
   };
@@ -139,8 +127,8 @@ const AuthPage: React.FC = () => {
       setError(null);
 
       try {
-          const redirectTo = window.location.origin + window.location.pathname + '#/auth';
-          addLog(`Solicitando reset...`);
+          const redirectTo = `${window.location.origin}${window.location.pathname}#/auth?type=recovery`;
+          addLog(`Reset para: ${email}`);
           
           const { error } = await supabase.auth.resetPasswordForEmail(email, { 
               redirectTo, 
@@ -149,15 +137,12 @@ const AuthPage: React.FC = () => {
           
           if (error) throw error;
           setSuccessMsg("Enlace enviado. Mira tu correo.");
+          setLoading(false);
       } catch (err: any) {
           setError(translateError(err.message));
-      } finally {
           setLoading(false);
       }
   };
-
-  // Solo mostramos el loader si hay tokens pero el AuthContext aún no ha forzado la sesión
-  const isWaitingForSession = window.location.href.includes('access_token=') && !session;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6 overflow-x-hidden">
@@ -176,121 +161,103 @@ const AuthPage: React.FC = () => {
              view === 'update-password' ? 'Seguridad' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {isWaitingForSession ? 'Sincronizando sesión...' : 'Introduce tus datos'}
+            {view === 'update-password' ? 'Establece tu nueva clave' : 'Introduce tus datos'}
           </p>
         </div>
 
-        {isWaitingForSession ? (
-            <div className="bg-white border border-slate-100 p-10 rounded-[2rem] shadow-xl text-center space-y-4 animate-fade-in">
-                <Loader2 className="animate-spin text-[#575AF9] mx-auto" size={48}/>
-                <p className="text-slate-600 font-bold">Validando acceso...</p>
-                <p className="text-slate-400 text-xs">Entrando en modo seguro.</p>
+        {successMsg && (
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm text-center font-bold flex items-center justify-center gap-2 animate-fade-in">
+                <CheckCircle2 size={18}/> {successMsg}
             </div>
-        ) : (
-            <>
-                {successMsg && (
-                    <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm text-center font-bold flex items-center justify-center gap-2 animate-fade-in">
-                        <CheckCircle2 size={18}/> {successMsg}
-                    </div>
-                )}
-
-                {error && (
-                <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm text-center font-medium shadow-sm flex items-center gap-2 animate-fade-in">
-                    <ShieldAlert size={18} className="shrink-0"/> {error}
-                </div>
-                )}
-
-                <div className="space-y-4">
-                    {view === 'update-password' ? (
-                        <form onSubmit={handleUpdatePassword} className="space-y-4">
-                            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
-                                <ShieldCheck className="text-indigo-600" size={24}/>
-                                <div className="text-[10px] font-bold text-indigo-800 leading-tight uppercase">
-                                    Sesión Validada.<br/>Establece tu nueva clave.
-                                </div>
-                            </div>
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                                <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña" autoFocus/>
-                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
-                                    {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                                </button>
-                            </div>
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                                <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Contraseña"/>
-                            </div>
-
-                            <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
-                                {loading ? <Loader2 className="animate-spin" size={20} /> : <>GUARDAR CLAVE <Key size={20}/></>}
-                            </button>
-                        </form>
-                    ) : view === 'recovery' ? (
-                        <form onSubmit={handlePasswordResetRequest} className="space-y-4">
-                            <div className="relative">
-                                <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email"/>
-                            </div>
-                            {HCAPTCHA_SITE_TOKEN && (
-                                <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                                    <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
-                                </div>
-                            )}
-                            <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
-                                {loading ? <Loader2 className="animate-spin" size={18} /> : <>MANDAR ENLACE <Send size={18}/></>}
-                            </button>
-                            <div className="text-center mt-4">
-                                <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al Login</button>
-                            </div>
-                        </form>
-                    ) : (
-                        <form onSubmit={handleAuth} className="space-y-4">
-                        <div className="relative">
-                            <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Email"/>
-                        </div>
-                        <div className="relative">
-                            <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Contraseña"/>
-                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
-                                {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                            </button>
-                        </div>
-
-                        {view === 'register' && (
-                            <div className="relative animate-slide-up">
-                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                                <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Confirmar contraseña"/>
-                            </div>
-                        )}
-
-                        {view === 'login' && (
-                            <div className="text-right">
-                                <button type="button" onClick={() => switchView('recovery')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">¿Olvidaste tu contraseña?</button>
-                            </div>
-                        )}
-
-                        {HCAPTCHA_SITE_TOKEN && (
-                            <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                                <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
-                            </div>
-                        )}
-                        <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg active:scale-95 transition-all">
-                            {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
-                        </button>
-                        </form>
-                    )}
-                </div>
-
-                {view !== 'update-password' && (
-                    <div className="mt-8 text-center">
-                        <button onClick={() => switchView(view === 'login' ? 'register' : 'login')} className="text-slate-500 text-sm font-medium hover:text-[#575AF9]">
-                            {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
-                        </button>
-                    </div>
-                )}
-            </>
         )}
+
+        {error && (
+        <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm text-center font-medium shadow-sm flex items-center gap-2 animate-fade-in">
+            <ShieldAlert size={18} className="shrink-0"/> {error}
+        </div>
+        )}
+
+        <div className="space-y-4">
+            {view === 'update-password' ? (
+                <form onSubmit={handleUpdatePassword} className="space-y-4">
+                    <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
+                        <ShieldCheck className="text-indigo-600" size={24}/>
+                        <div className="text-[10px] font-bold text-indigo-800 leading-tight uppercase">
+                            Sesión Validada.<br/>Establece tu nueva clave.
+                        </div>
+                    </div>
+                    <div className="relative">
+                        <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                        <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña" autoFocus/>
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
+                            {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                        </button>
+                    </div>
+                    <div className="relative">
+                        <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                        <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Contraseña"/>
+                    </div>
+
+                    <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
+                        {loading ? <Loader2 className="animate-spin" size={20} /> : <>GUARDAR CLAVE <Key size={20}/></>}
+                    </button>
+                </form>
+            ) : view === 'recovery' ? (
+                <form onSubmit={handlePasswordResetRequest} className="space-y-4">
+                    <div className="relative">
+                        <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
+                        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email"/>
+                    </div>
+                    {HCAPTCHA_SITE_TOKEN && (
+                        <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                            <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                        </div>
+                    )}
+                    <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
+                        {loading ? <Loader2 className="animate-spin" size={18} /> : <>MANDAR ENLACE <Send size={18}/></>}
+                    </button>
+                    <div className="text-center mt-4">
+                        <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al Login</button>
+                    </div>
+                </form>
+            ) : (
+                <form onSubmit={handleAuth} className="space-y-4">
+                <div className="relative">
+                    <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
+                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Email"/>
+                </div>
+                <div className="relative">
+                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                    <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Contraseña"/>
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
+                        {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                    </button>
+                </div>
+
+                {view === 'register' && (
+                    <div className="relative animate-slide-up">
+                        <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                        <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Confirmar contraseña"/>
+                    </div>
+                )}
+
+                {view === 'login' && (
+                    <div className="text-right">
+                        <button type="button" onClick={() => switchView('recovery')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">¿Olvidaste tu contraseña?</button>
+                    </div>
+                )}
+
+                {HCAPTCHA_SITE_TOKEN && (
+                    <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                    </div>
+                )}
+                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg active:scale-95 transition-all">
+                    {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
+                </button>
+                </form>
+            )}
+        </div>
 
         <div className="mt-12 bg-[#0A0A0B] rounded-3xl border border-white/5 shadow-2xl overflow-hidden animate-slide-up">
             <button 
@@ -300,14 +267,14 @@ const AuthPage: React.FC = () => {
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
                     <Terminal size={14}/> Consola de Identidad
                 </div>
-                <Activity size={14} className={isWaitingForSession || loading ? "animate-pulse" : ""}/>
+                <Activity size={14} className={loading ? "animate-pulse" : ""}/>
             </button>
             
             {showMonitor && (
                 <div className="p-5 font-mono text-[10px] space-y-1.5 h-40 overflow-y-auto custom-scrollbar leading-relaxed">
                     {authLogs.map((log, i) => {
-                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('FALLO') || log.includes('TIMEOUT');
-                        const isSuccess = log.includes('¡SESIÓN FORZADA') || log.includes('ÉXITO');
+                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('FALLO');
+                        const isSuccess = log.includes('OK') || log.includes('ÉXITO');
                         return (
                             <div key={i} className={`${isError ? 'text-rose-400' : isSuccess ? 'text-emerald-400' : 'text-slate-500'} flex gap-2`}>
                                 <span className="opacity-30 shrink-0">{i + 1}</span>
