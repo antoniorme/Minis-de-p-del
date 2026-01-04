@@ -39,7 +39,6 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // Redirección inmediata si se detecta sesión (ej. tras pulsar el enlace del email)
   useEffect(() => {
     if (session && !authLoading) {
       navigate('/');
@@ -81,18 +80,17 @@ const AuthPage: React.FC = () => {
       setError(null);
 
       try {
-          // Usamos signInWithOtp para enviar el enlace de acceso directo
           const { error } = await supabase.auth.signInWithOtp({
               email,
               options: {
-                  // Apuntamos a la raíz, el script en index.html se encargará de rescatar los tokens
-                  emailRedirectTo: window.location.origin + window.location.pathname,
+                  // Redirigimos a /auth para que el SDK procese el token en el fragmento
+                  emailRedirectTo: window.location.origin + '/auth',
                   captchaToken: captchaToken || undefined
               }
           });
           
           if (error) throw error;
-          setSuccessMsg("¡Enlace enviado! Revisa tu bandeja de entrada para entrar.");
+          setSuccessMsg("¡Enlace enviado! Revisa tu bandeja de entrada.");
       } catch (err: any) {
           setError(translateError(err.message));
       } finally {
@@ -124,7 +122,7 @@ const AuthPage: React.FC = () => {
              view === 'magic-link' ? 'Acceso Directo' : 'Crear Cuenta'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'magic-link' ? 'Entra a la aplicación sin contraseña' : 'Introduce tus datos para continuar'}
+            {view === 'magic-link' ? 'Entra a la aplicación sin contraseña' : 'Gestiona tus torneos de padel'}
           </p>
         </div>
 
@@ -142,7 +140,6 @@ const AuthPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* VISTA: ENLACE MÁGICO / ACCESO DIRECTO */}
                 {view === 'magic-link' && (
                     <form onSubmit={handleMagicLink} className="space-y-4 animate-slide-up">
                         <div className="relative">
@@ -163,7 +160,6 @@ const AuthPage: React.FC = () => {
                     </form>
                 )}
 
-                {/* VISTA: LOGIN / REGISTRO */}
                 {(view === 'login' || view === 'register') && (
                     <form onSubmit={handleAuth} className="space-y-4">
                         <div className="relative">
@@ -214,8 +210,7 @@ const AuthPage: React.FC = () => {
                 )}
             </div>
         )}
-        
-        <p className="text-center text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] mt-12">PadelPro Secure Entry v3.1</p>
+        <p className="text-center text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] mt-12">PadelPro Secure Entry v5.0</p>
       </div>
     </div>
   );
