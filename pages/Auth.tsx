@@ -25,12 +25,19 @@ const IS_DEV_ENV =
   hostname.includes('idx.google.com');
 
 const translateError = (msg: string) => {
-    if (msg.includes('different from the old password')) return "La nueva contraseña debe ser diferente a la anterior.";
-    if (msg.includes('at least 6 characters')) return "La contraseña debe tener al menos 6 caracteres.";
-    if (msg.includes('Invalid login credentials')) return "Email o contraseña incorrectos.";
-    if (msg.includes('User already registered')) return "Este email ya está registrado.";
-    if (msg.includes('captcha') || msg.includes('Captcha')) return "Error de verificación (Captcha).";
-    if (msg.includes('refresh_token_not_found')) return "El enlace es inválido o ha caducado.";
+    const m = msg.toLowerCase();
+    if (m.includes('different from the old password') || m.includes('new password should be different')) 
+        return "La nueva contraseña debe ser diferente a la anterior.";
+    if (m.includes('at least 6 characters')) 
+        return "La contraseña debe tener al menos 6 caracteres.";
+    if (m.includes('invalid login credentials')) 
+        return "Email o contraseña incorrectos.";
+    if (m.includes('user already registered')) 
+        return "Este email ya está registrado.";
+    if (m.includes('captcha')) 
+        return "Error de verificación (Captcha).";
+    if (m.includes('refresh_token_not_found') || m.includes('expired')) 
+        return "El enlace es inválido o ha caducado.";
     return msg;
 };
 
@@ -65,13 +72,11 @@ const AuthPage: React.FC = () => {
         const type = params.get('type') || searchParams.get('type');
 
         if (accessToken && (type === 'recovery' || fullUrl.includes('type=recovery'))) {
-            // Seteamos la vista inmediatamente
             if (view !== 'update-password') {
                 setView('update-password');
                 addLog("CAMBIANDO A VISTA DE NUEVA CLAVE.");
             }
             
-            // LÓGICA DE VALIDACIÓN
             if (!session) {
                 if (!validatingRecovery) {
                     setValidatingRecovery(true);
@@ -96,7 +101,6 @@ const AuthPage: React.FC = () => {
                     }
                 }
             } else {
-                // SI YA HAY SESIÓN (porque Supabase la detectó o la inyectamos arriba)
                 if (validatingRecovery) {
                     addLog("SESIÓN CONFIRMADA. LISTO PARA CAMBIAR CLAVE.");
                     setValidatingRecovery(false);
@@ -128,6 +132,12 @@ const AuthPage: React.FC = () => {
           return;
       }
 
+      if (password.length < 6) {
+          setError("Mínimo 6 caracteres.");
+          setLoading(false);
+          return;
+      }
+
       if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
           setError("Por favor, completa el captcha.");
           setLoading(false);
@@ -135,13 +145,17 @@ const AuthPage: React.FC = () => {
       }
 
       try {
+          addLog("Llamando a supabase.auth.updateUser...");
           const { error: updateError } = await supabase.auth.updateUser({ 
               password: password 
           }, { 
               captchaToken: captchaToken || undefined 
           });
 
-          if (updateError) throw updateError;
+          if (updateError) {
+              addLog(`RESPUESTA SUPABASE (ERROR): ${updateError.message}`);
+              throw updateError;
+          }
 
           addLog("CONTRASEÑA CAMBIADA CON ÉXITO.");
           setSuccessMsg("¡Contraseña actualizada! Entrando...");
@@ -152,11 +166,13 @@ const AuthPage: React.FC = () => {
           }, 1500);
 
       } catch (err: any) {
-          addLog(`ERROR UPDATE: ${err.message}`);
+          addLog(`FALLO EN UPDATE: ${err.message}`);
           setError(translateError(err.message));
-          setLoading(false);
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
+      } finally {
+          setLoading(false);
+          addLog("Operación finalizada.");
       }
   };
 
@@ -275,37 +291,36 @@ const AuthPage: React.FC = () => {
 
                 <div className="space-y-4">
                     {view === 'update-password' ? (
-                        !error && (
-                            <form onSubmit={handleUpdatePassword} className="space-y-4">
-                                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
-                                    <ShieldCheck className="text-indigo-600" size={24}/>
-                                    <div className="text-[10px] font-bold text-indigo-800 leading-tight uppercase">
-                                        Identidad verificada.<br/>Establece tu nueva contraseña.
-                                    </div>
+                        /* VISTA DE NUEVA CONTRASEÑA */
+                        <form onSubmit={handleUpdatePassword} className="space-y-4">
+                            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
+                                <ShieldCheck className="text-indigo-600" size={24}/>
+                                <div className="text-[10px] font-bold text-indigo-800 leading-tight uppercase">
+                                    Identidad verificada.<br/>Establece tu nueva contraseña.
                                 </div>
-                                <div className="relative">
-                                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                                    <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña" autoFocus/>
-                                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
-                                        {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                                    </button>
-                                </div>
-                                <div className="relative">
-                                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                                    <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Contraseña"/>
-                                </div>
-
-                                {HCAPTCHA_SITE_TOKEN && (
-                                    <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
-                                    </div>
-                                )}
-
-                                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
-                                    {loading ? <Loader2 className="animate-spin" size={20} /> : <>ESTABLECER CLAVE <Key size={20}/></>}
+                            </div>
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                                <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña" autoFocus/>
+                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
+                                    {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                                 </button>
-                            </form>
-                        )
+                            </div>
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                                <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Contraseña"/>
+                            </div>
+
+                            {HCAPTCHA_SITE_TOKEN && (
+                                <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                                    <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                                </div>
+                            )}
+
+                            <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
+                                {loading ? <Loader2 className="animate-spin" size={20} /> : <>ESTABLECER CLAVE <Key size={20}/></>}
+                            </button>
+                        </form>
                     ) : view === 'recovery' ? (
                         <form onSubmit={handlePasswordResetRequest} className="space-y-4">
                             <div className="relative">
@@ -387,7 +402,7 @@ const AuthPage: React.FC = () => {
             {showMonitor && (
                 <div className="p-5 font-mono text-[10px] space-y-1.5 h-40 overflow-y-auto custom-scrollbar leading-relaxed">
                     {authLogs.map((log, i) => {
-                        const isError = log.includes('!!!') || log.includes('ERROR');
+                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('FALLO');
                         const isSuccess = log.includes('CONFIRMADA') || log.includes('ÉXITO');
                         return (
                             <div key={i} className={`${isError ? 'text-rose-400' : isSuccess ? 'text-emerald-400' : 'text-slate-500'} flex gap-2`}>
