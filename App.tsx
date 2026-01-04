@@ -52,16 +52,15 @@ const IS_DEV_ENV =
   hostname.includes('idx.google.com');
 
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
-  const { user, loading, role } = useAuth();
+  const { user, loading, role, recoveryMode } = useAuth();
   const { clubData } = useHistory();
   const location = useLocation();
 
   if (loading) return null; 
   if (!user) return <Navigate to="/" replace />;
   
-  // EXCEPCIÓN DE RECUPERACIÓN
-  const fullUrl = window.location.href;
-  if (fullUrl.includes('type=recovery') || fullUrl.includes('access_token=')) {
+  // EXCEPCIÓN DE RECUPERACIÓN: Si estamos en modo recovery, no aplicar protecciones normales
+  if (recoveryMode) {
       return <>{children}</>;
   }
 
@@ -74,14 +73,15 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 };
 
 const AppRoutes = () => {
-  const { user, role, loading, authStatus, authLogs, loginWithDevBypass, signOut } = useAuth();
+  const { user, role, loading, authStatus, authLogs, signOut, recoveryMode } = useAuth();
   const location = useLocation();
 
   const fullUrl = window.location.href;
-  // DETECCIÓN CRÍTICA: Si hay tokens en la URL, forzamos AuthPage ignorando el "loading"
-  const isRecoveryMode = fullUrl.includes('type=recovery') || fullUrl.includes('access_token=');
+  // Combinamos detección por URL y detección por estado del contexto
+  const isRecoveryMode = recoveryMode || fullUrl.includes('type=recovery') || fullUrl.includes('access_token=');
   const isAuthPage = location.pathname.includes('/auth');
 
+  // Si estamos en medio de una recuperación, FORZAMOS AuthPage independientemente del usuario logueado
   if (isRecoveryMode) {
       return (
           <Routes>

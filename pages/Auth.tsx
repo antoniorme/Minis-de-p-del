@@ -43,9 +43,11 @@ const AuthPage: React.FC = () => {
 
   useEffect(() => {
     if (recoveryMode) {
+        addLog("VISTA: ACTIVANDO FORMULARIO DE RECUPERACIÓN");
         setView('update-password');
+        setLoading(false);
     }
-  }, [recoveryMode]);
+  }, [recoveryMode, addLog]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -69,7 +71,15 @@ const AuthPage: React.FC = () => {
 
       try {
           addLog("Llamando a API Supabase...");
-          const { data, error: updateError } = await supabase.auth.updateUser({ 
+          
+          // Aseguramos que tenemos sesión antes de intentar actualizar
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          if (!currentSession) {
+              addLog("!!! SESIÓN PERDIDA ANTES DE ACTUALIZAR");
+              throw new Error("Sesión caducada. Solicita un nuevo enlace.");
+          }
+
+          const { error: updateError } = await supabase.auth.updateUser({ 
               password: password 
           });
 
@@ -78,12 +88,14 @@ const AuthPage: React.FC = () => {
           addLog("API RESPONDIÓ OK.");
           setSuccessMsg("¡Contraseña actualizada!");
           
-          // Esperar un poco para que el usuario vea el éxito
+          // Desactivamos modo recovery para que App.tsx nos deje navegar
+          setRecoveryMode(false);
+
           setTimeout(() => {
               addLog("Redirigiendo...");
+              // Si no hay rol todavía, mandamos al dashboard de jugador por defecto
               const target = (role === 'admin' || role === 'superadmin') ? '/dashboard' : '/p/dashboard';
               navigate(target);
-              // Como la sesión ya cambió en AuthContext, solo navegamos.
           }, 1500);
 
       } catch (err: any) {

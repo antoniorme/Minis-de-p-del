@@ -94,14 +94,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     } else if (data.session) {
                         addLog("¡SESIÓN FORZADA OK!");
                         
-                        // LIMPIEZA DE URL: Muy importante para evitar que el estado se ensucie
-                        window.history.replaceState(null, '', window.location.pathname + '#/auth');
-                        
+                        // IMPORTANTE: Marcamos recovery ANTES de limpiar la URL
                         setRecoveryMode(true);
+                        
                         setSession(data.session);
                         setUser(data.session.user);
                         const r = await checkUserRole(data.session.user.id, data.session.user.email);
                         setRole(r);
+
+                        // Limpiamos URL pero el estado recoveryMode ya es true
+                        window.history.replaceState(null, '', window.location.pathname + '#/auth');
                         return true;
                     }
                 } catch (e: any) {
@@ -130,7 +132,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 addLog(`FALLO GET_SESSION: ${error.message}`);
             }
         }
-        setLoading(false);
+        
+        // Pequeño retardo para evitar parpadeos de redirección
+        setTimeout(() => {
+            setLoading(false);
+        }, 300);
     };
 
     initSession();
@@ -139,6 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addLog(`EVENTO_SDK: ${event}`);
       
       if (event === 'PASSWORD_RECOVERY') {
+          addLog("EVENTO RECOVERY DETECTADO");
           setRecoveryMode(true);
       }
 
