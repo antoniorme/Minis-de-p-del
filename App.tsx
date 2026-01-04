@@ -18,7 +18,7 @@ import ActiveTournament from './pages/ActiveTournament';
 import Results from './pages/Results';
 import Landing from './pages/Landing';
 import AuthPage from './pages/Auth';
-import InternalRecovery from './pages/InternalRecovery'; // NUEVA PÁGINA
+import InternalRecovery from './pages/InternalRecovery';
 import PlayerManager from './pages/PlayerManager';
 import History from './pages/History';
 import ClubProfile from './pages/ClubProfile';
@@ -50,12 +50,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   const location = useLocation();
 
   if (loading) return null; 
-  if (!user) {
-      // Si estamos en medio de una recuperación, el user debería existir ya que Supabase procesa el hash
-      // pero por si acaso, si hay tokens en la URL no redirigimos todavía al login
-      if (window.location.href.includes('access_token=')) return null;
-      return <Navigate to="/" replace />;
-  }
+  if (!user) return <Navigate to="/" replace />;
   
   if (role === 'pending' && location.pathname !== '/pending') return <Navigate to="/pending" replace />;
   if (requireSuperAdmin && role !== 'superadmin') return <Navigate to="/dashboard" replace />;
@@ -71,13 +66,13 @@ const AppRoutes = () => {
   const navigate = useNavigate();
   const isAuthPage = location.pathname.includes('/auth');
 
-  // EFECTO DE REDIRECCIÓN INTERNA PARA RECUPERACIÓN
+  // REDIRECCIÓN INTERNA PARA RECUPERACIÓN
   useEffect(() => {
-      if (window.location.href.includes('type=recovery') || window.location.href.includes('access_token=')) {
-          // Si detectamos los tokens, nos movemos a la ruta interna de la app
-          // Esto limpia la URL automáticamente y nos lleva a la página con el botón
-          if (location.pathname !== '/internal-recovery') {
-              navigate('/internal-recovery', { replace: true });
+      const fullUrl = window.location.href;
+      if (fullUrl.includes('access_token=') || fullUrl.includes('type=recovery')) {
+          if (location.pathname !== '/recovery-confirm') {
+              // Navegamos a la ruta interna una vez que el usuario está dentro
+              navigate('/recovery-confirm', { replace: true });
           }
       }
   }, [location.pathname, navigate]);
@@ -107,7 +102,7 @@ const AppRoutes = () => {
     <Routes>
         <Route path="/" element={getHomeRoute()} />
         <Route path="/auth" element={<AuthPage />} />
-        <Route path="/internal-recovery" element={<ProtectedRoute><InternalRecovery /></ProtectedRoute>} />
+        <Route path="/recovery-confirm" element={<ProtectedRoute><InternalRecovery /></ProtectedRoute>} />
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />

@@ -49,16 +49,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initSession = async () => {
-        try {
-            const { data: { session: currentSession } } = await supabase.auth.getSession();
-            if (currentSession) {
-                setSession(currentSession);
-                setUser(currentSession.user);
-                const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
-                setRole(r);
+        const fullUrl = window.location.href;
+        
+        // Detección manual de tokens para evitar problemas de HashRouter
+        const getParam = (key: string) => {
+            const reg = new RegExp(`[#?&]${key}=([^&]*)`);
+            const match = fullUrl.match(reg);
+            return match ? match[1] : null;
+        };
+
+        const accessToken = getParam('access_token');
+        const refreshToken = getParam('refresh_token');
+
+        if (accessToken && refreshToken) {
+            try {
+                const { data } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken
+                });
+                if (data.session) {
+                    setSession(data.session);
+                    setUser(data.session.user);
+                    const r = await checkUserRole(data.session.user.id, data.session.user.email);
+                    setRole(r);
+                }
+            } catch (e) {
+                console.error("Error setting session from URL", e);
             }
-        } catch (error: any) {
-            console.error("Auth Load Error", error);
+        } else {
+            try {
+                const { data: { session: currentSession } } = await supabase.auth.getSession();
+                if (currentSession) {
+                    setSession(currentSession);
+                    setUser(currentSession.user);
+                    const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
+                    setRole(r);
+                }
+            } catch (error: any) {
+                console.error("Auth Load Error", error);
+            }
         }
         setLoading(false);
     };
