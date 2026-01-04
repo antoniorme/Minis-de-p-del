@@ -59,7 +59,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   if (loading) return null; 
   if (!user) return <Navigate to="/" replace />;
   
-  // EXCEPCIÓN DE RECUPERACIÓN: Si estamos en modo recovery, no bloqueamos la ruta /auth
+  // EXCEPCIÓN DE RECUPERACIÓN
   const fullUrl = window.location.href;
   if (fullUrl.includes('type=recovery') || fullUrl.includes('access_token=')) {
       return <>{children}</>;
@@ -78,10 +78,10 @@ const AppRoutes = () => {
   const location = useLocation();
 
   const fullUrl = window.location.href;
+  // DETECCIÓN CRÍTICA: Si hay tokens en la URL, forzamos AuthPage ignorando el "loading"
   const isRecoveryMode = fullUrl.includes('type=recovery') || fullUrl.includes('access_token=');
   const isAuthPage = location.pathname.includes('/auth');
 
-  // Si estamos en modo recuperación, forzamos AuthPage ignorando el estado de carga del AuthContext
   if (isRecoveryMode) {
       return (
           <Routes>
@@ -126,11 +126,10 @@ const AppRoutes = () => {
                 
                 <div className="space-y-1.5 h-64 overflow-y-auto no-scrollbar text-[11px] leading-relaxed">
                     {authLogs.map((log, i) => {
-                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('Fallo');
-                        const isSuccess = log.includes('OK') || log.includes('Detectado') || log.includes('Concedido');
-                        const isInfo = log.includes('Intentando') || log.includes('Buscando');
+                        const isError = log.includes('!!!') || log.includes('ERROR');
+                        const isSuccess = log.includes('OK') || log.includes('DETECTADO');
                         return (
-                            <div key={i} className={`${isError ? 'text-rose-400 bg-rose-400/5' : isSuccess ? 'text-emerald-400' : isInfo ? 'text-blue-400' : 'text-slate-400'} px-2 py-1 rounded`}>
+                            <div key={i} className={`${isError ? 'text-rose-400 bg-rose-400/5' : isSuccess ? 'text-emerald-400' : 'text-slate-400'} px-2 py-1 rounded`}>
                                 {log}
                             </div>
                         );
@@ -147,17 +146,6 @@ const AppRoutes = () => {
                     <button onClick={() => signOut()} className="flex-1 py-3 bg-white/5 text-white border border-white/10 rounded-xl font-black text-[10px] flex items-center justify-center gap-2">
                         <ShieldAlert size={12}/> CERRAR SESIÓN
                     </button>
-                </div>
-
-                <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl mt-4">
-                    <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Terminal size={14}/> Acceso Rápido Sandbox
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                        <button onClick={() => loginWithDevBypass('admin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5">CLUB</button>
-                        <button onClick={() => loginWithDevBypass('superadmin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5">SA</button>
-                        <button onClick={() => loginWithDevBypass('player')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5">PLAYER</button>
-                    </div>
                 </div>
             </div>
             <p className="text-white/20 text-center text-[9px] font-bold uppercase tracking-[0.3em]">{authStatus}</p>
