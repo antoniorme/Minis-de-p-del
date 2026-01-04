@@ -67,49 +67,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [addLog]);
 
   useEffect(() => {
+    // Extractor infalible por Regex
+    const getUrlParam = (url: string, key: string) => {
+        const reg = new RegExp(`[#?&]${key}=([^&]*)`);
+        const match = url.match(reg);
+        return match ? match[1] : null;
+    };
+
     const handleUrlTokens = async () => {
         const fullUrl = window.location.href;
         if (fullUrl.includes('access_token=')) {
-            addLog("DETECTADOS TOKENS EN URL. PROCESANDO...");
+            addLog("DETECTADOS TOKENS EN URL. ANALIZANDO ESTRUCTURA...");
             
-            // Extraer tokens manualmente porque HashRouter rompe la detección automática
-            const params = new URLSearchParams(fullUrl.split('#')[1].split('?')[1] || fullUrl.split('?')[1]);
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
+            const accessToken = getUrlParam(fullUrl, 'access_token');
+            const refreshToken = getUrlParam(fullUrl, 'refresh_token');
 
             if (accessToken && refreshToken) {
-                addLog("FORZANDO SET_SESSION...");
-                const { data, error } = await supabase.auth.setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken
-                });
-                
-                if (error) {
-                    addLog(`ERROR SET_SESSION: ${error.message}`);
-                } else if (data.session) {
-                    addLog("¡SESIÓN FORZADA CON ÉXITO!");
-                    setRecoveryMode(true);
+                addLog("TOKENS CAPTURADOS. FORZANDO SESIÓN...");
+                try {
+                    const { data, error } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken
+                    });
+                    
+                    if (error) {
+                        addLog(`ERROR CRÍTICO: ${error.message}`);
+                    } else if (data.session) {
+                        addLog("¡SESIÓN ESTABLECIDA POR REEMPLAZO!");
+                        setRecoveryMode(true);
+                        setSession(data.session);
+                        setUser(data.session.user);
+                        const r = await checkUserRole(data.session.user.id, data.session.user.email);
+                        setRole(r);
+                    }
+                } catch (e: any) {
+                    addLog(`EXCEPCIÓN: ${e.message}`);
                 }
+            } else {
+                addLog("FALLO: Los tokens no se pudieron extraer de la URL.");
             }
         }
     };
 
     const initSession = async () => {
-        addLog("Consultando sesión actual...");
-        await handleUrlTokens(); // Intentar capturar tokens primero
+        addLog("Iniciando secuencia de arranque...");
         
+        // 1. Prioridad absoluta a los tokens de la URL
+        await handleUrlTokens();
+        
+        // 2. Si no hay sesión tras procesar tokens, buscar sesión persistente
         try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
-            if (currentSession) {
+            if (currentSession && !session) {
+                addLog("SESIÓN PERSISTENTE RECUPERADA");
                 setSession(currentSession);
                 setUser(currentSession.user);
                 const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
                 setRole(r);
             }
         } catch (error: any) {
-            addLog(`FALLO INICIAL: ${error.message}`);
+            addLog(`FALLO GET_SESSION: ${error.message}`);
         } finally {
             setLoading(false);
+            addLog("Secuencia de arranque completada.");
         }
     };
 
@@ -119,13 +139,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addLog(`EVENTO_AUTH: ${event}`);
       
       if (event === 'PASSWORD_RECOVERY') {
-          addLog("MODO RECUPERACIÓN ACTIVADO");
+          addLog("MODO RECUPERACIÓN CONFIRMADO POR SDK");
           setRecoveryMode(true);
       }
 
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          setSession(session);
-          if (session?.user) {
+          if (session) {
+              setSession(session);
               setUser(session.user);
               const r = await checkUserRole(session.user.id, session.user.email);
               setRole(r);
