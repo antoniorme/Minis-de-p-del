@@ -46,7 +46,12 @@ const AuthPage: React.FC = () => {
   const { session, authLogs, addLog } = useAuth();
   const [searchParams] = useSearchParams();
   
-  const [view, setView] = useState<AuthView>('login');
+  const [view, setView] = useState<AuthView>(() => {
+      // Si venimos de la recarga limpia, mostramos el formulario de actualización
+      if (window.location.href.includes('view=update-password')) return 'update-password';
+      return 'login';
+  });
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -59,11 +64,13 @@ const AuthPage: React.FC = () => {
   const captchaRef = useRef<HCaptcha>(null);
   const [showMonitor, setShowMonitor] = useState(true);
 
-  // MANEJO MANUAL DE TOKENS (Solución al "Doble Hash")
+  // MANEJO DE TOKENS CON RECARGA LIMPIA
   useEffect(() => {
     const handleUrlSession = async () => {
         const fullUrl = window.location.href;
-        if (!fullUrl.includes('access_token')) return;
+        
+        // Solo actuamos si detectamos tokens de Supabase en la URL
+        if (!fullUrl.includes('access_token=')) return;
 
         const parts = fullUrl.split('#');
         const lastPart = parts[parts.length - 1] || '';
@@ -71,45 +78,39 @@ const AuthPage: React.FC = () => {
         
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
-        const type = params.get('type') || searchParams.get('type');
 
-        if (accessToken && (type === 'recovery' || fullUrl.includes('type=recovery'))) {
-            if (view !== 'update-password') {
-                setView('update-password');
-                addLog("DETECTADO: Tokens de recuperación en URL.");
-            }
+        if (accessToken) {
+            setValidatingRecovery(true);
+            addLog("DETECTADO: Tokens en URL. Iniciando login forzado...");
             
-            if (!session && !validatingRecovery) {
-                setValidatingRecovery(true);
-                addLog("Validando credenciales de recuperación...");
+            try {
+                const { error: setSessionError } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken || '',
+                });
                 
-                try {
-                    const { error: setSessionError } = await supabase.auth.setSession({
-                        access_token: accessToken,
-                        refresh_token: refreshToken || '',
-                    });
-                    
-                    if (setSessionError) {
-                        addLog(`ERROR SESIÓN: ${setSessionError.message}`);
-                        setError("El enlace ha expirado.");
-                        setValidatingRecovery(false);
-                    } else {
-                        addLog("SESIÓN INYECTADA CON ÉXITO.");
-                        // LIMPIEZA CRÍTICA DE URL PARA EVITAR CONFLICTOS
-                        addLog("Limpiando hash de la URL...");
-                        navigate('/auth', { replace: true });
-                        setValidatingRecovery(false);
-                    }
-                } catch (e: any) {
-                    addLog(`FALLO CRÍTICO: ${e.message}`);
+                if (setSessionError) {
+                    addLog(`ERROR SESIÓN: ${setSessionError.message}`);
+                    setError("El enlace no es válido o ha expirado.");
                     setValidatingRecovery(false);
+                } else {
+                    addLog("SESIÓN INYECTADA. RECARGANDO APP PARA LIMPIAR SDK...");
+                    
+                    // PASO CRÍTICO: Recarga física de la página eliminando el hash
+                    // Redirigimos a una URL limpia con un parámetro de vista
+                    const cleanUrl = window.location.origin + window.location.pathname + '#/auth?view=update-password';
+                    window.location.href = cleanUrl;
+                    window.location.reload();
                 }
+            } catch (e: any) {
+                addLog(`FALLO CRÍTICO: ${e.message}`);
+                setValidatingRecovery(false);
             }
         }
     };
 
     handleUrlSession();
-  }, [session, searchParams, addLog, view, validatingRecovery, navigate]);
+  }, [addLog]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -123,7 +124,7 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
-      addLog("INICIANDO PROCESO DE ACTUALIZACIÓN...");
+      addLog("INICIANDO ACTUALIZACIÓN (MODO SESIÓN LIMPIA)...");
 
       if (password !== confirmPassword) {
           setError("Las contraseñas no coinciden.");
@@ -131,33 +132,14 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      if (password.length < 6) {
-          setError("Mínimo 6 caracteres.");
-          setLoading(false);
-          return;
-      }
-
       try {
-          // VERIFICACIÓN DE CANAL: ¿Realmente el SDK puede hablar con el servidor?
-          addLog("Verificando integridad de usuario...");
-          const { data: userData, error: userError } = await supabase.auth.getUser();
-          
-          if (userError || !userData.user) {
-              addLog(`ERROR IDENTIDAD: ${userError?.message || 'No hay usuario'}`);
-              throw new Error("La sesión no es válida. Solicita un nuevo enlace.");
-          }
-          addLog(`USUARIO CONFIRMADO: ${userData.user.email}`);
-
-          // LLAMADA ATÓMICA CON TIMEOUT
+          // Ya no necesitamos setSession ni getUser complejo porque la recarga
+          // ha dejado al SDK en estado normal logueado.
           addLog("Llamando a updateUser...");
           
-          const updatePromise = supabase.auth.updateUser({ password: password });
-          const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error("TIMEOUT_AUTH")), 15000)
-          );
-
-          const result = await Promise.race([updatePromise, timeoutPromise]) as any;
-          const { error: updateError } = result;
+          const { error: updateError } = await supabase.auth.updateUser({ 
+              password: password 
+          });
 
           if (updateError) {
               addLog(`ERROR SUPABASE: ${updateError.message}`);
@@ -173,13 +155,8 @@ const AuthPage: React.FC = () => {
           }, 1500);
 
       } catch (err: any) {
-          if (err.message === "TIMEOUT_AUTH") {
-              addLog("ERROR: Tiempo de espera agotado.");
-              setError("El servidor de seguridad no responde. Reintenta en unos segundos.");
-          } else {
-              addLog(`FALLO: ${err.message}`);
-              setError(translateError(err.message));
-          }
+          addLog(`FALLO: ${err.message}`);
+          setError(translateError(err.message));
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
       } finally {
@@ -192,12 +169,6 @@ const AuthPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
-    if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-        setError("Por favor, completa el captcha.");
-        setLoading(false);
-        return;
-    }
 
     try {
       let result;
@@ -231,15 +202,9 @@ const AuthPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-          setError("Completa el captcha.");
-          setLoading(false);
-          return;
-      }
-
       try {
-          const redirectTo = window.location.origin + window.location.pathname + '#/auth?type=recovery';
-          addLog(`Solicitando recovery...`);
+          const redirectTo = window.location.origin + window.location.pathname + '#/auth';
+          addLog(`Solicitando recuperación para ${email}...`);
           
           const { error } = await supabase.auth.resetPasswordForEmail(email, { 
               redirectTo, 
@@ -249,12 +214,8 @@ const AuthPage: React.FC = () => {
           if (error) throw error;
           
           setSuccessMsg("Enlace enviado. Revisa tu email.");
-          setCaptchaToken(null);
-          if(captchaRef.current) captchaRef.current.resetCaptcha();
       } catch (err: any) {
           setError(translateError(err.message || "Error al solicitar."));
-          setCaptchaToken(null);
-          if(captchaRef.current) captchaRef.current.resetCaptcha();
       } finally {
           setLoading(false);
       }
@@ -277,15 +238,15 @@ const AuthPage: React.FC = () => {
              view === 'update-password' ? 'Seguridad' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'update-password' ? 'Gestión de nueva clave' : 'Introduce tus datos'}
+            {view === 'update-password' ? 'Establece tu nueva clave' : 'Introduce tus datos'}
           </p>
         </div>
 
         {validatingRecovery ? (
             <div className="bg-white border border-slate-100 p-8 rounded-[2rem] shadow-xl text-center space-y-4 animate-fade-in">
                 <Loader2 className="animate-spin text-[#575AF9] mx-auto" size={40}/>
-                <p className="text-slate-600 font-bold">Verificando enlace...</p>
-                <p className="text-slate-400 text-xs">Un momento por favor.</p>
+                <p className="text-slate-600 font-bold">Verificando acceso...</p>
+                <p className="text-slate-400 text-xs">Preparando sesión segura.</p>
             </div>
         ) : (
             <>
@@ -307,7 +268,7 @@ const AuthPage: React.FC = () => {
                             <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
                                 <ShieldCheck className="text-indigo-600" size={24}/>
                                 <div className="text-[10px] font-bold text-indigo-800 leading-tight uppercase">
-                                    Identidad verificada.<br/>Establece tu nueva contraseña.
+                                    Sesión Validada.<br/>Escribe tu nueva contraseña.
                                 </div>
                             </div>
                             <div className="relative">
@@ -322,14 +283,8 @@ const AuthPage: React.FC = () => {
                                 <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Contraseña"/>
                             </div>
 
-                            {HCAPTCHA_SITE_TOKEN && (
-                                <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                                    <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
-                                </div>
-                            )}
-
                             <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
-                                {loading ? <Loader2 className="animate-spin" size={20} /> : <>ESTABLECER CLAVE <Key size={20}/></>}
+                                {loading ? <Loader2 className="animate-spin" size={20} /> : <>GUARDAR CLAVE <Key size={20}/></>}
                             </button>
                         </form>
                     ) : view === 'recovery' ? (
