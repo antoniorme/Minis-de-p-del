@@ -61,21 +61,20 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 };
 
 const AppRoutes = () => {
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, isRecovering } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isAuthPage = location.pathname.includes('/auth');
 
-  // REDIRECCIÓN INTERNA PARA RECUPERACIÓN
-  // Se ejecuta cada vez que cambia la URL. Si hay tokens o flag de recovery, entramos.
+  // REDIRECCIÓN INTERNA PARA RECUPERACIÓN (Inmune al Doble Hash)
   useEffect(() => {
       const fullUrl = window.location.href;
-      const isRecoveryFlow = fullUrl.includes('type=recovery') || fullUrl.includes('access_token=');
-      
-      if (isRecoveryFlow && location.pathname !== '/recovery-confirm') {
-          console.log("Flujo de recuperación detectado en AppRoutes. Redirigiendo...");
-          // Usamos replace: true para limpiar el historial del navegador de la URL con tokens
-          navigate('/recovery-confirm', { replace: true });
+      // Si la URL tiene los tokens, forzamos la estancia en la ruta de recuperación
+      if (fullUrl.includes('access_token=') || fullUrl.includes('type=recovery')) {
+          if (location.pathname !== '/recovery-confirm') {
+              console.log("Forzando entrada a recuperación interna...");
+              navigate('/recovery-confirm', { replace: true });
+          }
       }
   }, [location.pathname, navigate]);
 
@@ -93,6 +92,12 @@ const AppRoutes = () => {
   }
 
   const getHomeRoute = () => {
+      // SI HAY TOKENS, NO MANDAMOS A LANDING, MANDAMOS A RECOVERY
+      const fullUrl = window.location.href;
+      if (fullUrl.includes('access_token=') || fullUrl.includes('type=recovery')) {
+          return <Navigate to="/recovery-confirm" replace />;
+      }
+
       if (!user) return <Landing />;
       if (role === 'superadmin') return <Navigate to="/superadmin" replace />;
       if (role === 'admin') return <Navigate to="/dashboard" replace />;
@@ -104,7 +109,9 @@ const AppRoutes = () => {
     <Routes>
         <Route path="/" element={getHomeRoute()} />
         <Route path="/auth" element={<AuthPage />} />
+        {/* Esta ruta ya está DENTRO de la aplicación, es lo que pedías */}
         <Route path="/recovery-confirm" element={<ProtectedRoute><InternalRecovery /></ProtectedRoute>} />
+        
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
