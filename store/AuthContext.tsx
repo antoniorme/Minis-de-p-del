@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initSession = async () => {
         const fullUrl = window.location.href;
         
-        // Extractor de parámetros ultra-robusto (ignora cuántos # haya)
+        // 1. DETECCIÓN ULTRA-AGRESIVA DE TOKENS (Independiente del Router)
         const getRawParam = (key: string) => {
             const regex = new RegExp(`[#?&]${key}=([^&]*)`);
             const match = fullUrl.match(regex);
@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (accessToken && refreshToken) {
             try {
-                // Bloqueamos la carga normal para procesar la recuperación
+                // Forzamos el inicio de sesión con los tokens capturados de la URL
                 const { data, error } = await supabase.auth.setSession({
                     access_token: accessToken,
                     refresh_token: refreshToken
@@ -75,18 +75,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const r = await checkUserRole(data.session.user.id, data.session.user.email);
                     setRole(r);
                     
-                    // CRÍTICO: Limpiamos la URL y forzamos la ruta interna de recuperación
-                    // Esto evita que el Router vea el "sucio" y nos mande a la home
-                    window.location.replace('/#/recovery-confirm');
+                    // 2. CAMBIO DE RUTA FORZADO ANTES DEL RENDER
+                    // Limpiamos la basura de Supabase y forzamos al Router a ir a recovery
+                    window.location.hash = '/recovery-confirm';
+                    
                     setLoading(false);
-                    return; 
+                    return; // Saltamos la carga normal
                 }
             } catch (e) {
-                console.error("Auth Recovery Error", e);
+                console.error("Error en interceptación de tokens:", e);
             }
         }
 
-        // Carga normal de sesión
+        // 3. CARGA NORMAL (Si no hay tokens en la URL)
         try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
             if (currentSession) {
@@ -96,13 +97,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setRole(r);
             }
         } catch (error: any) {
-            console.error("Auth Load Error", error);
+            console.error("Error en carga de sesión normal:", error);
         }
         setLoading(false);
     };
 
     initSession();
 
+    // Listener para cambios de estado (por si acaso el usuario navega normalmente)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
           setSession(session);
