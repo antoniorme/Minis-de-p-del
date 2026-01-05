@@ -136,7 +136,7 @@ const AppRoutes = () => {
                     <Route path="/history" element={<ProtectedRoute requireAdmin><History /></ProtectedRoute>} />
                     <Route path="/club" element={<ProtectedRoute requireAdmin><ClubProfile /></ProtectedRoute>} />
                     <Route path="/help" element={<ProtectedRoute requireAdmin><Help /></ProtectedRoute>} />
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="*" element={<Navigate to="dashboard" replace />} />
                 </Routes>
             </Layout>
         } />
@@ -144,17 +144,16 @@ const AppRoutes = () => {
   );
 }
 
-const App: React.FC = () => {
-  // Detector de Basename inteligente para Google AI Studio
-  const getBasename = () => {
-    const path = window.location.pathname;
-    if (path.includes('/proxy/')) {
-      const match = path.match(/\/proxy\/\d+/);
-      return match ? match[0] : '';
-    }
-    return '';
-  };
+const getBasename = () => {
+  const path = window.location.pathname;
+  const proxyMatch = path.match(/^\/proxy\/\d+/);
+  if (proxyMatch) {
+    return proxyMatch[0];
+  }
+  return '/';
+};
 
+const App: React.FC = () => {
   return (
     <AuthProvider>
       <HistoryProvider>

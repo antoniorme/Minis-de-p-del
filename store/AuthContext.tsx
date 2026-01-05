@@ -50,7 +50,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Escuchar cambios de estado de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Ya no interceptamos PASSWORD_RECOVERY. Dejamos que entre directo.
       if (session) {
           setSession(session);
           setUser(session.user);
@@ -80,8 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     setLoading(true);
     await supabase.auth.signOut();
-    const base = window.location.pathname.split('/proxy/')[0] || '';
-    window.location.href = window.location.origin + base + '/';
+    window.location.reload();
   };
 
   const loginWithDevBypass = (role: 'admin' | 'player' | 'superadmin') => {

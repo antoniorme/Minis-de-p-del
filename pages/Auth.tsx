@@ -41,7 +41,7 @@ const AuthPage: React.FC = () => {
   const captchaRef = useRef<HCaptcha>(null);
 
   useEffect(() => {
-    // Redirigir al inicio si ya hay sesión activa (Magic Link o Login normal)
+    // Redirigir al inicio si ya hay sesión activa
     if (session && !authLoading) {
       navigate('/');
     }
@@ -92,7 +92,7 @@ const AuthPage: React.FC = () => {
           }
 
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: window.location.origin, // Redirige al home, donde AuthContext detectará la sesión
+              redirectTo: window.location.origin, // Redirige a la raíz, el router manejará el resto
               captchaToken: captchaToken || undefined
           });
           

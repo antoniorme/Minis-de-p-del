@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="es">
   <head>
+    <script>
+      // FIX CRÍTICO: Detectar Proxy de Google AI Studio e inyectar <base>
+      // Esto permite que BrowserRouter funcione en subcarpetas sin romper la carga de scripts/estilos
+      (function() {
+        var path = window.location.pathname;
+        var proxyMatch = path.match(/^\/proxy\/\d+/);
+        var baseHref = proxyMatch ? proxyMatch[0] + '/' : '/';
+        document.write('<base href="' + baseHref + '" />');
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Minis de Padel</title>
@@ -31,6 +41,6 @@
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>
