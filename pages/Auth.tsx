@@ -39,13 +39,11 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // Si entramos en modo recuperación forzamos la vista de actualizar password
   useEffect(() => {
     if (recoveryMode) setView('update-password');
   }, [recoveryMode]);
 
   useEffect(() => {
-    // Si ya hay sesión y NO estamos en vista de cambio de password, vamos al inicio
     if (session && !authLoading && view !== 'update-password') {
       navigate('/');
     }
@@ -57,7 +55,7 @@ const AuthPage: React.FC = () => {
     setError(null);
 
     try {
-      if (HCAPTCHA_SITE_TOKEN && !captchaToken) {
+      if (HCAPTCHA_SITE_TOKEN && !captchaToken && view !== 'update-password') {
           throw new Error("Por favor, completa el captcha.");
       }
 
@@ -81,7 +79,6 @@ const AuthPage: React.FC = () => {
           });
           if (error) throw error;
           setSuccessMsg("¡Contraseña actualizada! Ya puedes entrar.");
-          // Redirigir suavemente tras éxito
           setTimeout(() => navigate('/'), 2000);
           return;
       }
@@ -99,21 +96,17 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
-
       try {
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
-              // Apuntamos a /auth para que el script de index.html capte el token de recovery
-              redirectTo: window.location.origin + window.location.pathname + 'auth',
+              redirectTo: window.location.href, // Mantenemos la URL actual para que el basename sea correcto
               captchaToken: captchaToken || undefined
           });
-          
           if (error) throw error;
-          setSuccessMsg("Enlace de recuperación enviado. Revisa tu email.");
+          setSuccessMsg("Enlace enviado. Revisa tu email.");
       } catch (err: any) {
           setError(translateError(err.message));
       } finally {
           setLoading(false);
-          if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
       }
   };
@@ -129,7 +122,7 @@ const AuthPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6 overflow-x-hidden">
       <button onClick={() => navigate('/')} className="text-slate-500 flex items-center gap-2 mb-8 font-bold text-sm hover:text-slate-800 transition-colors">
-        <ArrowLeft size={20} /> Volver
+        <ArrowLeft size={20} /> Inicio
       </button>
 
       <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full space-y-8">
@@ -142,9 +135,7 @@ const AuthPage: React.FC = () => {
              view === 'forgot-password' ? 'Recuperar Cuenta' : 
              view === 'update-password' ? 'Nueva Contraseña' : 'Crear Cuenta'}
           </h1>
-          <p className="text-slate-400 text-sm">
-            {view === 'update-password' ? 'Escribe tu nueva clave de acceso' : 'Gestiona tus torneos de padel'}
-          </p>
+          <p className="text-slate-400 text-sm">Gestiona tus torneos de padel</p>
         </div>
 
         {successMsg ? (
@@ -161,12 +152,11 @@ const AuthPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* VISTA: SOLICITAR RECUPERACIÓN */}
-                {view === 'forgot-password' && (
+                {view === 'forgot-password' ? (
                     <form onSubmit={handleResetRequest} className="space-y-4 animate-slide-up">
                         <div className="relative">
                             <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email registrado"/>
+                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Email"/>
                         </div>
                         {HCAPTCHA_SITE_TOKEN && (
                             <div className="flex justify-center my-2 scale-90 min-h-[78px]">
@@ -174,16 +164,13 @@ const AuthPage: React.FC = () => {
                             </div>
                         )}
                         <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-3 transition-all">
-                            {loading ? <Loader2 className="animate-spin" size={24} /> : 'ENVIAR ENLACE'}
+                            {loading ? <Loader2 className="animate-spin" size={24} /> : 'RECUPERAR'}
                         </button>
                         <div className="text-center mt-6">
-                            <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al inicio de sesión</button>
+                            <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver</button>
                         </div>
                     </form>
-                )}
-
-                {/* VISTA: CAMBIAR CONTRASEÑA (Triggered by recovery token) */}
-                {view === 'update-password' && (
+                ) : view === 'update-password' ? (
                     <form onSubmit={handleAuth} className="space-y-4 animate-slide-up">
                          <div className="relative">
                             <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
@@ -194,21 +181,13 @@ const AuthPage: React.FC = () => {
                         </div>
                         <div className="relative">
                             <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Repite la contraseña"/>
+                            <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Repite contraseña"/>
                         </div>
-                        {HCAPTCHA_SITE_TOKEN && (
-                            <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                                <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
-                            </div>
-                        )}
                         <button type="submit" disabled={loading} className="w-full bg-[#575AF9] text-white py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-all">
-                            {loading ? <Loader2 className="animate-spin mx-auto" size={24} /> : 'ACTUALIZAR Y ENTRAR'}
+                            {loading ? <Loader2 className="animate-spin mx-auto" size={24} /> : 'GUARDAR Y ENTRAR'}
                         </button>
                     </form>
-                )}
-
-                {/* VISTA: LOGIN / REGISTRO */}
-                {(view === 'login' || view === 'register') && (
+                ) : (
                     <form onSubmit={handleAuth} className="space-y-4">
                         <div className="relative">
                             <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
@@ -258,7 +237,6 @@ const AuthPage: React.FC = () => {
                 )}
             </div>
         )}
-        <p className="text-center text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] mt-12">PadelPro Secure Entry v7.0</p>
       </div>
     </div>
   );

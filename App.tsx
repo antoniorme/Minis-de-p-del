@@ -89,7 +89,6 @@ const AppRoutes = () => {
     <Routes>
         <Route path="/" element={getHomeRoute()} />
         <Route path="/auth" element={<AuthPage />} />
-        
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
@@ -146,11 +145,17 @@ const AppRoutes = () => {
 }
 
 const App: React.FC = () => {
-  // Basename para Google AI Studio: /proxy/[PORT]/
-  // Buscamos si la URL actual empieza por /proxy/ y tiene un puerto
-  const pathParts = window.location.pathname.split('/');
-  const isProxy = pathParts[1] === 'proxy';
-  const basename = isProxy ? `/${pathParts[1]}/${pathParts[2]}` : '/';
+  // DETECCIÓN DINÁMICA DE BASE URL PARA GOOGLE AI STUDIO
+  const path = window.location.pathname;
+  let dynamicBasename = '';
+  
+  if (path.includes('/proxy/')) {
+    const parts = path.split('/');
+    const proxyIdx = parts.indexOf('proxy');
+    if (proxyIdx !== -1 && parts[proxyIdx + 1]) {
+      dynamicBasename = `/${parts[proxyIdx]}/${parts[proxyIdx+1]}`;
+    }
+  }
 
   return (
     <AuthProvider>
@@ -159,7 +164,7 @@ const App: React.FC = () => {
             <TournamentProvider>
                 <LeagueProvider>
                     <TimerProvider>
-                        <BrowserRouter basename={basename === '/' ? '' : basename}>
+                        <BrowserRouter basename={dynamicBasename}>
                             <AppRoutes />
                         </BrowserRouter>
                     </TimerProvider>
