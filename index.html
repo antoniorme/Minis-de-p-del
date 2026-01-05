@@ -12,28 +12,6 @@
       @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 
-    <script>
-      // SCRIPT DE RESCATE DE SESIÓN (CRÍTICO PARA PROXIES)
-      (function() {
-        var h = window.location.hash;
-        if (h && (h.indexOf('access_token=') !== -1 || h.indexOf('type=recovery') !== -1)) {
-          var fragment = h.substring(1);
-          var params = new URLSearchParams(fragment);
-          var sessionData = {
-            access_token: params.get('access_token'),
-            refresh_token: params.get('refresh_token'),
-            type: params.get('type') || 'login'
-          };
-          if (sessionData.access_token) {
-            localStorage.setItem('sb-rescuing-session', JSON.stringify(sessionData));
-            // Limpiamos la URL para que React Router no se bloquee
-            var cleanUrl = window.location.pathname + window.location.search;
-            window.history.replaceState(null, document.title, cleanUrl);
-          }
-        }
-      })();
-    </script>
-
 <script type="importmap">
 {
   "imports": {
@@ -53,6 +31,7 @@
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <!-- La ruta debe ser relativa para que funcione en proxies -->
+    <script type="module" src="index.tsx"></script>
   </body>
 </html>

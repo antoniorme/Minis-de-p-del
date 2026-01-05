@@ -145,17 +145,15 @@ const AppRoutes = () => {
 }
 
 const App: React.FC = () => {
-  // DETECCIÓN DINÁMICA DE BASE URL PARA GOOGLE AI STUDIO
-  const path = window.location.pathname;
-  let dynamicBasename = '';
-  
-  if (path.includes('/proxy/')) {
-    const parts = path.split('/');
-    const proxyIdx = parts.indexOf('proxy');
-    if (proxyIdx !== -1 && parts[proxyIdx + 1]) {
-      dynamicBasename = `/${parts[proxyIdx]}/${parts[proxyIdx+1]}`;
+  // Detector de Basename inteligente para Google AI Studio
+  const getBasename = () => {
+    const path = window.location.pathname;
+    if (path.includes('/proxy/')) {
+      const match = path.match(/\/proxy\/\d+/);
+      return match ? match[0] : '';
     }
-  }
+    return '';
+  };
 
   return (
     <AuthProvider>
@@ -164,7 +162,7 @@ const App: React.FC = () => {
             <TournamentProvider>
                 <LeagueProvider>
                     <TimerProvider>
-                        <BrowserRouter basename={dynamicBasename}>
+                        <BrowserRouter basename={getBasename()}>
                             <AppRoutes />
                         </BrowserRouter>
                     </TimerProvider>

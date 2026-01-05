@@ -51,32 +51,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    const handleInitialAuth = async () => {
-        // 1. CONSUMIR RESCATE DE INDEX.HTML
-        const rescuedRaw = localStorage.getItem('sb-rescuing-session');
-        if (rescuedRaw) {
-            try {
-                const rescued = JSON.parse(rescuedRaw);
-                localStorage.removeItem('sb-rescuing-session');
-                
-                const { data, error } = await supabase.auth.setSession({ 
-                  access_token: rescued.access_token, 
-                  refresh_token: rescued.refresh_token 
-                });
-
-                if (!error && data.session) {
-                    setSession(data.session);
-                    setUser(data.session.user);
-                    if (rescued.type === 'recovery') setRecoveryMode(true);
-                    const r = await checkUserRole(data.session.user.id, data.session.user.email);
-                    setRole(r);
-                    setLoading(false);
-                    return;
-                }
-            } catch (e) { console.error("Error al restaurar sesión:", e); }
+    const initializeAuth = async () => {
+        // 1. Detectar tokens en la URL (Magic Links / Recovery)
+        const hash = window.location.hash;
+        if (hash && (hash.includes('access_token=') || hash.includes('type=recovery'))) {
+            // Dejamos que Supabase procese el hash automáticamente al arrancar
+            // Pero si el router lo limpia muy rápido, lo capturamos aquí por si acaso
         }
 
-        // 2. CARGA NORMAL SI NO HAY RESCATE
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         if (currentSession) {
             setSession(currentSession);
@@ -87,17 +69,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
     };
 
-    handleInitialAuth();
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
-      if (event === 'SIGNED_OUT') {
-          setSession(null); setUser(null); setRole(null); setRecoveryMode(false);
-      } else if (session) {
+      
+      if (session) {
           setSession(session);
           setUser(session.user);
           const r = await checkUserRole(session.user.id, session.user.email);
           setRole(r);
+      } else {
+          setSession(null);
+          setUser(null);
+          setRole(null);
+          setRecoveryMode(false);
       }
       setLoading(false);
     });
@@ -108,13 +94,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     setLoading(true);
     await supabase.auth.signOut();
-    // Limpieza total del estado local
-    localStorage.removeItem('sb-rescuing-session');
-    // Forzar recarga a la raíz limpia detectando basename
-    const path = window.location.pathname;
-    const parts = path.split('/');
-    const proxyIdx = parts.indexOf('proxy');
-    const base = proxyIdx !== -1 ? `/${parts[proxyIdx]}/${parts[proxyIdx+1]}` : '';
+    // Limpieza total y recarga a la base
+    const base = window.location.pathname.split('/proxy/')[0] || '';
     window.location.href = window.location.origin + base + '/';
   };
 
