@@ -43,15 +43,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (saData) return 'superadmin';
       } catch (e) {}
 
-      // 2. Check Club Owner (Standard)
+      // 2. Check Club Owner (Standard - by ID)
       try {
           const { data: clubData } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
           if (clubData) return 'admin';
       } catch (e) {}
 
-      // 3. Fallback: Check Player Profile for 'Admin' category
-      // Esto soluciona casos donde la recuperación de cuenta o invitaciones rápidas
-      // asignan permisos vía la tabla de players en lugar de la tabla clubs directamente.
+      // 3. Fallback: Check Player Profile by ID for 'Admin' category
       try {
           const { data: playerData } = await supabase
             .from('players')
@@ -60,10 +58,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .maybeSingle();
             
           if (playerData && playerData.categories && Array.isArray(playerData.categories)) {
-              // Si tiene la categoría especial 'Admin', le damos rol de admin
               if (playerData.categories.includes('Admin')) return 'admin';
           }
       } catch (e) {}
+
+      // 4. Emergency Fallback: Check Player Profile by EMAIL for 'Admin' category
+      // Esto soluciona casos donde la cuenta de Auth se ha recreado (nuevo UUID)
+      // pero el registro en la tabla de 'players' sigue existiendo con el email correcto.
+      if (userEmail) {
+          try {
+              const { data: playerByEmail } = await supabase
+                  .from('players')
+                  .select('categories')
+                  .eq('email', userEmail)
+                  .maybeSingle();
+              
+              if (playerByEmail && playerByEmail.categories && Array.isArray(playerByEmail.categories)) {
+                  if (playerByEmail.categories.includes('Admin')) return 'admin';
+              }
+          } catch (e) {}
+      }
 
       // Default to player
       return 'player';
