@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -22,7 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   signOut: async () => {},
   isOfflineMode: false,
-  checkUserRole: async () => null,
+  checkUserRole: async () => 'player',
   loginWithDevBypass: () => {},
 });
 
@@ -33,13 +34,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
-  // Lógica DIRECTA de detección de roles (Sin etiquetas, solo tablas)
-  const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
-      if (!uid) return null;
-      
-      try {
-          // 1. Verificación SuperAdmin (Tabla 'superadmins')
-          if (userEmail) {
+  // Función crítica: Determina si es Club (Admin), SuperAdmin o Jugador
+  const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
+      // 1. SUPER ADMIN CHECK (DB + Fallback)
+      if (userEmail) {
+          // Hardcoded Fallback (Seguridad por si la tabla no existe aún)
+          if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
+
+          try {
+              // Consultamos tabla whitelist de superadmins
               const { data: saData } = await supabase
                   .from('superadmins')
                   .select('id')
@@ -47,111 +50,142 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   .maybeSingle();
               
               if (saData) return 'superadmin';
+          } catch (e) {
+              console.warn('Error checking superadmin table');
           }
+      }
 
-          // 2. Verificación Admin de Club (Tabla 'clubs')
-          // Si el ID del usuario coincide con el 'owner_id' de algún club, es Admin.
-          const { data: clubData } = await supabase
+      // 2. MODO LOCAL / OFFLINE
+      if (isOfflineMode) {
+          if (userEmail?.includes('admin') || userEmail?.includes('club')) {
+              return 'admin';
+          }
+          return 'player';
+      }
+
+      // 3. MODO PRODUCCIÓN (Supabase)
+      try {
+          // Consultamos si este usuario está en la tabla de CLUBS ACTIVOS
+          const { data, error } = await supabase
               .from('clubs')
               .select('id')
               .eq('owner_id', uid)
               .maybeSingle();
-
-          if (clubData) return 'admin';
-
-          // 3. Por defecto, es Jugador
+          
+          if (data) {
+              return 'admin'; // Es un Club
+          }
+          
+          // SI NO ES CLUB NI SUPERADMIN -> ES JUGADOR AUTOMÁTICAMENTE
           return 'player';
 
       } catch (e) {
-          console.error("Error verificando rol:", e);
-          return 'player'; // En caso de error, degradar a permisos mínimos por seguridad
+          console.error("Error checking role:", e);
+          return 'player'; // Fallback seguro
       }
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const initAuth = async () => {
-        try {
-            // Paso 1: Obtener sesión actual de Supabase
-            const { data: { session: initialSession } } = await supabase.auth.getSession();
-            
-            if (mounted) {
-                if (initialSession) {
-                    setSession(initialSession);
-                    setUser(initialSession.user);
-                    
-                    // Paso 2: CRÍTICO - Esperar a verificar el rol ANTES de quitar el loading
-                    // Esto evita que la app cargue como 'player' y luego cambie a 'admin'
-                    const detectedRole = await checkUserRole(initialSession.user.id, initialSession.user.email);
-                    
-                    if (mounted) setRole(detectedRole);
-                } else {
-                    // No hay sesión
-                    setSession(null);
-                    setUser(null);
-                    setRole(null);
-                }
-            }
-        } catch (error) {
-            console.error("Error en inicialización de Auth:", error);
-        } finally {
-            // Paso 3: Solo ahora permitimos que la app se renderice
-            if (mounted) setLoading(false);
-        }
-    };
-
-    initAuth();
-
-    // Escuchar cambios de sesión (Login/Logout en tiempo real)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-        if (!mounted) return;
-        
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-             setSession(currentSession);
-             setUser(currentSession?.user ?? null);
-             
-             if (currentSession) {
-                 const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
-                 if (mounted) setRole(r);
-             }
-             
-             setLoading(false);
-        } else if (event === 'SIGNED_OUT') {
-             setSession(null);
-             setUser(null);
-             setRole(null);
-             setLoading(false);
-        }
-    });
-
-    return () => {
-        mounted = false;
-        subscription.unsubscribe();
-    };
-  }, [checkUserRole]);
-
-  const signOut = async () => {
-    setLoading(true);
-    await supabase.auth.signOut();
-    // Forzar recarga para limpiar cualquier estado en memoria
-    window.location.reload(); 
   };
 
-  const loginWithDevBypass = (role: 'admin' | 'player' | 'superadmin') => {
+  const loginWithDevBypass = (targetRole: 'admin' | 'player' | 'superadmin') => {
       setIsOfflineMode(true);
-      const devUser = { id: `dev-${role}`, email: `${role}@sandbox.test` } as User;
+      const devUser = {
+          id: targetRole === 'admin' ? 'dev-admin-id' : targetRole === 'superadmin' ? 'dev-super-id' : 'dev-player-id',
+          email: targetRole === 'superadmin' ? 'antoniorme@gmail.com' : targetRole === 'admin' ? 'admin@padelpro.local' : 'player@padelpro.local',
+          aud: 'authenticated',
+          created_at: new Date().toISOString(),
+          app_metadata: {},
+          user_metadata: {}
+      } as User;
+      
       setUser(devUser);
-      setSession({ user: devUser, access_token: 'mock' } as Session);
-      setRole(role);
+      setSession({ user: devUser, access_token: 'mock-token' } as Session);
+      setRole(targetRole);
       setLoading(false);
+      
+      sessionStorage.setItem('padelpro_dev_mode', 'true');
+  };
+
+  useEffect(() => {
+    const initSession = async () => {
+        let shouldUseOffline = false;
+
+        // @ts-ignore
+        if ((supabase as any).supabaseUrl === 'https://placeholder.supabase.co') {
+             shouldUseOffline = true;
+        }
+
+        const storedDevMode = sessionStorage.getItem('padelpro_dev_mode') === 'true';
+        if (storedDevMode) shouldUseOffline = true;
+
+        if (shouldUseOffline) {
+            setIsOfflineMode(true);
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (error) throw error;
+            
+            setSession(session);
+            setUser(session?.user ?? null);
+            
+            if (session?.user) {
+                const r = await checkUserRole(session.user.id, session.user.email);
+                setRole(r);
+            }
+        } catch (error) {
+            console.warn("Session check failed, defaulting to offline logic if necessary", error);
+            // Don't force offline mode on session error, just clear state
+            setSession(null);
+            setUser(null);
+            setRole(null);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    initSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!isOfflineMode) {
+          setSession(session);
+          const currentUser = session?.user ?? null;
+          setUser(currentUser);
+          
+          if (currentUser) {
+              const r = await checkUserRole(currentUser.id, currentUser.email);
+              setRole(r);
+          } else {
+              setRole(null);
+          }
+          setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [isOfflineMode]);
+
+  const signOut = async () => {
+    if (isOfflineMode) {
+        sessionStorage.removeItem('padelpro_dev_mode');
+        window.location.reload();
+        return;
+    } 
+    
+    try {
+        await supabase.auth.signOut();
+    } catch (error) {
+        console.error("Error al cerrar sesión en Supabase:", error);
+    } finally {
+        setUser(null);
+        setSession(null);
+        setRole(null);
+        localStorage.removeItem('padel_sim_player_id');
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ 
-        session, user, loading, role, signOut, 
-        isOfflineMode, checkUserRole, loginWithDevBypass
-    }}>
+    <AuthContext.Provider value={{ session, user, loading, role, signOut, isOfflineMode, checkUserRole, loginWithDevBypass }}>
       {children}
     </AuthContext.Provider>
   );

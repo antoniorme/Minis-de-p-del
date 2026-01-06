@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
 import { LeagueProvider } from './store/LeagueContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
@@ -8,7 +9,6 @@ import { TimerProvider } from './store/TimerContext';
 import { NotificationProvider } from './store/NotificationContext';
 import { Layout } from './components/Layout';
 import { PlayerLayout } from './components/PlayerLayout';
-import { Trophy, Loader2 } from 'lucide-react';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -43,39 +43,39 @@ import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
 
+// Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role } = useAuth();
   const { clubData } = useHistory();
   const location = useLocation();
 
-  if (loading) return null; 
-  if (!user) return <Navigate to="/auth" replace />;
+  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold">Cargando...</div>;
   
-  if (role === 'pending' && location.pathname !== '/pending') return <Navigate to="/pending" replace />;
-  if (requireSuperAdmin && role !== 'superadmin') return <Navigate to="/dashboard" replace />;
-  if (requireAdmin && role !== 'admin' && role !== 'superadmin') return <Navigate to="/p/dashboard" replace />;
-  if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding' && role !== 'superadmin') return <Navigate to="/onboarding" replace />;
+  if (!user) return <Navigate to="/" replace />;
+  
+  if (role === 'pending' && location.pathname !== '/pending') {
+      return <Navigate to="/pending" replace />;
+  }
+
+  if (requireSuperAdmin && role !== 'superadmin') {
+      return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requireAdmin && role !== 'admin' && role !== 'superadmin') {
+      return <Navigate to="/p/dashboard" replace />;
+  }
+
+  if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding' && role !== 'superadmin') {
+      return <Navigate to="/onboarding" replace />;
+  }
 
   return <>{children}</>;
 };
 
 const AppRoutes = () => {
   const { user, role, loading } = useAuth();
-  const location = useLocation();
-  const isAuthPage = location.pathname.includes('/auth');
 
-  if (loading && !isAuthPage) {
-    return (
-        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-20 h-20 bg-white rounded-3xl shadow-xl shadow-indigo-100 flex items-center justify-center mb-8 animate-bounce">
-                <Trophy size={40} className="text-[#575AF9]" />
-            </div>
-            <div className="flex items-center gap-3 text-slate-400 font-bold text-sm tracking-widest uppercase">
-                <Loader2 size={18} className="animate-spin text-[#575AF9]"/> Iniciando...
-            </div>
-        </div>
-    );
-  }
+  if (loading) null;
 
   const getHomeRoute = () => {
       if (!user) return <Landing />;
@@ -88,7 +88,7 @@ const AppRoutes = () => {
   return (
     <Routes>
         <Route path="/" element={getHomeRoute()} />
-        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/auth" element={user ? getHomeRoute() : <AuthPage />} />
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
@@ -127,31 +127,26 @@ const AppRoutes = () => {
                     <Route path="/checkin" element={<ProtectedRoute requireAdmin><CheckIn /></ProtectedRoute>} />
                     <Route path="/active" element={<ProtectedRoute requireAdmin><ActiveTournament /></ProtectedRoute>} />
                     <Route path="/results" element={<ProtectedRoute requireAdmin><Results /></ProtectedRoute>} />
+                    
+                    {/* LEAGUE ROUTES */}
                     <Route path="/league" element={<ProtectedRoute requireAdmin><LeagueDashboard /></ProtectedRoute>} />
                     <Route path="/league/setup" element={<ProtectedRoute requireAdmin><LeagueSetup /></ProtectedRoute>} />
                     <Route path="/league/groups/:categoryId" element={<ProtectedRoute requireAdmin><LeagueGroups /></ProtectedRoute>} />
                     <Route path="/league/active" element={<ProtectedRoute requireAdmin><LeagueActive /></ProtectedRoute>} />
+                    
                     <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
                     <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><AdminPlayerProfile /></ProtectedRoute>} />
                     <Route path="/history" element={<ProtectedRoute requireAdmin><History /></ProtectedRoute>} />
                     <Route path="/club" element={<ProtectedRoute requireAdmin><ClubProfile /></ProtectedRoute>} />
                     <Route path="/help" element={<ProtectedRoute requireAdmin><Help /></ProtectedRoute>} />
-                    <Route path="*" element={<Navigate to="dashboard" replace />} />
+
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
             </Layout>
         } />
     </Routes>
   );
 }
-
-const getBasename = () => {
-  const path = window.location.pathname;
-  const proxyMatch = path.match(/^\/proxy\/\d+/);
-  if (proxyMatch) {
-    return proxyMatch[0];
-  }
-  return '/';
-};
 
 const App: React.FC = () => {
   return (
@@ -161,9 +156,9 @@ const App: React.FC = () => {
             <TournamentProvider>
                 <LeagueProvider>
                     <TimerProvider>
-                        <BrowserRouter basename={getBasename()}>
-                            <AppRoutes />
-                        </BrowserRouter>
+                        <HashRouter>
+                        <AppRoutes />
+                        </HashRouter>
                     </TimerProvider>
                 </LeagueProvider>
             </TournamentProvider>

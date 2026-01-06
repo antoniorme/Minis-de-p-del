@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../../store/TournamentContext';
@@ -700,9 +699,9 @@ const JoinTournament: React.FC = () => {
 
                                                 {/* Partner Position */}
                                                 <div className="flex bg-slate-100 p-1 rounded-lg">
-                                                    <button onClick={() => setPartnerPosition('right')} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPosition === 'right' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><ArrowRightCircle size={12}/> Der.</button>
-                                                    <button onClick={() => setPartnerPosition('backhand')} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPosition === 'backhand' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><ArrowLeftCircle size={12}/> Rev.</button>
-                                                    <button onClick={() => setPartnerPosition('both')} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPosition === 'both' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><Repeat size={12}/> Ambas</button>
+                                                    <button onClick={() => { setPartnerPosition('right'); setPartnerPlayBoth(false); }} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${!partnerPlayBoth && partnerPosition === 'right' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><ArrowRightCircle size={12}/> Der.</button>
+                                                    <button onClick={() => { setPartnerPosition('backhand'); setPartnerPlayBoth(false); }} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${!partnerPlayBoth && partnerPosition === 'backhand' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><ArrowLeftCircle size={12}/> Rev.</button>
+                                                    <button onClick={() => { setPartnerPosition(undefined); setPartnerPlayBoth(true); }} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md flex items-center justify-center gap-1 transition-all ${partnerPlayBoth ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}><Repeat size={12}/> Ambas</button>
                                                 </div>
 
                                                 {/* CATEGORY SELECTOR */}
