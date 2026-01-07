@@ -66,21 +66,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 3. MODO PRODUCCIÓN (Supabase)
       try {
           // Consultamos si este usuario está en la tabla de CLUBS ACTIVOS
+          // Usamos limit(1) para evitar errores si hay duplicados (varias filas con mismo owner_id)
           const { data, error } = await supabase
               .from('clubs')
               .select('id')
               .eq('owner_id', uid)
+              .limit(1)
               .maybeSingle();
           
+          if (error) {
+              console.error("Error Checking Role (Supabase):", error.message);
+          }
+
           if (data) {
+              console.log("✅ Rol asignado: ADMIN (Club encontrado)", data.id);
               return 'admin'; // Es un Club
           }
           
+          console.log("ℹ️ Rol asignado: PLAYER (No encontrado en tabla clubs)");
           // SI NO ES CLUB NI SUPERADMIN -> ES JUGADOR AUTOMÁTICAMENTE
           return 'player';
 
       } catch (e) {
-          console.error("Error checking role:", e);
+          console.error("Excepción crítica comprobando rol:", e);
           return 'player'; // Fallback seguro
       }
   };
