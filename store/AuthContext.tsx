@@ -37,76 +37,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
-  // Función crítica: Determina el rol basándose ESTRICTAMENTE en la base de datos
+  // Función crítica optimizada: Determina el rol
   const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
-      console.group(`[Auth] Verificando rol para: ${userEmail || uid}`);
-      console.log("UID:", uid);
-
-      // 1. Acceso de Emergencia (Hardcoded)
+      console.groupCollapsed(`[Auth] CheckRole ${userEmail || uid}`);
+      
+      // 1. Acceso de Emergencia (Instantáneo)
       if (userEmail && HARDCODED_ADMINS.includes(userEmail)) {
-          console.log("⚠️ Usuario en lista blanca. Asignando rol privilegiado.");
+          console.log("⚠️ Lista blanca.");
           console.groupEnd();
           if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
           return 'admin';
       }
 
-      // 2. Comprobar si es SUPERADMIN en DB
+      // 2. Comprobación en paralelo para velocidad
       try {
-          const { data: saData } = await supabase
+          const clubPromise = supabase
+              .from('clubs')
+              .select('id')
+              .eq('owner_id', uid)
+              .maybeSingle();
+
+          const superPromise = supabase
               .from('superadmins')
               .select('id')
               .eq('email', userEmail)
               .maybeSingle();
-          
-          if (saData) {
-              console.log("✅ Rol detectado: SUPERADMIN");
+
+          // Ejecutamos ambas consultas a la vez
+          const [clubRes, superRes] = await Promise.all([clubPromise, superPromise]);
+
+          if (superRes.data) {
+              console.log("✅ Rol: SUPERADMIN");
               console.groupEnd();
               return 'superadmin';
           }
-      } catch (e) { console.warn("Check Superadmin falló", e); }
 
-      // 3. Comprobar si es CLUB (ADMIN)
-      try {
-          // Usamos select('*') para evitar problemas de permisos a nivel de columna
-          const { data: clubData, error } = await supabase
-              .from('clubs')
-              .select('*') 
-              .eq('owner_id', uid)
-              .maybeSingle();
-
-          if (error) {
-              console.error("❌ Error DB consultando tabla 'clubs':", error.message, error.details);
-          } else {
-              if (clubData) {
-                  console.log(`✅ Rol detectado: ADMIN. Club encontrado: "${clubData.name}" (ID: ${clubData.id})`);
-                  console.groupEnd();
-                  return 'admin';
-              } else {
-                  console.warn(`⚠️ No se encontró ningún club donde owner_id = ${uid}.`);
-                  console.log("Esto significa que el usuario logueado NO coincide con el dueño de ningún club en la DB.");
-              }
+          if (clubRes.data) {
+              console.log("✅ Rol: ADMIN (Club detectado)");
+              console.groupEnd();
+              return 'admin';
           }
-      } catch (e) { console.error("Excepción verificando club:", e); }
 
-      // 4. Comprobar si es JUGADOR (PLAYER)
-      try {
-          const { data: playerData, error: playerError } = await supabase
+          // Si no es club ni superadmin, miramos si es jugador
+          const { data: playerData } = await supabase
               .from('players')
               .select('id')
               .eq('user_id', uid)
               .maybeSingle();
-          
+
           if (playerData) {
-              console.log("✅ Rol detectado: PLAYER (Ficha de jugador encontrada)");
+              console.log("✅ Rol: PLAYER");
               console.groupEnd();
               return 'player';
-          } else if (playerError) {
-              console.error("Error consultando players:", playerError);
           }
-      } catch (e) { console.error("Excepción verificando player:", e); }
 
-      // 5. Si no es nada
-      console.log("❓ No se encontró rol. Asignando: PENDING");
+      } catch (e) {
+          console.error("Error verificando rol:", e);
+      }
+
+      console.log("❓ Rol: PENDING");
       console.groupEnd();
       return 'pending';
   };
@@ -133,13 +122,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initSession = async () => {
-        // TIMEOUT DE SEGURIDAD
+        // TIMEOUT DE SEGURIDAD (Reducido a 3s para mejor UX)
         const safetyTimer = setTimeout(() => {
             if (mounted && loading) {
-                console.warn("[Auth] Timeout: Forzando fin de carga por demora en respuesta.");
+                console.warn("[Auth] Timeout: Forzando carga.");
                 setLoading(false);
             }
-        }, 5000); // Aumentado a 5s para dar tiempo al debug
+        }, 3000);
 
         // Check Offline Mode
         // @ts-ignore
@@ -163,7 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 
                 if (session?.user) {
                     const r = await checkUserRole(session.user.id, session.user.email);
-                    setRole(r);
+                    if (mounted) setRole(r);
                 }
             }
         } catch (error) {
@@ -182,20 +171,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[Auth] Evento: ${event}`);
       if (!isOfflineMode && mounted) {
           setSession(session);
           const currentUser = session?.user ?? null;
           setUser(currentUser);
           
-          if (currentUser) {
-              if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-                  setLoading(true);
-                  const r = await checkUserRole(currentUser.id, currentUser.email);
+          if (currentUser && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+              setLoading(true);
+              const r = await checkUserRole(currentUser.id, currentUser.email);
+              if (mounted) {
                   setRole(r);
                   setLoading(false);
               }
-          } else {
+          } else if (!currentUser) {
               setRole(null);
           }
       }
