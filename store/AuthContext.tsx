@@ -28,7 +28,6 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 const ROLE_STORAGE_KEY = 'padelpro_user_role';
-// Lista blanca para acceso de emergencia a SuperAdmin/Admin si falla la DB
 const HARDCODED_ADMINS = ['admin@padelpro.local', 'antoniorme@gmail.com'];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -37,112 +36,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
-  // INICIALIZACIÓN INTELIGENTE DEL ROL:
-  // Leemos del localStorage al iniciar. Si existe, lo usamos inmediatamente.
-  // Esto evita que 'role' sea null durante la carga inicial y el usuario sea expulsado.
+  // Inicializar rol desde caché para velocidad inmediata
   const [role, setRoleState] = useState<UserRole>(() => {
       const cached = localStorage.getItem(ROLE_STORAGE_KEY);
       return (cached as UserRole) || null;
   });
 
-  // Wrapper para mantener localStorage sincronizado
   const setRole = (r: UserRole) => {
       setRoleState(r);
-      if (r) {
-          localStorage.setItem(ROLE_STORAGE_KEY, r);
-      } else {
-          localStorage.removeItem(ROLE_STORAGE_KEY);
-      }
+      if (r) localStorage.setItem(ROLE_STORAGE_KEY, r);
+      else localStorage.removeItem(ROLE_STORAGE_KEY);
   };
 
-  // Función crítica optimizada: Determina el rol
   const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
-      console.groupCollapsed(`[Auth] CheckRole ${userEmail || uid}`);
+      console.groupCollapsed(`[Auth] CheckRole Realtime: ${userEmail || uid}`);
       
-      // 1. Acceso de Emergencia (Instantáneo)
       if (userEmail && HARDCODED_ADMINS.includes(userEmail)) {
-          console.log("⚠️ Lista blanca.");
           console.groupEnd();
           if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
           return 'admin';
       }
 
       try {
-          // 2. Comprobación SuperAdmin (Prioridad Absoluta)
-          const { data: superAdmin } = await supabase
-              .from('superadmins')
-              .select('id')
-              .eq('email', userEmail)
-              .maybeSingle();
+          // Consultas directas a DB (Sin timeouts artificiales)
+          // 1. SuperAdmin
+          const { data: superAdmin } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
+          if (superAdmin) { console.groupEnd(); return 'superadmin'; }
 
-          if (superAdmin) {
-              console.log("✅ Rol: SUPERADMIN");
-              console.groupEnd();
-              return 'superadmin';
-          }
+          // 2. Club Owner
+          const { data: club } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
+          if (club) { console.groupEnd(); return 'admin'; }
 
-          // 3. Comprobación de CLUB (Admin Principal)
-          const { data: club } = await supabase
-              .from('clubs')
-              .select('id')
-              .eq('owner_id', uid)
-              .maybeSingle();
-
-          if (club) {
-              console.log("✅ Rol: ADMIN (Club encontrado)");
-              console.groupEnd();
-              return 'admin';
-          }
-
-          // 4. Lógica "Greedy" de Admin (Datos huérfanos)
-          // Si tiene datos creados pero no club, lo tratamos como Admin para que pueda terminar el setup
-          const [playersOwned, tournamentsOwned] = await Promise.all([
+          // 3. Greedy Admin
+          const [p, t] = await Promise.all([
               supabase.from('players').select('id').eq('user_id', uid).limit(1).maybeSingle(),
               supabase.from('tournaments').select('id').eq('user_id', uid).limit(1).maybeSingle()
           ]);
+          if (p.data || t.data) { console.groupEnd(); return 'admin'; }
 
-          if (playersOwned.data || tournamentsOwned.data) {
-              console.log("✅ Rol: ADMIN (Datos encontrados sin Club)");
-              console.groupEnd();
-              return 'admin';
-          }
+          // 4. Player
+          const { data: playerProfile } = await supabase.from('players').select('id').eq('profile_user_id', uid).maybeSingle();
+          if (playerProfile) { console.groupEnd(); return 'player'; }
 
-          // 5. Jugador (Player App)
-          const { data: playerProfile } = await supabase
-              .from('players')
-              .select('id')
-              .eq('profile_user_id', uid)
-              .maybeSingle();
-
-          if (playerProfile) {
-              console.log("✅ Rol: PLAYER (Perfil vinculado)");
-              console.groupEnd();
-              return 'player';
-          }
-
-          // Check by Email for Player (Invitation linking fallback)
           if (userEmail) {
-              const { data: emailMatch } = await supabase
-                  .from('players')
-                  .select('id')
-                  .eq('email', userEmail)
-                  .is('profile_user_id', null)
-                  .maybeSingle();
-              
-              if (emailMatch) {
-                  console.log("✅ Rol: PLAYER (Email detectado)");
-                  console.groupEnd();
-                  return 'player';
-              }
+              const { data: emailMatch } = await supabase.from('players').select('id').eq('email', userEmail).is('profile_user_id', null).maybeSingle();
+              if (emailMatch) { console.groupEnd(); return 'player'; }
           }
 
       } catch (e) {
           console.error("Error verificando rol:", e);
       }
 
-      console.warn("⛔ Rol: NULL (Sin coincidencias)");
+      console.warn("⛔ Rol no encontrado en DB");
       console.groupEnd();
-      // ESTRICTO: Si no encaja en nada, devolvemos null.
       return null;
   };
 
@@ -159,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setUser(devUser);
       setSession({ user: devUser, access_token: 'mock-token' } as Session);
-      setRole(targetRole); // Esto actualiza también el localStorage
+      setRole(targetRole); 
       setLoading(false);
       sessionStorage.setItem('padelpro_dev_mode', 'true');
   };
@@ -168,43 +114,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initSession = async () => {
-        const safetyTimer = setTimeout(() => {
-            if (mounted && loading) {
-                console.warn("[Auth] Timeout: Forzando fin carga.");
-                setLoading(false);
-            }
-        }, 3000);
-
         // Check Offline Mode
         // @ts-ignore
         if ((supabase as any).supabaseUrl === 'https://placeholder.supabase.co' || sessionStorage.getItem('padelpro_dev_mode') === 'true') {
-             if(mounted) {
-                 setIsOfflineMode(true);
-                 setLoading(false);
-             }
-             clearTimeout(safetyTimer);
+             if(mounted) { setIsOfflineMode(true); setLoading(false); }
              return;
         }
 
         try {
+            // 1. Obtener Sesión (Rápido, local)
             const { data: { session }, error } = await supabase.auth.getSession();
-            
             if (error) throw error;
             
             if (mounted) {
                 setSession(session);
                 setUser(session?.user ?? null);
                 
+                // ESTRATEGIA: Carga Optimista
+                // Si tenemos un rol en caché, dejamos pasar al usuario INMEDIATAMENTE (loading = false).
+                // Si no, esperamos a la DB.
+                const hasCachedRole = !!role; 
+                if (hasCachedRole) {
+                    console.log("[Auth] Usando rol en caché para acceso inmediato.");
+                    setLoading(false); 
+                }
+
                 if (session?.user) {
-                    // Verificación de fondo (Background Revalidation)
-                    // Ya tenemos el rol del localStorage (si existe), así que la UI no parpadea.
-                    // Pero consultamos la DB para asegurar que sigue siendo válido.
-                    checkUserRole(session.user.id, session.user.email).then(r => {
-                        if (mounted) setRole(r);
+                    // 2. Verificación en Segundo Plano (Siempre se ejecuta)
+                    // Esto asegura que la DB sea la fuente de la verdad final.
+                    checkUserRole(session.user.id, session.user.email).then(serverRole => {
+                        if (mounted) {
+                            // Solo actualizamos si ha cambiado o si no teníamos caché
+                            if (serverRole !== role) {
+                                console.log("[Auth] Actualizando rol desde DB:", serverRole);
+                                setRole(serverRole);
+                            }
+                            // Si no teníamos caché, ahora quitamos el loading
+                            if (!hasCachedRole) setLoading(false);
+                        }
                     });
                 } else {
-                    // Si no hay sesión, limpiamos el rol obligatoriamente
                     setRole(null);
+                    setLoading(false);
                 }
             }
         } catch (error) {
@@ -213,10 +164,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setSession(null);
                 setUser(null);
                 setRole(null);
+                setLoading(false);
             }
-        } finally {
-            if (mounted) setLoading(false);
-            clearTimeout(safetyTimer);
         }
     };
 
@@ -229,15 +178,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(currentUser);
           
           if (currentUser && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
-              // No ponemos loading a true aquí para evitar "parpadeo" si ya tenemos caché
-              // setLoading(true); 
-              const r = await checkUserRole(currentUser.id, currentUser.email);
-              if (mounted) {
-                  setRole(r);
-                  setLoading(false);
-              }
+              // Misma estrategia para cambios de auth
+              checkUserRole(currentUser.id, currentUser.email).then(r => {
+                  if (mounted) {
+                      setRole(r);
+                      setLoading(false);
+                  }
+              });
           } else if (!currentUser) {
               setRole(null);
+              // No forzamos loading false aquí para evitar parpadeos en logout
           }
       }
     });
@@ -263,7 +213,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
         setUser(null);
         setSession(null);
-        setRole(null); // Limpia localStorage
+        setRole(null);
         localStorage.removeItem('padel_sim_player_id');
         setLoading(false);
     }
