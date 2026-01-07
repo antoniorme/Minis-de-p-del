@@ -49,22 +49,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return 'admin';
       }
 
-      // 2. Comprobación en paralelo para velocidad
+      // 2. Comprobación en paralelo
       try {
-          const clubPromise = supabase
-              .from('clubs')
-              .select('id')
-              .eq('owner_id', uid)
-              .maybeSingle();
-
+          // Check SuperAdmin
           const superPromise = supabase
               .from('superadmins')
               .select('id')
               .eq('email', userEmail)
               .maybeSingle();
 
-          // Ejecutamos ambas consultas a la vez
-          const [clubRes, superRes] = await Promise.all([clubPromise, superPromise]);
+          // Check Club Owner (Admin) - Primary check via 'clubs' table
+          const clubPromise = supabase
+              .from('clubs')
+              .select('id')
+              .eq('owner_id', uid)
+              .maybeSingle();
+
+          const [superRes, clubRes] = await Promise.all([superPromise, clubPromise]);
 
           if (superRes.data) {
               console.log("✅ Rol: SUPERADMIN");
@@ -78,26 +79,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return 'admin';
           }
 
-          // Si no es club ni superadmin, miramos si es jugador
-          const { data: playerData } = await supabase
+          // 3. Fallback: Check 'players' table to distinguish Admin vs Player
+          // - user_id in 'players' = OWNER of the player (Admin)
+          // - profile_user_id in 'players' = LINKED USER (Player App)
+          
+          // Check if user is a Player App User
+          const { data: playerProfile } = await supabase
+              .from('players')
+              .select('id')
+              .eq('profile_user_id', uid)
+              .maybeSingle();
+
+          if (playerProfile) {
+              console.log("✅ Rol: PLAYER (Perfil vinculado)");
+              console.groupEnd();
+              return 'player';
+          }
+
+          // Check if user OWNS players (Admin without club record yet?)
+          const { data: ownerCheck } = await supabase
               .from('players')
               .select('id')
               .eq('user_id', uid)
+              .limit(1)
               .maybeSingle();
 
-          if (playerData) {
-              console.log("✅ Rol: PLAYER");
+          if (ownerCheck) {
+              console.log("✅ Rol: ADMIN (Posee jugadores, sin club)");
               console.groupEnd();
-              return 'player';
+              return 'admin';
+          }
+
+          // Check by Email for Player (Invitation linking)
+          if (userEmail) {
+              const { data: emailMatch } = await supabase
+                  .from('players')
+                  .select('id')
+                  .eq('email', userEmail)
+                  .maybeSingle();
+              
+              if (emailMatch) {
+                  // Technically they should claim the profile, but for role check treat as player
+                  console.log("✅ Rol: PLAYER (Email detectado)");
+                  console.groupEnd();
+                  return 'player';
+              }
           }
 
       } catch (e) {
           console.error("Error verificando rol:", e);
       }
 
-      console.log("❓ Rol: PENDING");
+      console.log("❓ Rol: PENDING (Nuevo usuario)");
       console.groupEnd();
-      return 'pending';
+      // Default new users to 'admin' to allow them to create a club (Onboarding)
+      return 'admin';
   };
 
   const loginWithDevBypass = (targetRole: 'admin' | 'player' | 'superadmin') => {
@@ -122,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initSession = async () => {
-        // TIMEOUT DE SEGURIDAD (Reducido a 3s para mejor UX)
+        // TIMEOUT DE SEGURIDAD
         const safetyTimer = setTimeout(() => {
             if (mounted && loading) {
                 console.warn("[Auth] Timeout: Forzando carga.");
