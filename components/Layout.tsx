@@ -6,6 +6,7 @@ import { useAuth } from '../store/AuthContext';
 import { useHistory } from '../store/HistoryContext';
 import { useTournament } from '../store/TournamentContext';
 import { useNotifications } from '../store/NotificationContext';
+import { THEME } from '../utils/theme';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -79,6 +80,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       return 'bg-slate-50';
   };
 
+  // Logic for Logo/Title Display
+  // If user has a custom logo, show it.
+  // If not, show "ParaPádel" if it's the generic club name, otherwise the club name.
+  const showDefaultBranding = clubData.name === 'Mi Club de Padel' || clubData.name === 'ParaPadel';
+
   return (
     <div className={`min-h-screen transition-colors duration-500 flex flex-col overflow-x-hidden ${getBodyBackground()} ${isDarkMode || isLeaguePath ? 'text-slate-50' : 'text-slate-900'}`}>
       
@@ -104,9 +110,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 </div>
                 
                 <div className="flex flex-col overflow-hidden">
-                    <h1 className={`text-base md:text-lg font-black truncate leading-tight ${isDarkMode || isLeaguePath ? 'text-white' : 'bg-gradient-to-r from-[#2B2DBF] to-[#575AF9] bg-clip-text text-transparent'}`}>
-                        {clubData.name || 'Minis de Padel'}
-                    </h1>
+                    {showDefaultBranding ? (
+                        <h1 className="text-base md:text-lg font-black truncate leading-tight italic tracking-tighter">
+                            <span className={isDarkMode || isLeaguePath ? 'text-white' : 'text-slate-900'}>Para</span>
+                            <span style={{ color: THEME.cta }}>Pádel</span>
+                        </h1>
+                    ) : (
+                        <h1 className={`text-base md:text-lg font-black truncate leading-tight ${isDarkMode || isLeaguePath ? 'text-white' : 'text-slate-900'}`}>
+                            {clubData.name}
+                        </h1>
+                    )}
+                    
                     {isTournamentActive ? (
                         <span className="text-[9px] text-[#575AF9] font-black uppercase tracking-widest truncate">Torneo Activo</span>
                     ) : isLeaguePath ? (

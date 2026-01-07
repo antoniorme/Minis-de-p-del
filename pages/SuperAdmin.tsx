@@ -7,7 +7,7 @@ import {
     LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, 
     Mail, Key, Trash2, X, Copy, Edit2, Send, Save, 
     ShieldCheck, Users, Trophy, Activity, Eye, Calendar,
-    UserCheck, TrendingUp, BarChart3
+    UserCheck, TrendingUp, BarChart3, CalendarRange
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
@@ -34,8 +34,9 @@ interface Club {
     id: string;
     owner_id: string;
     name: string;
-    email?: string; // ADDED: Email field for Club table
+    email?: string;
     is_active: boolean;
+    league_enabled?: boolean; // NEW: League Module Flag
     created_at: string;
 }
 
@@ -61,6 +62,7 @@ const SuperAdmin: React.FC = () => {
     const [fetchError, setFetchError] = useState<string | null>(null);
     
     // UI Controls
+    const [showCreateModal, setShowCreateModal] = useState(false); // NEW: Create Club Modal
     const [inspectedClub, setInspectedClub] = useState<ClubWithStats | null>(null);
     const [clubDetailData, setClubDetailData] = useState<{
         players: any[],
@@ -80,7 +82,6 @@ const SuperAdmin: React.FC = () => {
     const [clubToDelete, setClubToDelete] = useState<Club | null>(null);
     const [clubToEdit, setClubToEdit] = useState<Club | null>(null);
     const [newName, setNewName] = useState('');
-    const [resendingId, setResendingId] = useState<string | null>(null);
     const [clubToRepair, setClubToRepair] = useState<Club | null>(null);
     const [manualEmailInput, setManualEmailInput] = useState('');
     const [modalMode, setModalMode] = useState<'repair' | 'send'>('send');
@@ -94,7 +95,7 @@ const SuperAdmin: React.FC = () => {
         if (isOfflineMode) {
             setClubs([{ 
                 id: 'local-c1', owner_id: 'local-o1', name: 'Club Local Test', is_active: true, created_at: new Date().toISOString(),
-                playerCount: 16, activeTourneys: 1, finishedTourneys: 5, ownerEmail: 'admin@local.test', email: 'admin@local.test'
+                playerCount: 16, activeTourneys: 1, finishedTourneys: 5, ownerEmail: 'admin@local.test', email: 'admin@local.test', league_enabled: false
             }]);
             setGlobalStats({ totalClubs: 1, totalPlayers: 16, activeTourneys: 1, finishedTourneys: 5 });
             setLoading(false);
@@ -102,7 +103,7 @@ const SuperAdmin: React.FC = () => {
         }
 
         try {
-            // 1. Fetch Clubs (Includes email if column exists)
+            // 1. Fetch Clubs (Including league_enabled)
             const { data: clubsData, error: clubsError } = await supabase.from('clubs').select('*').order('created_at', { ascending: false });
             if (clubsError) throw clubsError;
 
@@ -120,7 +121,6 @@ const SuperAdmin: React.FC = () => {
                     playerCount: clubPlayers,
                     activeTourneys: clubTourneys.filter(t => t.status !== 'finished').length,
                     finishedTourneys: clubTourneys.filter(t => t.status === 'finished').length,
-                    // Prefer direct club email, fallback to legacy player record
                     ownerEmail: club.email || ownerRecord?.email
                 };
             });
@@ -167,7 +167,7 @@ const SuperAdmin: React.FC = () => {
         setLoadingDetails(false);
     };
 
-    // --- LOGIC HANDLERS (MAINTAINED) ---
+    // --- LOGIC HANDLERS ---
     const handleSearchUser = async () => {
         if (!searchEmail) return;
         setCreateError(null);
@@ -182,10 +182,12 @@ const SuperAdmin: React.FC = () => {
 
     const handleCreateClubFromExisting = async () => {
         if (!foundUser || !clubName) return;
-        // Insert with email
         const { error } = await supabase.from('clubs').insert([{ owner_id: foundUser.id, name: clubName, is_active: true, email: foundUser.email }]);
         if (error) setCreateError(error.message);
-        else { setSuccessMessage(`Club "${clubName}" creado.`); setFoundUser(null); setClubName(''); setSearchEmail(''); fetchClubs(); }
+        else { 
+            setSuccessMessage(`Club "${clubName}" creado.`); 
+            setFoundUser(null); setClubName(''); setSearchEmail(''); setShowCreateModal(false); fetchClubs(); 
+        }
     };
 
     const handleQuickInvite = async () => {
@@ -199,7 +201,6 @@ const SuperAdmin: React.FC = () => {
             const { data: authData, error: authError } = await tempClient.auth.signUp({ email: quickEmail, password: tempPass, options: { captchaToken: captchaToken || undefined } });
             if (authError) throw authError;
             
-            // Create Club with Email
             await supabase.from('clubs').insert([{ 
                 owner_id: authData.user!.id, 
                 name: quickClubName, 
@@ -208,7 +209,7 @@ const SuperAdmin: React.FC = () => {
             }]);
             
             setTempCredentials({ email: quickEmail, pass: tempPass });
-            setQuickEmail(''); setQuickClubName(''); if(captchaRef.current) captchaRef.current.resetCaptcha(); setCaptchaToken(null); fetchClubs();
+            setQuickEmail(''); setQuickClubName(''); if(captchaRef.current) captchaRef.current.resetCaptcha(); setCaptchaToken(null); setShowCreateModal(false); fetchClubs();
         } catch (err: any) { setCreateError(err.message); if(captchaRef.current) captchaRef.current.resetCaptcha(); setCaptchaToken(null); }
     };
 
@@ -216,6 +217,22 @@ const SuperAdmin: React.FC = () => {
         const newState = !club.is_active;
         const { error } = await supabase.from('clubs').update({ is_active: newState }).eq('id', club.id);
         if (!error) setClubs(clubs.map(c => c.id === club.id ? { ...c, is_active: newState } : c));
+    };
+
+    const toggleLeagueModule = async (club: ClubWithStats) => {
+        const newState = !club.league_enabled;
+        try {
+            const { error } = await supabase.from('clubs').update({ league_enabled: newState }).eq('id', club.id);
+            if (error) throw error;
+            
+            // Update local state
+            setClubs(prev => prev.map(c => c.id === club.id ? { ...c, league_enabled: newState } : c));
+            if (inspectedClub && inspectedClub.id === club.id) {
+                setInspectedClub({ ...inspectedClub, league_enabled: newState });
+            }
+        } catch(e: any) {
+            alert("Error cambiando estado del módulo de liga: " + e.message);
+        }
     };
 
     const handleDeleteClub = async () => {
@@ -234,13 +251,11 @@ const SuperAdmin: React.FC = () => {
     };
 
     const handleResendEmail = async (club: Club) => {
-        // Try to use the stored email in clubs, then fallback to players table
         let targetEmail = club.email;
         if (!targetEmail) {
              const { data: playerData } = await supabase.from('players').select('email').eq('user_id', club.owner_id).maybeSingle();
              targetEmail = playerData?.email;
         }
-
         setClubToRepair(club);
         if (targetEmail) { setManualEmailInput(targetEmail); setModalMode('send'); }
         else { setManualEmailInput(''); setModalMode('repair'); }
@@ -251,9 +266,7 @@ const SuperAdmin: React.FC = () => {
         if (!clubToRepair || !manualEmailInput) return;
         if (!isOfflineMode && HCAPTCHA_SITE_TOKEN && !captchaToken) { setCreateError("Captcha requerido."); return; }
         try {
-            // Repair: Update club email if missing
             await supabase.from('clubs').update({ email: manualEmailInput }).eq('id', clubToRepair.id);
-            
             await supabase.auth.resetPasswordForEmail(manualEmailInput, { redirectTo: window.location.origin + '/#/auth?type=recovery', captchaToken: captchaToken || undefined });
             setSuccessMessage(`Enviado a ${manualEmailInput}`); setClubToRepair(null); setCaptchaToken(null); fetchClubs();
         } catch (err: any) { setCreateError(err.message); }
@@ -267,16 +280,34 @@ const SuperAdmin: React.FC = () => {
                     <Shield size={120} />
                 </div>
                 <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-8">
-                        <div className="bg-emerald-500 p-2 rounded-lg">
-                            <Shield size={24} className="text-white" />
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-emerald-500 p-2 rounded-lg">
+                                <Shield size={24} className="text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-black tracking-tight">Super Admin</h1>
+                                <p className="text-slate-400 text-sm">Control global de ParaPadel</p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="text-3xl font-black tracking-tight">Super Admin Dashboard</h1>
-                            <p className="text-slate-400 text-sm">Panel de control global de la plataforma PadelPro</p>
+                        <div className="flex gap-4">
+                            <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-all border border-white/10">
+                                <LayoutDashboard size={16}/> Mi Club
+                            </button>
+                            <button onClick={() => navigate('/p/dashboard')} className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-all border border-white/10">
+                                <Smartphone size={16}/> App Jugador
+                            </button>
                         </div>
                     </div>
                     
+                    {/* QUICK ACTIONS ROW */}
+                    <div className="mb-8 flex gap-4">
+                        <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-6 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black shadow-lg transition-all active:scale-95">
+                            <Plus size={20}/> ALTA NUEVO CLUB
+                        </button>
+                        {/* Future Actions Here */}
+                    </div>
+
                     {/* GLOBAL STATS GRID */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
@@ -304,15 +335,6 @@ const SuperAdmin: React.FC = () => {
                             <div className="text-3xl font-black text-emerald-400">{globalStats.totalPlayers}</div>
                         </div>
                     </div>
-
-                    <div className="flex gap-4 mt-10">
-                        <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-all border border-white/10">
-                            <LayoutDashboard size={16}/> Mi Club
-                        </button>
-                        <button onClick={() => navigate('/p/dashboard')} className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-all border border-white/10">
-                            <Smartphone size={16}/> App Jugador
-                        </button>
-                    </div>
                 </div>
             </div>
 
@@ -324,141 +346,142 @@ const SuperAdmin: React.FC = () => {
                 </div>
             )}
 
-            {/* MAIN GRID */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
-                {/* LIST OF CLUBS (Large Column) */}
-                <div className="lg:col-span-2 space-y-4">
-                    <div className="flex items-center justify-between px-2">
-                        <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                            <Building size={20} className="text-slate-400"/> Gestión de Clubs
-                        </h3>
-                        <button onClick={fetchClubs} className="p-2 text-slate-400 hover:text-blue-500 bg-white border border-slate-200 rounded-lg shadow-sm">
-                            <RefreshCw size={16} className={loading ? 'animate-spin' : ''}/>
-                        </button>
-                    </div>
-
-                    <div className="space-y-3">
-                        {loading ? (
-                            Array.from({length: 4}).map((_, i) => <div key={i} className="h-24 bg-slate-100 animate-pulse rounded-2xl"></div>)
-                        ) : clubs.map(club => (
-                            <div key={club.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-200 transition-colors flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-3 mb-1">
-                                        <h4 className="font-black text-slate-800 text-lg leading-tight truncate">{club.name}</h4>
-                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${club.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
-                                            {club.is_active ? 'ACTIVO' : 'BLOQUEADO'}
-                                        </span>
-                                    </div>
-                                    
-                                    {/* OWNER EMAIL DISPLAY */}
-                                    <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium mb-1">
-                                        <Mail size={12} className="text-slate-300"/>
-                                        <span className="truncate">{club.ownerEmail || 'Sin email asociado'}</span>
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-x-4 gap-y-2 mt-3">
-                                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
-                                            <Users size={14} className="text-blue-500"/> {club.playerCount} <span className="font-normal text-slate-400">Jugadores</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
-                                            <Activity size={14} className="text-rose-500"/> {club.activeTourneys} <span className="font-normal text-slate-400">Activos</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
-                                            <Trophy size={14} className="text-amber-500"/> {club.finishedTourneys} <span className="font-normal text-slate-400">Historial</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button 
-                                        onClick={() => fetchClubDetails(club)}
-                                        className="p-3 bg-slate-50 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 rounded-xl border border-slate-100 transition-all"
-                                        title="Inspeccionar Club"
-                                    >
-                                        <Eye size={18}/>
-                                    </button>
-                                    <button 
-                                        onClick={() => { setNewName(club.name); setClubToEdit(club); }}
-                                        className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl border border-slate-100 transition-all"
-                                        title="Renombrar"
-                                    >
-                                        <Edit2 size={18}/>
-                                    </button>
-                                    <button 
-                                        onClick={() => handleResendEmail(club)}
-                                        className="p-3 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 transition-all"
-                                        title="Claves"
-                                    >
-                                        <Send size={18}/>
-                                    </button>
-                                    <button 
-                                        onClick={() => toggleClubStatus(club)}
-                                        className={`p-3 rounded-xl border transition-all ${club.is_active ? 'bg-slate-50 text-slate-400 hover:text-rose-600' : 'bg-rose-50 text-rose-600'}`}
-                                        title={club.is_active ? 'Bloquear' : 'Desbloquear'}
-                                    >
-                                        {club.is_active ? <Unlock size={18}/> : <Lock size={18}/>}
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+            {/* MAIN CONTENT: CLUB LIST */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between px-2">
+                    <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                        <Building size={20} className="text-slate-400"/> Listado de Clubs
+                    </h3>
+                    <button onClick={fetchClubs} className="p-2 text-slate-400 hover:text-blue-500 bg-white border border-slate-200 rounded-lg shadow-sm">
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''}/>
+                    </button>
                 </div>
 
-                {/* CREATION PANEL (Small Column) */}
-                <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm sticky top-24">
-                        <h3 className="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
-                            <Plus className="bg-indigo-100 text-indigo-600 p-1 rounded-md" size={24}/> Alta Rápida
-                        </h3>
-                        
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email Administrador</label>
-                                <div className="flex items-center gap-2 mt-1 border-b border-slate-100 pb-2">
-                                    <Mail size={16} className="text-slate-300"/>
-                                    <input value={quickEmail} onChange={e => setQuickEmail(e.target.value)} placeholder="admin@club.com" className="flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none"/>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {loading ? (
+                        Array.from({length: 6}).map((_, i) => <div key={i} className="h-40 bg-slate-100 animate-pulse rounded-2xl"></div>)
+                    ) : clubs.map(club => (
+                        <div key={club.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-200 hover:shadow-md transition-all flex flex-col justify-between h-full">
+                            <div className="mb-4">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <h4 className="font-black text-slate-800 text-lg leading-tight truncate w-full" title={club.name}>{club.name}</h4>
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${club.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                                        {club.is_active ? 'ACTIVO' : 'BLOQUEADO'}
+                                    </span>
+                                </div>
+                                
+                                <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium mb-3 truncate" title={club.ownerEmail}>
+                                    <Mail size={12} className="text-slate-300"/>
+                                    {club.ownerEmail || 'Sin email asociado'}
+                                </div>
+
+                                {/* TAGS ROW */}
+                                <div className="flex gap-2 mb-3">
+                                    {club.league_enabled && (
+                                        <div className="bg-indigo-50 border border-indigo-100 text-indigo-600 px-2 py-1 rounded-md text-[10px] font-black uppercase flex items-center gap-1">
+                                            <CalendarRange size={10}/> Liga Pro
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-4 border-t border-slate-50 pt-3">
+                                    <div className="text-center flex-1">
+                                        <div className="text-lg font-black text-slate-700">{club.playerCount}</div>
+                                        <div className="text-[9px] text-slate-400 font-bold uppercase">Jugadores</div>
+                                    </div>
+                                    <div className="text-center flex-1">
+                                        <div className="text-lg font-black text-rose-500">{club.activeTourneys}</div>
+                                        <div className="text-[9px] text-slate-400 font-bold uppercase">Activos</div>
+                                    </div>
+                                    <div className="text-center flex-1">
+                                        <div className="text-lg font-black text-amber-500">{club.finishedTourneys}</div>
+                                        <div className="text-[9px] text-slate-400 font-bold uppercase">Historial</div>
+                                    </div>
                                 </div>
                             </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nombre del Club</label>
-                                <div className="flex items-center gap-2 mt-1 border-b border-slate-100 pb-2">
-                                    <Building size={16} className="text-slate-300"/>
-                                    <input value={quickClubName} onChange={e => setQuickClubName(e.target.value)} placeholder="Padel Indoor Center" className="flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none"/>
+
+                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 bg-slate-50/50 -mx-5 -mb-5 p-3 rounded-b-2xl">
+                                <button 
+                                    onClick={() => fetchClubDetails(club)}
+                                    className="text-xs font-bold text-slate-600 flex items-center gap-1 hover:text-emerald-600 transition-colors"
+                                >
+                                    <Eye size={14}/> DETALLES
+                                </button>
+                                <div className="flex gap-1">
+                                    <button onClick={() => { setNewName(club.name); setClubToEdit(club); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-white rounded-lg transition-colors"><Edit2 size={16}/></button>
+                                    <button onClick={() => handleResendEmail(club)} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-white rounded-lg transition-colors"><Send size={16}/></button>
+                                    <button onClick={() => toggleClubStatus(club)} className={`p-2 rounded-lg transition-colors ${club.is_active ? 'text-slate-400 hover:text-rose-500 hover:bg-white' : 'text-rose-500 bg-rose-50'}`}>{club.is_active ? <Lock size={16}/> : <Unlock size={16}/>}</button>
                                 </div>
                             </div>
-
-                            {!isOfflineMode && HCAPTCHA_SITE_TOKEN && (
-                                <div className="flex justify-center mt-2 scale-90">
-                                    <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={token => setCaptchaToken(token)} ref={captchaRef}/>
-                                </div>
-                            )}
-
-                            <button onClick={handleQuickInvite} disabled={!quickEmail || !quickClubName} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                CREAR CLUB
-                            </button>
                         </div>
-
-                        <div className="mt-8 pt-8 border-t border-slate-100">
-                             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Vincular Usuario Existente</h4>
-                             <div className="flex gap-2">
-                                <input value={searchEmail} onChange={e => setSearchEmail(e.target.value)} placeholder="Email..." className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-400"/>
-                                <button onClick={handleSearchUser} className="bg-slate-200 p-2 rounded-xl text-slate-600 hover:bg-slate-300"><Search size={16}/></button>
-                             </div>
-                             {foundUser && (
-                                 <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100 animate-fade-in">
-                                     <div className="text-[10px] font-black text-emerald-700 uppercase mb-1">Usuario Encontrado</div>
-                                     <div className="text-xs font-bold text-slate-800 mb-2 truncate">{foundUser.email}</div>
-                                     <input value={clubName} onChange={e => setClubName(e.target.value)} placeholder="Nombre del club..." className="w-full p-2 bg-white border border-emerald-200 rounded-lg text-xs mb-2 outline-none"/>
-                                     <button onClick={handleCreateClubFromExisting} className="w-full py-2 bg-emerald-600 text-white rounded-lg text-xs font-black">ASIGNAR CLUB</button>
-                                 </div>
-                             )}
-                        </div>
-                    </div>
+                    ))}
                 </div>
             </div>
 
-            {/* --- CLUB INSPECTOR MODAL --- */}
+            {/* --- CREATE CLUB MODAL --- */}
+            {showCreateModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl animate-scale-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                                <Plus className="bg-indigo-100 text-indigo-600 p-1.5 rounded-lg" size={32}/> Nuevo Club
+                            </h3>
+                            <button onClick={() => setShowCreateModal(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* FORM BLOCK */}
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email Administrador</label>
+                                    <div className="flex items-center gap-2 mt-1 border rounded-xl px-3 py-2 bg-slate-50 border-slate-200">
+                                        <Mail size={18} className="text-slate-400"/>
+                                        <input value={quickEmail} onChange={e => setQuickEmail(e.target.value)} placeholder="admin@club.com" className="flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none"/>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nombre del Club</label>
+                                    <div className="flex items-center gap-2 mt-1 border rounded-xl px-3 py-2 bg-slate-50 border-slate-200">
+                                        <Building size={18} className="text-slate-400"/>
+                                        <input value={quickClubName} onChange={e => setQuickClubName(e.target.value)} placeholder="Padel Indoor Center" className="flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none"/>
+                                    </div>
+                                </div>
+
+                                {!isOfflineMode && HCAPTCHA_SITE_TOKEN && (
+                                    <div className="flex justify-center mt-2 scale-90">
+                                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={token => setCaptchaToken(token)} ref={captchaRef}/>
+                                    </div>
+                                )}
+
+                                <button onClick={handleQuickInvite} disabled={!quickEmail || !quickClubName} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                    CREAR CLUB Y GENERAR CLAVE
+                                </button>
+                            </div>
+
+                            <div className="h-px bg-slate-100 w-full"></div>
+
+                            {/* EXISTING USER BLOCK */}
+                            <div>
+                                 <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">O vincular Usuario Existente</h4>
+                                 <div className="flex gap-2">
+                                    <input value={searchEmail} onChange={e => setSearchEmail(e.target.value)} placeholder="Email..." className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400"/>
+                                    <button onClick={handleSearchUser} className="bg-slate-200 px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-300 font-bold text-xs">BUSCAR</button>
+                                 </div>
+                                 {foundUser && (
+                                     <div className="mt-4 p-4 bg-emerald-50 rounded-xl border border-emerald-100 animate-fade-in">
+                                         <div className="text-[10px] font-black text-emerald-700 uppercase mb-1">Usuario Encontrado</div>
+                                         <div className="text-sm font-bold text-slate-800 mb-2 truncate">{foundUser.email}</div>
+                                         <input value={clubName} onChange={e => setClubName(e.target.value)} placeholder="Nombre del club..." className="w-full p-2 bg-white border border-emerald-200 rounded-lg text-sm mb-2 outline-none"/>
+                                         <button onClick={handleCreateClubFromExisting} className="w-full py-2 bg-emerald-600 text-white rounded-lg text-xs font-black">ASIGNAR CLUB</button>
+                                     </div>
+                                 )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- CLUB INSPECTOR MODAL (WITH LEAGUE TOGGLE) --- */}
             {inspectedClub && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[2.5rem] w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-scale-in">
@@ -477,6 +500,25 @@ const SuperAdmin: React.FC = () => {
                             <button onClick={() => setInspectedClub(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
                                 <X size={24}/>
                             </button>
+                        </div>
+
+                        {/* Feature Toggles Section */}
+                        <div className="bg-slate-100 p-6 border-b border-slate-200 flex flex-wrap gap-4">
+                            <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                <div className={`p-2 rounded-lg ${inspectedClub.league_enabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                                    <CalendarRange size={24}/>
+                                </div>
+                                <div>
+                                    <div className="font-bold text-slate-800 text-sm">Módulo Liga</div>
+                                    <div className="text-[10px] text-slate-500 uppercase font-bold">{inspectedClub.league_enabled ? 'Activado' : 'Desactivado'}</div>
+                                </div>
+                                <button 
+                                    onClick={() => toggleLeagueModule(inspectedClub)}
+                                    className={`ml-4 w-12 h-6 rounded-full p-1 transition-colors ${inspectedClub.league_enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                >
+                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${inspectedClub.league_enabled ? 'translate-x-6' : ''}`}></div>
+                                </button>
+                            </div>
                         </div>
 
                         {/* Modal Content */}
@@ -551,7 +593,8 @@ const SuperAdmin: React.FC = () => {
                 </div>
             )}
 
-            {/* --- MODALS (MAINTAINED) --- */}
+            {/* --- MODALS (MAINTAINED: Credentials, Repair, Edit, Delete) --- */}
+            {/* Same implementation as before for these modals, just ensuring they render correctly */}
             {tempCredentials && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4 animate-scale-in">
                     <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full relative">
@@ -570,7 +613,6 @@ const SuperAdmin: React.FC = () => {
                 </div>
             )}
 
-            {/* REPAIR/SEND MODAL */}
             {clubToRepair && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4 animate-scale-in">
                     <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl relative">
@@ -590,7 +632,6 @@ const SuperAdmin: React.FC = () => {
                 </div>
             )}
 
-            {/* EDIT NAME MODAL */}
             {clubToEdit && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
@@ -604,7 +645,6 @@ const SuperAdmin: React.FC = () => {
                 </div>
             )}
 
-            {/* DELETE MODAL */}
             {clubToDelete && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">

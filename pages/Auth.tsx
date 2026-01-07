@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldAlert, ShieldCheck, Terminal, Eye, EyeOff } from 'lucide-react';
+import { Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldAlert, ShieldCheck, Terminal, Eye, EyeOff } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
@@ -253,10 +253,12 @@ const AuthPage: React.FC = () => {
             </button>
             <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
                 <div className="text-center mb-8">
-                    <div className="inline-block p-4 bg-white rounded-3xl mb-4 shadow-xl shadow-indigo-100">
-                        <Key size={48} className="text-[#575AF9]" />
+                    <div className="mb-6">
+                        <span className="text-4xl font-black italic tracking-tighter text-slate-900">
+                            Para<span style={{ color: '#575AF9' }}>Pádel</span>
+                        </span>
                     </div>
-                    <h1 className="text-3xl font-black text-slate-900 mb-2">Recuperar Acceso</h1>
+                    <h1 className="text-2xl font-black text-slate-900 mb-2">Recuperar Acceso</h1>
                     <p className="text-slate-400 text-sm">Te enviaremos un enlace mágico a tu correo.</p>
                 </div>
 
@@ -323,14 +325,16 @@ const AuthPage: React.FC = () => {
 
       <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
         <div className="text-center mb-8">
-          <div className="inline-block p-4 bg-white rounded-3xl mb-4 shadow-xl shadow-indigo-100">
-             <Trophy size={48} className="text-[#575AF9]" />
+          <div className="mb-6">
+              <span className="text-5xl font-black italic tracking-tighter text-slate-900">
+                  Para<span style={{ color: '#575AF9' }}>Pádel</span>
+              </span>
           </div>
-          <h1 className="text-3xl font-black text-slate-900 mb-2">
+          <h1 className="text-2xl font-black text-slate-900 mb-2">
             {view === 'login' ? 'Bienvenido' : 'Crear Cuenta'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'login' ? 'Introduce tus credenciales' : 'Únete a la comunidad de padel'}
+            {view === 'login' ? 'Introduce tus credenciales' : 'Únete a la comunidad de ParaPádel'}
           </p>
         </div>
 

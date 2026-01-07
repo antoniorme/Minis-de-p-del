@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Trophy, User, Compass, Dribbble, Bell } from 'lucide-react';
@@ -25,7 +26,7 @@ export const PlayerLayout: React.FC<{ children: React.ReactNode }> = ({ children
           {/* Top Bar - Always Visible */}
           <div className="px-6 py-4 flex justify-between items-center bg-white sticky top-0 z-30 border-b border-slate-100">
               <div className="font-black text-xl italic tracking-tighter text-slate-900">
-                  Padel<span style={{color: THEME.cta}}>Pro</span>
+                  Para<span style={{color: THEME.cta}}>Pádel</span>
               </div>
               <button 
                 onClick={() => navigate('/notifications')} 

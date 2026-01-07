@@ -2,6 +2,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, ArrowRight } from 'lucide-react';
+import { THEME } from '../utils/theme';
 
 const Landing: React.FC = () => {
   const navigate = useNavigate();
@@ -16,12 +17,9 @@ const Landing: React.FC = () => {
       </div>
 
       <div className="relative z-10 flex flex-col items-center">
-          <div className="mb-8 p-6 bg-white/10 backdrop-blur-md rounded-3xl shadow-2xl border border-white/10">
-            <Trophy size={60} className="text-[#575AF9]" />
-          </div>
           
-          <h1 className="text-5xl font-black mb-4 tracking-tight">
-            Minis de Padel
+          <h1 className="text-6xl font-black mb-4 tracking-tighter italic">
+            Para<span style={{color: THEME.cta}}>Pádel</span>
           </h1>
           
           <p className="text-slate-400 mb-12 max-w-xs mx-auto leading-relaxed text-lg">
@@ -43,7 +41,7 @@ const Landing: React.FC = () => {
       </div>
 
       <footer className="absolute bottom-6 text-xs text-slate-600">
-        © {new Date().getFullYear()} PadelPro App v2.0
+        © {new Date().getFullYear()} ParaPádel App v2.0
       </footer>
     </div>
   );
