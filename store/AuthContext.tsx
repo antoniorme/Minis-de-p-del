@@ -27,15 +27,33 @@ const AuthContext = createContext<AuthContextType>({
   loginWithDevBypass: () => {},
 });
 
+const ROLE_STORAGE_KEY = 'padelpro_user_role';
 // Lista blanca para acceso de emergencia a SuperAdmin/Admin si falla la DB
 const HARDCODED_ADMINS = ['admin@padelpro.local', 'antoniorme@gmail.com'];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
+
+  // INICIALIZACIÓN INTELIGENTE DEL ROL:
+  // Leemos del localStorage al iniciar. Si existe, lo usamos inmediatamente.
+  // Esto evita que 'role' sea null durante la carga inicial y el usuario sea expulsado.
+  const [role, setRoleState] = useState<UserRole>(() => {
+      const cached = localStorage.getItem(ROLE_STORAGE_KEY);
+      return (cached as UserRole) || null;
+  });
+
+  // Wrapper para mantener localStorage sincronizado
+  const setRole = (r: UserRole) => {
+      setRoleState(r);
+      if (r) {
+          localStorage.setItem(ROLE_STORAGE_KEY, r);
+      } else {
+          localStorage.removeItem(ROLE_STORAGE_KEY);
+      }
+  };
 
   // Función crítica optimizada: Determina el rol
   const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
@@ -124,7 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       console.warn("⛔ Rol: NULL (Sin coincidencias)");
       console.groupEnd();
-      // ESTRICTO: Si no encaja en nada, devolvemos null. No dejamos entrar.
+      // ESTRICTO: Si no encaja en nada, devolvemos null.
       return null;
   };
 
@@ -141,7 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setUser(devUser);
       setSession({ user: devUser, access_token: 'mock-token' } as Session);
-      setRole(targetRole);
+      setRole(targetRole); // Esto actualiza también el localStorage
       setLoading(false);
       sessionStorage.setItem('padelpro_dev_mode', 'true');
   };
@@ -178,8 +196,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setUser(session?.user ?? null);
                 
                 if (session?.user) {
-                    const r = await checkUserRole(session.user.id, session.user.email);
-                    if (mounted) setRole(r);
+                    // Verificación de fondo (Background Revalidation)
+                    // Ya tenemos el rol del localStorage (si existe), así que la UI no parpadea.
+                    // Pero consultamos la DB para asegurar que sigue siendo válido.
+                    checkUserRole(session.user.id, session.user.email).then(r => {
+                        if (mounted) setRole(r);
+                    });
+                } else {
+                    // Si no hay sesión, limpiamos el rol obligatoriamente
+                    setRole(null);
                 }
             }
         } catch (error) {
@@ -204,7 +229,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(currentUser);
           
           if (currentUser && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
-              setLoading(true);
+              // No ponemos loading a true aquí para evitar "parpadeo" si ya tenemos caché
+              // setLoading(true); 
               const r = await checkUserRole(currentUser.id, currentUser.email);
               if (mounted) {
                   setRole(r);
@@ -225,6 +251,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     if (isOfflineMode) {
         sessionStorage.removeItem('padelpro_dev_mode');
+        localStorage.removeItem(ROLE_STORAGE_KEY);
         window.location.reload();
         return;
     } 
@@ -236,7 +263,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
         setUser(null);
         setSession(null);
-        setRole(null);
+        setRole(null); // Limpia localStorage
         localStorage.removeItem('padel_sim_player_id');
         setLoading(false);
     }
