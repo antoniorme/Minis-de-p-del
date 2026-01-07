@@ -27,6 +27,9 @@ const AuthContext = createContext<AuthContextType>({
   loginWithDevBypass: () => {},
 });
 
+// Lista blanca para acceso de emergencia a SuperAdmin/Admin si falla la DB
+const HARDCODED_ADMINS = ['admin@padelpro.local', 'antoniorme@gmail.com'];
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -34,63 +37,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
-  // Función crítica: Determina si es Club (Admin), SuperAdmin o Jugador
+  // Función crítica: Determina el rol basándose ESTRICTAMENTE en la base de datos
   const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
-      // 1. SUPER ADMIN CHECK (DB + Fallback)
-      if (userEmail) {
-          // Hardcoded Fallback (Seguridad por si la tabla no existe aún)
+      console.group(`[Auth] Verificando rol para: ${userEmail || uid}`);
+      console.log("UID:", uid);
+
+      // 1. Acceso de Emergencia (Hardcoded)
+      if (userEmail && HARDCODED_ADMINS.includes(userEmail)) {
+          console.log("⚠️ Usuario en lista blanca. Asignando rol privilegiado.");
+          console.groupEnd();
           if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
-
-          try {
-              // Consultamos tabla whitelist de superadmins
-              const { data: saData } = await supabase
-                  .from('superadmins')
-                  .select('id')
-                  .eq('email', userEmail)
-                  .maybeSingle();
-              
-              if (saData) return 'superadmin';
-          } catch (e) {
-              console.warn('Error checking superadmin table');
-          }
+          return 'admin';
       }
 
-      // 2. MODO LOCAL / OFFLINE
-      if (isOfflineMode) {
-          if (userEmail?.includes('admin') || userEmail?.includes('club')) {
-              return 'admin';
-          }
-          return 'player';
-      }
-
-      // 3. MODO PRODUCCIÓN (Supabase)
+      // 2. Comprobar si es SUPERADMIN en DB
       try {
-          // Consultamos si este usuario está en la tabla de CLUBS ACTIVOS
-          // Usamos limit(1) para evitar errores si hay duplicados (varias filas con mismo owner_id)
-          const { data, error } = await supabase
-              .from('clubs')
+          const { data: saData } = await supabase
+              .from('superadmins')
               .select('id')
-              .eq('owner_id', uid)
-              .limit(1)
+              .eq('email', userEmail)
               .maybeSingle();
           
+          if (saData) {
+              console.log("✅ Rol detectado: SUPERADMIN");
+              console.groupEnd();
+              return 'superadmin';
+          }
+      } catch (e) { console.warn("Check Superadmin falló", e); }
+
+      // 3. Comprobar si es CLUB (ADMIN)
+      try {
+          // Usamos select('*') para evitar problemas de permisos a nivel de columna
+          const { data: clubData, error } = await supabase
+              .from('clubs')
+              .select('*') 
+              .eq('owner_id', uid)
+              .maybeSingle();
+
           if (error) {
-              console.error("Error Checking Role (Supabase):", error.message);
+              console.error("❌ Error DB consultando tabla 'clubs':", error.message, error.details);
+          } else {
+              if (clubData) {
+                  console.log(`✅ Rol detectado: ADMIN. Club encontrado: "${clubData.name}" (ID: ${clubData.id})`);
+                  console.groupEnd();
+                  return 'admin';
+              } else {
+                  console.warn(`⚠️ No se encontró ningún club donde owner_id = ${uid}.`);
+                  console.log("Esto significa que el usuario logueado NO coincide con el dueño de ningún club en la DB.");
+              }
           }
+      } catch (e) { console.error("Excepción verificando club:", e); }
 
-          if (data) {
-              console.log("✅ Rol asignado: ADMIN (Club encontrado)", data.id);
-              return 'admin'; // Es un Club
-          }
+      // 4. Comprobar si es JUGADOR (PLAYER)
+      try {
+          const { data: playerData, error: playerError } = await supabase
+              .from('players')
+              .select('id')
+              .eq('user_id', uid)
+              .maybeSingle();
           
-          console.log("ℹ️ Rol asignado: PLAYER (No encontrado en tabla clubs)");
-          // SI NO ES CLUB NI SUPERADMIN -> ES JUGADOR AUTOMÁTICAMENTE
-          return 'player';
+          if (playerData) {
+              console.log("✅ Rol detectado: PLAYER (Ficha de jugador encontrada)");
+              console.groupEnd();
+              return 'player';
+          } else if (playerError) {
+              console.error("Error consultando players:", playerError);
+          }
+      } catch (e) { console.error("Excepción verificando player:", e); }
 
-      } catch (e) {
-          console.error("Excepción crítica comprobando rol:", e);
-          return 'player'; // Fallback seguro
-      }
+      // 5. Si no es nada
+      console.log("❓ No se encontró rol. Asignando: PENDING");
+      console.groupEnd();
+      return 'pending';
   };
 
   const loginWithDevBypass = (targetRole: 'admin' | 'player' | 'superadmin') => {
@@ -108,69 +126,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession({ user: devUser, access_token: 'mock-token' } as Session);
       setRole(targetRole);
       setLoading(false);
-      
       sessionStorage.setItem('padelpro_dev_mode', 'true');
   };
 
   useEffect(() => {
+    let mounted = true;
+
     const initSession = async () => {
-        let shouldUseOffline = false;
+        // TIMEOUT DE SEGURIDAD
+        const safetyTimer = setTimeout(() => {
+            if (mounted && loading) {
+                console.warn("[Auth] Timeout: Forzando fin de carga por demora en respuesta.");
+                setLoading(false);
+            }
+        }, 5000); // Aumentado a 5s para dar tiempo al debug
 
+        // Check Offline Mode
         // @ts-ignore
-        if ((supabase as any).supabaseUrl === 'https://placeholder.supabase.co') {
-             shouldUseOffline = true;
-        }
-
-        const storedDevMode = sessionStorage.getItem('padelpro_dev_mode') === 'true';
-        if (storedDevMode) shouldUseOffline = true;
-
-        if (shouldUseOffline) {
-            setIsOfflineMode(true);
-            setLoading(false);
-            return;
+        if ((supabase as any).supabaseUrl === 'https://placeholder.supabase.co' || sessionStorage.getItem('padelpro_dev_mode') === 'true') {
+             if(mounted) {
+                 setIsOfflineMode(true);
+                 setLoading(false);
+             }
+             clearTimeout(safetyTimer);
+             return;
         }
 
         try {
             const { data: { session }, error } = await supabase.auth.getSession();
+            
             if (error) throw error;
             
-            setSession(session);
-            setUser(session?.user ?? null);
-            
-            if (session?.user) {
-                const r = await checkUserRole(session.user.id, session.user.email);
-                setRole(r);
+            if (mounted) {
+                setSession(session);
+                setUser(session?.user ?? null);
+                
+                if (session?.user) {
+                    const r = await checkUserRole(session.user.id, session.user.email);
+                    setRole(r);
+                }
             }
         } catch (error) {
-            console.warn("Session check failed, defaulting to offline logic if necessary", error);
-            // Don't force offline mode on session error, just clear state
-            setSession(null);
-            setUser(null);
-            setRole(null);
+            console.error("[Auth] Error inicial:", error);
+            if(mounted) {
+                setSession(null);
+                setUser(null);
+                setRole(null);
+            }
         } finally {
-            setLoading(false);
+            if (mounted) setLoading(false);
+            clearTimeout(safetyTimer);
         }
     };
 
     initSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!isOfflineMode) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[Auth] Evento: ${event}`);
+      if (!isOfflineMode && mounted) {
           setSession(session);
           const currentUser = session?.user ?? null;
           setUser(currentUser);
           
           if (currentUser) {
-              const r = await checkUserRole(currentUser.id, currentUser.email);
-              setRole(r);
+              if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+                  setLoading(true);
+                  const r = await checkUserRole(currentUser.id, currentUser.email);
+                  setRole(r);
+                  setLoading(false);
+              }
           } else {
               setRole(null);
           }
-          setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+        mounted = false;
+        subscription.unsubscribe();
+    };
   }, [isOfflineMode]);
 
   const signOut = async () => {
@@ -183,12 +217,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
         await supabase.auth.signOut();
     } catch (error) {
-        console.error("Error al cerrar sesión en Supabase:", error);
+        console.error("Error al cerrar sesión:", error);
     } finally {
         setUser(null);
         setSession(null);
         setRole(null);
         localStorage.removeItem('padel_sim_player_id');
+        setLoading(false);
     }
   };
 

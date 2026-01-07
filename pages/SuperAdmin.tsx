@@ -34,6 +34,7 @@ interface Club {
     id: string;
     owner_id: string;
     name: string;
+    email?: string; // ADDED: Email field for Club table
     is_active: boolean;
     created_at: string;
 }
@@ -93,7 +94,7 @@ const SuperAdmin: React.FC = () => {
         if (isOfflineMode) {
             setClubs([{ 
                 id: 'local-c1', owner_id: 'local-o1', name: 'Club Local Test', is_active: true, created_at: new Date().toISOString(),
-                playerCount: 16, activeTourneys: 1, finishedTourneys: 5, ownerEmail: 'admin@local.test'
+                playerCount: 16, activeTourneys: 1, finishedTourneys: 5, ownerEmail: 'admin@local.test', email: 'admin@local.test'
             }]);
             setGlobalStats({ totalClubs: 1, totalPlayers: 16, activeTourneys: 1, finishedTourneys: 5 });
             setLoading(false);
@@ -101,11 +102,11 @@ const SuperAdmin: React.FC = () => {
         }
 
         try {
-            // 1. Fetch Clubs
+            // 1. Fetch Clubs (Includes email if column exists)
             const { data: clubsData, error: clubsError } = await supabase.from('clubs').select('*').order('created_at', { ascending: false });
             if (clubsError) throw clubsError;
 
-            // 2. Fetch Aggregated Stats & Emails
+            // 2. Fetch Aggregated Stats & Emails (fallback)
             const { data: allPlayers } = await supabase.from('players').select('user_id, email');
             const { data: allTourneys } = await supabase.from('tournaments').select('user_id, status');
 
@@ -119,7 +120,8 @@ const SuperAdmin: React.FC = () => {
                     playerCount: clubPlayers,
                     activeTourneys: clubTourneys.filter(t => t.status !== 'finished').length,
                     finishedTourneys: clubTourneys.filter(t => t.status === 'finished').length,
-                    ownerEmail: ownerRecord?.email
+                    // Prefer direct club email, fallback to legacy player record
+                    ownerEmail: club.email || ownerRecord?.email
                 };
             });
 
@@ -180,7 +182,8 @@ const SuperAdmin: React.FC = () => {
 
     const handleCreateClubFromExisting = async () => {
         if (!foundUser || !clubName) return;
-        const { error } = await supabase.from('clubs').insert([{ owner_id: foundUser.id, name: clubName, is_active: true }]);
+        // Insert with email
+        const { error } = await supabase.from('clubs').insert([{ owner_id: foundUser.id, name: clubName, is_active: true, email: foundUser.email }]);
         if (error) setCreateError(error.message);
         else { setSuccessMessage(`Club "${clubName}" creado.`); setFoundUser(null); setClubName(''); setSearchEmail(''); fetchClubs(); }
     };
@@ -195,8 +198,15 @@ const SuperAdmin: React.FC = () => {
             const tempClient = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
             const { data: authData, error: authError } = await tempClient.auth.signUp({ email: quickEmail, password: tempPass, options: { captchaToken: captchaToken || undefined } });
             if (authError) throw authError;
-            await supabase.from('clubs').insert([{ owner_id: authData.user!.id, name: quickClubName, is_active: true }]);
-            await supabase.from('players').insert([{ user_id: authData.user!.id, email: quickEmail, name: quickClubName, categories: ['Admin'], manual_rating: 5 }]);
+            
+            // Create Club with Email
+            await supabase.from('clubs').insert([{ 
+                owner_id: authData.user!.id, 
+                name: quickClubName, 
+                is_active: true,
+                email: quickEmail 
+            }]);
+            
             setTempCredentials({ email: quickEmail, pass: tempPass });
             setQuickEmail(''); setQuickClubName(''); if(captchaRef.current) captchaRef.current.resetCaptcha(); setCaptchaToken(null); fetchClubs();
         } catch (err: any) { setCreateError(err.message); if(captchaRef.current) captchaRef.current.resetCaptcha(); setCaptchaToken(null); }
@@ -224,9 +234,15 @@ const SuperAdmin: React.FC = () => {
     };
 
     const handleResendEmail = async (club: Club) => {
-        const { data: playerData } = await supabase.from('players').select('email').eq('user_id', club.owner_id).maybeSingle();
+        // Try to use the stored email in clubs, then fallback to players table
+        let targetEmail = club.email;
+        if (!targetEmail) {
+             const { data: playerData } = await supabase.from('players').select('email').eq('user_id', club.owner_id).maybeSingle();
+             targetEmail = playerData?.email;
+        }
+
         setClubToRepair(club);
-        if (playerData?.email) { setManualEmailInput(playerData.email); setModalMode('send'); }
+        if (targetEmail) { setManualEmailInput(targetEmail); setModalMode('send'); }
         else { setManualEmailInput(''); setModalMode('repair'); }
         if(captchaRef.current) captchaRef.current.resetCaptcha(); setCaptchaToken(null);
     };
@@ -235,9 +251,11 @@ const SuperAdmin: React.FC = () => {
         if (!clubToRepair || !manualEmailInput) return;
         if (!isOfflineMode && HCAPTCHA_SITE_TOKEN && !captchaToken) { setCreateError("Captcha requerido."); return; }
         try {
-            await supabase.from('players').upsert([{ user_id: clubToRepair.owner_id, email: manualEmailInput, name: clubToRepair.name, categories: ['Admin'], manual_rating: 5 }], { onConflict: 'user_id' });
+            // Repair: Update club email if missing
+            await supabase.from('clubs').update({ email: manualEmailInput }).eq('id', clubToRepair.id);
+            
             await supabase.auth.resetPasswordForEmail(manualEmailInput, { redirectTo: window.location.origin + '/#/auth?type=recovery', captchaToken: captchaToken || undefined });
-            setSuccessMessage(`Enviado a ${manualEmailInput}`); setClubToRepair(null); setCaptchaToken(null);
+            setSuccessMessage(`Enviado a ${manualEmailInput}`); setClubToRepair(null); setCaptchaToken(null); fetchClubs();
         } catch (err: any) { setCreateError(err.message); }
     };
 

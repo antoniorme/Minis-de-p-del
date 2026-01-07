@@ -80,7 +80,25 @@ const AuthPage: React.FC = () => {
   };
 
   const ensurePlayerRecord = async (userId: string, userEmail: string) => {
-      // Basic check to see if player exists, created with email name as placeholder
+      // 1. Verificar si es Club
+      const { data: clubData } = await supabase
+          .from('clubs')
+          .select('id, email') // Select email to check if it needs updating
+          .eq('owner_id', userId)
+          .maybeSingle();
+
+      if (clubData) {
+          console.log("Usuario identificado como Club.");
+          // AUTO-HEAL: Si el club no tiene email guardado en la tabla pública, lo guardamos ahora.
+          // Esto permite que el SuperAdmin vea el email sin necesidad de una ficha de jugador.
+          if (!clubData.email || clubData.email !== userEmail) {
+              console.log("Actualizando email público del club...");
+              await supabase.from('clubs').update({ email: userEmail }).eq('id', clubData.id);
+          }
+          return;
+      }
+
+      // 2. Si no es Club, verificar/crear ficha de Jugador
       const { data: existingPlayer } = await supabase
           .from('players')
           .select('id')
