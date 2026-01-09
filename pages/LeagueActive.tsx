@@ -6,7 +6,7 @@ import {
     Edit3, X, Image as ImageIcon,
     ChevronDown, ChevronUp, Clock, Info, GitMerge,
     Users, ArrowRight, Settings, PlusCircle, CheckCircle,
-    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight, Edit2, AlertTriangle, Save
+    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight, Edit2, AlertTriangle, Save, Trophy
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PosterGenerator } from '../components/PosterGenerator';
@@ -50,6 +50,13 @@ const LeagueActive: React.FC = () => {
     
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
     const [showGenerateConfirm, setShowGenerateConfirm] = useState<boolean>(false);
+    
+    // PLAYOFF WIZARD STATE
+    const [showPlayoffWizard, setShowPlayoffWizard] = useState(false);
+    const [poQuota, setPoQuota] = useState(4); // Qualifiers per group
+    const [poCross, setPoCross] = useState<'crossed' | 'internal'>('crossed');
+    const [poFormat, setPoFormat] = useState<'single' | 'double'>('single');
+
     const [alertMessage, setAlertMessage] = useState<{type: 'error' | 'success', message: string} | null>(null);
 
     // Form Data
@@ -199,6 +206,17 @@ const LeagueActive: React.FC = () => {
         setTab('calendar');
     };
 
+    const handleConfirmPlayoffs = async () => {
+        if (!mainCatId) return;
+        await advanceToPlayoffs(mainCatId, {
+            qualifiersPerGroup: poQuota,
+            crossType: poCross,
+            mode: poFormat
+        });
+        setShowPlayoffWizard(false);
+        setTab('playoffs');
+    };
+
     // Filter available players: exclude those already in a league pair
     // UNLESS editing the current pair
     const availablePlayers = useMemo(() => {
@@ -215,6 +233,7 @@ const LeagueActive: React.FC = () => {
     const MatchRow: React.FC<{ match: any }> = ({ match }) => (
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between group">
             <div className="flex-1 min-w-0 pr-4">
+                {match.round_label && <div className="text-[9px] font-black uppercase text-indigo-400 mb-1">{match.round_label}</div>}
                 <div className={`flex justify-between items-center mb-1 ${match.winnerId === match.pairAId ? 'text-indigo-600 font-black' : 'text-slate-700 font-medium'}`}>
                     <span className="text-sm truncate">{getPairName(match.pairAId)}</span>
                     <span className="text-lg ml-2">{match.setsA ?? '-'}</span>
@@ -422,7 +441,14 @@ const LeagueActive: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
-                    {league.status === 'groups' && <button onClick={() => advanceToPlayoffs(mainCatId!)} className="w-full py-4 bg-white text-indigo-500 border-2 border-dashed border-indigo-200 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 transition-colors">GENERAR CUADRO ELIMINATORIO</button>}
+                    {league.status === 'groups' && (
+                        <button 
+                            onClick={() => setShowPlayoffWizard(true)}
+                            className="w-full py-4 bg-white text-indigo-500 border-2 border-dashed border-indigo-200 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 transition-colors"
+                        >
+                            GENERAR CUADRO ELIMINATORIO
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -559,6 +585,87 @@ const LeagueActive: React.FC = () => {
                         <div className="flex gap-3">
                             <button onClick={() => setShowGenerateConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button>
                             <button onClick={handleConfirmGenerate} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg">Confirmar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PLAYOFF WIZARD MODAL */}
+            {showPlayoffWizard && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl animate-scale-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                                <Trophy className="text-amber-500"/> Configurar Playoffs
+                            </h3>
+                            <button onClick={() => setShowPlayoffWizard(false)} className="p-2 bg-slate-100 rounded-full text-slate-500"><X size={20}/></button>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* QUOTA */}
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Clasificados por Grupo</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[1, 2, 4, 8].map(num => (
+                                        <button 
+                                            key={num} 
+                                            onClick={() => setPoQuota(num)}
+                                            className={`py-3 rounded-xl font-bold transition-all border-2 ${poQuota === num ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
+                                        >
+                                            {num}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* CROSS TYPE */}
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Tipo de Cruce</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        onClick={() => setPoCross('crossed')}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all ${poCross === 'crossed' ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+                                    >
+                                        <div className="font-bold text-slate-800 text-sm">Cruzado</div>
+                                        <div className="text-[10px] text-slate-500">1º A vs 4º B</div>
+                                    </button>
+                                    <button 
+                                        onClick={() => setPoCross('internal')}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all ${poCross === 'internal' ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+                                    >
+                                        <div className="font-bold text-slate-800 text-sm">Interno</div>
+                                        <div className="text-[10px] text-slate-500">1º A vs 4º A</div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* FORMAT */}
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Formato de Partido</label>
+                                <div className="flex bg-slate-100 p-1 rounded-xl">
+                                    <button 
+                                        onClick={() => setPoFormat('single')} 
+                                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${poFormat === 'single' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
+                                    >
+                                        Partido Único
+                                    </button>
+                                    <button 
+                                        onClick={() => setPoFormat('double')} 
+                                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${poFormat === 'double' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
+                                    >
+                                        Ida y Vuelta
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="pt-4">
+                                <button 
+                                    onClick={handleConfirmPlayoffs}
+                                    className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <GitMerge size={20}/> GENERAR CUADRO
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

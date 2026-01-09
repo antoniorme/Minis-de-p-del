@@ -5,6 +5,12 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useHistory } from './HistoryContext';
 
+interface PlayoffConfig {
+    qualifiersPerGroup: number;
+    crossType: 'internal' | 'crossed';
+    mode: 'single' | 'double';
+}
+
 interface LeagueContextType {
     league: LeagueState;
     leaguesList: any[];
@@ -13,10 +19,10 @@ interface LeagueContextType {
     updateLeagueScore: (matchId: string, setsA: number, setsB: number, scoreText: string) => Promise<void>;
     createLeague: (data: Partial<LeagueState> & { prizeWinner?: string, prizeRunnerUp?: string }) => Promise<string | null>;
     generateLeagueGroups: (categoryId: string, groupsCount: number, method: 'elo-balanced' | 'elo-mixed', doubleRound: boolean) => Promise<void>;
-    advanceToPlayoffs: (categoryId: string) => Promise<void>;
+    advanceToPlayoffs: (categoryId: string, config: PlayoffConfig) => Promise<void>;
     addPairToLeague: (pair: Partial<Pair>) => Promise<void>;
     deletePairFromLeague: (pairId: string) => Promise<void>;
-    updateLeaguePair: (pairId: string, p1: string, p2: string) => Promise<void>; // NEW
+    updateLeaguePair: (pairId: string, p1: string, p2: string) => Promise<void>; 
     isLeagueModuleEnabled: boolean;
 }
 
@@ -453,31 +459,84 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return standings.sort((a, b) => b.pts - a.pts);
     };
 
-    const advanceToPlayoffs = async (categoryId: string) => {
+    const advanceToPlayoffs = async (categoryId: string, config: PlayoffConfig) => {
         const catGroups = league.groups.filter(g => g.category_id === categoryId);
-        const newPlayoffMatches: any[] = []; 
+        const newPlayoffMatches: any[] = [];
         
-        if (catGroups.length === 2) {
-            const stA = calculateStandings(categoryId, catGroups[0].id);
-            const stB = calculateStandings(categoryId, catGroups[1].id);
-
-            if (stA[0] && stB[3]) newPlayoffMatches.push({ id_stub: `qf-1-${categoryId}`, league_id: league.id, category_id: categoryId, phase: 'playoff', pair_a_id: stA[0].id, pair_b_id: stB[3].id });
-            if (stB[1] && stA[2]) newPlayoffMatches.push({ id_stub: `qf-2-${categoryId}`, league_id: league.id, category_id: categoryId, phase: 'playoff', pair_a_id: stB[1].id, pair_b_id: stA[2].id });
-            if (stB[0] && stA[3]) newPlayoffMatches.push({ id_stub: `qf-3-${categoryId}`, league_id: league.id, category_id: categoryId, phase: 'playoff', pair_a_id: stB[0].id, pair_b_id: stA[3].id });
-            if (stA[1] && stB[2]) newPlayoffMatches.push({ id_stub: `qf-4-${categoryId}`, league_id: league.id, category_id: categoryId, phase: 'playoff', pair_a_id: stA[1].id, pair_b_id: stB[2].id });
-        } else {
-            const st = calculateStandings(categoryId, catGroups[0]?.id);
-            const pairings = [[0,7], [3,4], [1,6], [2,5]];
-            pairings.forEach((p, idx) => {
-                if (st[p[0]] && st[p[1]]) {
-                    newPlayoffMatches.push({ id_stub: `qf-${idx+1}-${categoryId}`, league_id: league.id, category_id: categoryId, phase: 'playoff', pair_a_id: st[p[0]].id, pair_b_id: st[p[1]].id });
-                }
+        const { qualifiersPerGroup, crossType, mode } = config;
+        
+        // Helper to queue match generation
+        const queueMatch = (idStub: string, pairA: string, pairB: string) => {
+            if (!pairA || !pairB) return;
+            
+            // Ida
+            newPlayoffMatches.push({ 
+                id_stub: `${idStub}-L1`, league_id: league.id, category_id: categoryId, phase: 'playoff', 
+                pair_a_id: pairA, pair_b_id: pairB, 
+                round_label: 'Ida'
             });
+            
+            // Vuelta (if double)
+            if (mode === 'double') {
+                newPlayoffMatches.push({ 
+                    id_stub: `${idStub}-L2`, league_id: league.id, category_id: categoryId, phase: 'playoff', 
+                    pair_a_id: pairB, pair_b_id: pairA, 
+                    round_label: 'Vuelta'
+                });
+            }
+        };
+
+        // Logic based on Number of Groups
+        if (catGroups.length === 1) {
+            // Single Group: Pair 1 vs N, 2 vs N-1, etc.
+            const standings = calculateStandings(categoryId, catGroups[0].id);
+            const qualified = standings.slice(0, qualifiersPerGroup);
+            
+            // Generate standard bracket pairings (1 vs 4, 2 vs 3)
+            for (let i = 0; i < qualifiersPerGroup / 2; i++) {
+                const p1 = qualified[i];
+                const p2 = qualified[qualified.length - 1 - i];
+                if (p1 && p2) {
+                    queueMatch(`qf-${i+1}`, p1.id, p2.id);
+                }
+            }
+        } 
+        else if (catGroups.length === 2) {
+            // Two Groups (A and B)
+            const stA = calculateStandings(categoryId, catGroups[0].id); // Group A
+            const stB = calculateStandings(categoryId, catGroups[1].id); // Group B
+            
+            const qA = stA.slice(0, qualifiersPerGroup);
+            const qB = stB.slice(0, qualifiersPerGroup);
+
+            if (crossType === 'crossed') {
+                // A1 vs B(last), B1 vs A(last)
+                for (let i = 0; i < qualifiersPerGroup; i++) {
+                    // Match i: A(i) vs B(n-1-i)
+                    const pA = qA[i];
+                    const pB = qB[qualifiersPerGroup - 1 - i];
+                    if (pA && pB) queueMatch(`cross-${i+1}`, pA.id, pB.id);
+                }
+            } else {
+                // Internal: A1 vs A(last), B1 vs B(last)
+                // Just pair internal to group A
+                for (let i = 0; i < qualifiersPerGroup / 2; i++) {
+                    const topA = qA[i]; const botA = qA[qualifiersPerGroup - 1 - i];
+                    if (topA && botA) queueMatch(`internal-A-${i+1}`, topA.id, botA.id);
+                    
+                    const topB = qB[i]; const botB = qB[qualifiersPerGroup - 1 - i];
+                    if (topB && botB) queueMatch(`internal-B-${i+1}`, topB.id, botB.id);
+                }
+            }
+        } else {
+            // Fallback for > 2 groups: Just take top X overall? 
+            // Too complex for auto-wizard. For now, warn user or do basic cross.
+            console.warn("Auto-playoff for >2 groups not fully supported. Use Manual.");
         }
 
         if (isOfflineMode) {
             const offlineMatches = newPlayoffMatches.map(m => ({
-                id: m.id_stub, ...m, setsA: null, setsB: null, isFinished: false, pairAId: m.pair_a_id, pairBId: m.pair_b_id
+                id: `local-${m.id_stub}-${Date.now()}`, ...m, setsA: null, setsB: null, isFinished: false, pairAId: m.pair_a_id, pairBId: m.pair_b_id
             }));
             const updatedLeague = { ...league, status: 'playoffs' as LeaguePhase, matches: [...league.matches, ...offlineMatches] };
             setLeague(updatedLeague);
@@ -492,13 +551,14 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             pair_a_id: m.pair_a_id,
             pair_b_id: m.pair_b_id,
             is_finished: false,
-            round_label: m.id_stub.split('-')[0].toUpperCase() + m.id_stub.split('-')[1] 
+            round_label: m.round_label
         }));
 
-        await supabase.from('league_matches').insert(dbMatches);
-        await supabase.from('leagues').update({ status: 'playoffs' }).eq('id', league.id);
-        
-        if (league.id) selectLeague(league.id);
+        if (dbMatches.length > 0) {
+            await supabase.from('league_matches').insert(dbMatches);
+            await supabase.from('leagues').update({ status: 'playoffs' }).eq('id', league.id);
+            if (league.id) selectLeague(league.id);
+        }
     };
 
     return (

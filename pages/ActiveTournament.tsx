@@ -4,8 +4,9 @@ import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
 import { useTimer } from '../store/TimerContext';
 import { Player, Pair } from '../types';
-import { ChevronRight, Edit2, Info, User, Play, RotateCcw, CheckCircle, XCircle, Trophy, Medal, Settings, Coffee, ArrowRight, Archive, X, AlertTriangle, Check } from 'lucide-react';
+import { ChevronRight, Edit2, Info, User, Play, RotateCcw, CheckCircle, XCircle, Trophy, Medal, Settings, Coffee, ArrowRight, Archive, X, AlertTriangle, Check, CloudOff, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../store/AuthContext';
 
 interface NextMatchInfo {
     pairA: { name: string; status: 'win' | 'loss'; nextText: string; highlight: boolean };
@@ -19,8 +20,9 @@ interface AlertState {
 }
 
 const ActiveTournament: React.FC = () => {
-  const { state, updateScoreDB, nextRoundDB, resetToSetupDB, formatPlayerName, finishTournamentDB, archiveAndResetDB } = useTournament();
+  const { state, updateScoreDB, nextRoundDB, resetToSetupDB, formatPlayerName, finishTournamentDB, archiveAndResetDB, pendingSyncCount } = useTournament();
   const { resetTimer } = useTimer();
+  const { isOnline } = useAuth();
   const navigate = useNavigate();
   
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
@@ -84,14 +86,22 @@ const ActiveTournament: React.FC = () => {
   };
 
   const handleResetToSetup = async () => { 
-      await resetToSetupDB(); 
-      setShowResetConfirm(false); 
-      navigate('/dashboard'); 
+      try {
+        await resetToSetupDB(); 
+        setShowResetConfirm(false); 
+        navigate('/dashboard'); 
+      } catch (e: any) {
+        setAlertMessage({ type: 'error', title: 'Error', message: e.message });
+      }
   };
   
   const handleArchive = async () => {
-      await archiveAndResetDB();
-      navigate('/dashboard');
+      try {
+        await archiveAndResetDB();
+        navigate('/dashboard');
+      } catch (e: any) {
+        setAlertMessage({ type: 'error', title: 'Error', message: e.message });
+      }
   };
 
   const getNextStepText = (pairId: string, isWinner: boolean, phase: string, courtId: number, bracket: string) => {
@@ -235,7 +245,7 @@ const ActiveTournament: React.FC = () => {
       );
   };
 
-  // 1. SETUP STATE (WAITING FOR GENERATION)
+  // 1. SETUP STATE
   if (state.status === 'setup') {
       return (
           <div className="flex flex-col h-full items-center justify-center py-20 text-center animate-fade-in">
@@ -317,6 +327,25 @@ const ActiveTournament: React.FC = () => {
   return (
     <div className="space-y-6 pb-32">
       
+      {/* OFFLINE INDICATOR */}
+      {!isOnline && (
+          <div className="bg-amber-100 border border-amber-300 rounded-xl p-3 flex items-center justify-between text-amber-800 shadow-sm animate-pulse">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                  <CloudOff size={16}/> Sin Conexión
+              </div>
+              <div className="text-xs font-bold flex items-center gap-2">
+                  <span className="bg-white px-2 py-0.5 rounded-full text-amber-600 border border-amber-200">{pendingSyncCount}</span>
+                  <span className="opacity-80">Resultados Pendientes</span>
+              </div>
+          </div>
+      )}
+      {isOnline && pendingSyncCount > 0 && (
+          <div className="bg-blue-100 border border-blue-300 rounded-xl p-3 flex items-center justify-center gap-2 text-blue-800 shadow-sm">
+              <RefreshCw size={16} className="animate-spin"/>
+              <span className="text-xs font-bold uppercase tracking-wide">Sincronizando {pendingSyncCount} resultados...</span>
+          </div>
+      )}
+
       {/* ROUND HEADER */}
       <div style={{ backgroundColor: themeColor }} className="rounded-2xl shadow-lg p-4 flex items-center justify-between text-white transition-colors duration-300">
             <div className="flex items-center gap-2">
