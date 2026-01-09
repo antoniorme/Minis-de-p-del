@@ -1,13 +1,14 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Users, Trash2, Edit2, Save, X, AlertTriangle, TrendingUp, Link as LinkIcon, UserPlus } from 'lucide-react';
+import { Users, Trash2, Edit2, Save, X, AlertTriangle, TrendingUp, Link as LinkIcon, UserPlus, Activity } from 'lucide-react';
 import { PlayerSelector } from '../components/PlayerSelector';
+import { calculateDisplayRanking } from '../utils/Elo';
 
 // --- MAIN REGISTRATION COMPONENT ---
 const Registration: React.FC = () => {
-  const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, formatPlayerName, getPairElo, assignPartnerDB } = useTournament();
+  const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, formatPlayerName, assignPartnerDB } = useTournament();
   
   // MODAL STATES
   const [isPairModalOpen, setIsPairModalOpen] = useState(false);
@@ -37,6 +38,20 @@ const Registration: React.FC = () => {
       });
       return !isAssigned;
   });
+
+  // HELPER: Calculate Average ELO for sorting and display
+  const getPairAverageElo = (pair: any) => {
+      const p1 = state.players.find(p => p.id === pair.player1Id);
+      const p2 = state.players.find(p => p.id === pair.player2Id);
+      const elo1 = p1 ? calculateDisplayRanking(p1) : 1200;
+      const elo2 = p2 ? calculateDisplayRanking(p2) : elo1; 
+      return Math.round((elo1 + elo2) / 2);
+  };
+
+  // SORTED PAIRS (Highest Average ELO first)
+  const sortedActivePairs = useMemo(() => {
+      return [...activePairs].sort((a, b) => getPairAverageElo(b) - getPairAverageElo(a));
+  }, [activePairs, state.players]);
 
   const openNewPairModal = () => {
     setIsEditingPairId(null);
@@ -103,30 +118,56 @@ const Registration: React.FC = () => {
                 {pairs.map((pair, idx) => {
                     const p1 = state.players.find(p => p.id === pair.player1Id);
                     const p2 = state.players.find(p => p.id === pair.player2Id);
-                    const pairElo = getPairElo(pair, state.players);
+                    const avgElo = getPairAverageElo(pair);
+                    
+                    // Visual Bar Logic
+                    const rangeFloor = Math.floor(avgElo / 1000) * 1000;
+                    const rangeCeiling = rangeFloor + 1000;
+                    const progressPercent = Math.max(5, Math.min(100, ((avgElo - rangeFloor) / 1000) * 100));
 
                     return (
-                        <div key={pair.id} className="bg-white p-4 rounded-xl flex items-center justify-between border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-center gap-4 overflow-hidden w-full">
-                                <span className="bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 text-slate-500 border border-slate-200">{idx + 1}</span>
-                                <div className="flex flex-col w-full">
-                                    <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(p1)}</div>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <span style={{ color: THEME.cta }} className="text-xs font-black">&</span>
-                                        <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(p2)}</div>
+                        <div key={pair.id} className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col">
+                            {/* TOP PART: NAMES AND ACTIONS */}
+                            <div className="p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3 overflow-hidden w-full">
+                                    <span className="bg-slate-100 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-slate-500 border border-slate-200">{idx + 1}</span>
+                                    <div className="flex flex-col w-full min-w-0">
+                                        <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(p1)}</div>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                            <span style={{ color: THEME.cta }} className="text-[10px] font-black">&</span>
+                                            <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(p2)}</div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                                <div className="flex flex-col items-center justify-center bg-slate-50 px-2 py-1 rounded border border-slate-100 min-w-[50px]">
-                                    <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1"><TrendingUp size={8}/> ELO</span>
-                                    <span className="text-xs font-black text-slate-700">{pairElo}</span>
+                                
+                                <div className="flex items-center gap-1 shrink-0 ml-2">
+                                    <button onClick={() => startEditPair(pair.id)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg hover:bg-blue-50 transition-colors"><Edit2 size={16}/></button>
+                                    <button onClick={() => setShowDeleteModal(pair.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
                                 </div>
+                            </div>
 
-                                <div className="flex items-center gap-1">
-                                    <button onClick={() => startEditPair(pair.id)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors"><Edit2 size={18}/></button>
-                                    <button onClick={() => setShowDeleteModal(pair.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-red-200 transition-colors"><Trash2 size={18}/></button>
+                            {/* BOTTOM STRIP: ELO BAR */}
+                            <div className="bg-slate-50 px-4 py-2 border-t border-slate-100">
+                                <div className="flex justify-between items-end mb-1">
+                                    <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        <Activity size={10} className="text-slate-400"/> Media
+                                    </div>
+                                    <div className="text-xs font-black text-slate-700">{avgElo} pts</div>
+                                </div>
+                                
+                                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden flex relative">
+                                    <div 
+                                        className="h-full rounded-full transition-all duration-500" 
+                                        style={{ 
+                                            width: `${progressPercent}%`, 
+                                            backgroundColor: THEME.cta 
+                                        }}
+                                    ></div>
+                                </div>
+                                
+                                <div className="flex justify-between mt-1 text-[9px] text-slate-400 font-mono">
+                                    <span>{rangeFloor}</span>
+                                    <span>{rangeCeiling}</span>
                                 </div>
                             </div>
                         </div>
@@ -175,7 +216,7 @@ const Registration: React.FC = () => {
           </div>
       )}
 
-      <PairList pairs={activePairs} title="Parejas Inscritas" colorClass="text-slate-600" />
+      <PairList pairs={sortedActivePairs} title="Parejas Inscritas (Por Nivel)" colorClass="text-slate-600" />
 
       {/* PAIR MODAL */}
       {isPairModalOpen && (
