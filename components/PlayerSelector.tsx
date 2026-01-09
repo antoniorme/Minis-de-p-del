@@ -109,7 +109,15 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-2">{p.categories?.[0] && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{p.categories[0]}</span>}</div>
+                                        <div className="flex items-center gap-1 flex-wrap justify-end max-w-[120px]">
+                                            {p.categories && p.categories.length > 0 ? (
+                                                p.categories.map((c, i) => (
+                                                    <span key={i} className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 border border-slate-200">{c}</span>
+                                                ))
+                                            ) : (
+                                                <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">Sin Cat</span>
+                                            )}
+                                        </div>
                                     </button>
                                 ))}
                                 {filteredPlayers.length === 0 && <p className="text-xs text-center text-slate-400 py-4 italic">No hay jugadores disponibles.</p>}

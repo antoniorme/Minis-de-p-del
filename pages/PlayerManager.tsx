@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle, ArrowRightCircle, ArrowLeftCircle, Shuffle, Mail, Phone } from 'lucide-react';
+import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle, ArrowRightCircle, ArrowLeftCircle, Shuffle, Mail, Phone, Merge, ArrowRight } from 'lucide-react';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { calculateDisplayRanking, calculateInitialElo, manualToElo } from '../utils/Elo';
+import { supabase } from '../lib/supabase';
 
 interface AlertState {
     type: 'error' | 'success';
@@ -13,13 +14,19 @@ interface AlertState {
 }
 
 const PlayerManager: React.FC = () => {
-  const { state, updatePlayerInDB, addPlayerToDB, deletePlayerDB, formatPlayerName } = useTournament();
+  const { state, updatePlayerInDB, addPlayerToDB, deletePlayerDB, formatPlayerName, loadData } = useTournament();
   const navigate = useNavigate();
   const [filterCat, setFilterCat] = useState('all');
   const [search, setSearch] = useState('');
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [alertMessage, setAlertMessage] = useState<AlertState | null>(null);
+  
+  // MERGE STATE
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergeSearch, setMergeSearch] = useState('');
+  const [mainPlayerId, setMainPlayerId] = useState<string | null>(null);
+  const [dupePlayerId, setDupePlayerId] = useState<string | null>(null);
   
   const [isCreating, setIsCreating] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], manual_rating: 5, email: '', phone: '', preferred_position: undefined as 'right' | 'backhand' | undefined, play_both_sides: false });
@@ -97,6 +104,37 @@ const PlayerManager: React.FC = () => {
       });
   };
 
+  const executeMerge = async () => {
+      if (!mainPlayerId || !dupePlayerId) return;
+      if (mainPlayerId === dupePlayerId) {
+          setAlertMessage({ type: 'error', message: "No puedes fusionar al jugador consigo mismo." });
+          return;
+      }
+
+      try {
+          // 1. Move Tournament Pairs (Minis)
+          await supabase.from('tournament_pairs').update({ player1_id: mainPlayerId }).eq('player1_id', dupePlayerId);
+          await supabase.from('tournament_pairs').update({ player2_id: mainPlayerId }).eq('player2_id', dupePlayerId);
+
+          // 2. Move League Pairs (Leagues)
+          await supabase.from('league_pairs').update({ player1_id: mainPlayerId }).eq('player1_id', dupePlayerId);
+          await supabase.from('league_pairs').update({ player2_id: mainPlayerId }).eq('player2_id', dupePlayerId);
+
+          // 3. Delete Duplicate Player
+          await deletePlayerDB(dupePlayerId);
+
+          // 4. Refresh Data
+          await loadData();
+          
+          setAlertMessage({ type: 'success', message: "Jugadores fusionados correctamente. Historial unificado." });
+          setShowMergeModal(false);
+          setMainPlayerId(null);
+          setDupePlayerId(null);
+      } catch (e: any) {
+          setAlertMessage({ type: 'error', message: "Error al fusionar: " + e.message });
+      }
+  };
+
   const getPositionLabel = (pos?: string, both?: boolean) => {
       if (!pos) return null;
       let label = pos === 'right' ? 'Derecha' : 'Revés';
@@ -107,17 +145,29 @@ const PlayerManager: React.FC = () => {
       );
   };
 
+  // Logic for Merge Modal List
+  const mergeList = state.players.filter(p => p.name.toLowerCase().includes(mergeSearch.toLowerCase()));
+
   return (
     <div className="space-y-8 pb-20">
       <div className="flex justify-between items-center">
           <h2 className="text-2xl font-black text-white">Gestión Jugadores</h2>
-          <button 
-            onClick={() => setIsCreating(true)} 
-            style={{ backgroundColor: THEME.cta }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg active:scale-95 transition-transform hover:opacity-90"
-          >
-              <Plus size={20} /> CREAR
-          </button>
+          <div className="flex gap-2">
+              <button 
+                onClick={() => setShowMergeModal(true)}
+                className="p-3 bg-slate-800 text-indigo-300 rounded-xl hover:bg-slate-700 transition-colors border border-indigo-900/50"
+                title="Fusionar duplicados"
+              >
+                  <Merge size={20}/>
+              </button>
+              <button 
+                onClick={() => setIsCreating(true)} 
+                style={{ backgroundColor: THEME.cta }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg active:scale-95 transition-transform hover:opacity-90"
+              >
+                  <Plus size={20} /> CREAR
+              </button>
+          </div>
       </div>
 
       <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-xl space-y-5">
@@ -154,9 +204,20 @@ const PlayerManager: React.FC = () => {
                               {formatPlayerName(player)}
                           </div>
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 bg-slate-800 px-2 py-0.5 rounded-lg">{player.categories?.[0] || 'Sin Cat'}</span>
+                              {/* DISPLAY ALL CATEGORIES */}
+                              {player.categories && player.categories.length > 0 ? (
+                                  player.categories.map((cat, i) => (
+                                      <span key={i} className="text-[10px] font-black uppercase tracking-wider text-slate-400 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700/50">
+                                          {cat}
+                                      </span>
+                                  ))
+                              ) : (
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 bg-slate-800 px-2 py-0.5 rounded-lg">Sin Cat</span>
+                              )}
+                              
                               {getPositionLabel(player.preferred_position, player.play_both_sides)}
-                              <span className="text-[10px] font-black text-blue-300 flex items-center gap-1 uppercase"><Activity size={12}/> {rankingScore} pts</span>
+                              
+                              <span className="text-[10px] font-black text-blue-300 flex items-center gap-1 uppercase ml-1"><Activity size={12}/> {rankingScore} pts</span>
                           </div>
                       </div>
                   </div>
@@ -168,6 +229,78 @@ const PlayerManager: React.FC = () => {
               );
           })}
       </div>
+
+      {/* MERGE MODAL */}
+      {showMergeModal && (
+          <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[200] flex items-center justify-center p-6">
+              <div className="bg-slate-900 rounded-[2rem] p-8 w-full max-w-2xl shadow-2xl animate-scale-in border border-slate-800 max-h-[90vh] flex flex-col">
+                  <div className="flex justify-between items-center mb-6 shrink-0">
+                      <div>
+                          <h3 className="text-xl font-black text-white flex items-center gap-2"><Merge className="text-indigo-500"/> Fusionar Duplicados</h3>
+                          <p className="text-slate-500 text-xs mt-1">Elige el perfil 'Principal'. El historial del 'Duplicado' se moverá al principal y el duplicado se borrará.</p>
+                      </div>
+                      <button onClick={() => setShowMergeModal(false)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
+                  </div>
+
+                  {/* SELECTION AREA */}
+                  <div className="flex flex-col md:flex-row gap-4 mb-6 flex-1 overflow-hidden">
+                      <div className="flex-1 flex flex-col bg-slate-950 rounded-2xl border border-slate-800 p-4">
+                          <div className="mb-3">
+                              <h4 className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-2">1. Jugador Principal (Se mantiene)</h4>
+                              <input value={mergeSearch} onChange={e => setMergeSearch(e.target.value)} placeholder="Buscar..." className="w-full p-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white"/>
+                          </div>
+                          <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
+                              {mergeList.map(p => (
+                                  <button 
+                                    key={p.id} 
+                                    onClick={() => setMainPlayerId(p.id)}
+                                    className={`w-full text-left p-2 rounded-lg text-sm font-bold flex justify-between items-center ${mainPlayerId === p.id ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-800' : 'text-slate-400 hover:bg-slate-900'}`}
+                                  >
+                                      <span>{formatPlayerName(p)}</span>
+                                      {mainPlayerId === p.id && <Check size={16}/>}
+                                  </button>
+                              ))}
+                          </div>
+                      </div>
+
+                      <div className="flex items-center justify-center text-slate-600">
+                          <ArrowRight size={24} className="hidden md:block"/>
+                          <ArrowLeft size={24} className="md:hidden rotate-90"/>
+                      </div>
+
+                      <div className="flex-1 flex flex-col bg-slate-950 rounded-2xl border border-slate-800 p-4">
+                          <h4 className="text-xs font-bold text-rose-500 uppercase tracking-widest mb-3">2. Jugador Duplicado (Se borra)</h4>
+                          <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
+                              {mergeList.map(p => {
+                                  if (p.id === mainPlayerId) return null;
+                                  return (
+                                      <button 
+                                        key={p.id} 
+                                        onClick={() => setDupePlayerId(p.id)}
+                                        className={`w-full text-left p-2 rounded-lg text-sm font-bold flex justify-between items-center ${dupePlayerId === p.id ? 'bg-rose-900/50 text-rose-400 border border-rose-800' : 'text-slate-400 hover:bg-slate-900'}`}
+                                      >
+                                          <span>{formatPlayerName(p)}</span>
+                                          {dupePlayerId === p.id && <Trash2 size={16}/>}
+                                      </button>
+                                  )
+                              })}
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="shrink-0 pt-4 border-t border-slate-800 flex justify-end gap-3">
+                      <button onClick={() => setShowMergeModal(false)} className="px-6 py-3 rounded-xl font-bold text-slate-400 bg-slate-800 hover:bg-slate-700">Cancelar</button>
+                      <button 
+                        onClick={executeMerge}
+                        disabled={!mainPlayerId || !dupePlayerId}
+                        className="px-6 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      >
+                          Confirmar Fusión
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* CREATE MODAL */}
       {isCreating && (
@@ -346,6 +479,20 @@ const PlayerManager: React.FC = () => {
                       <button onClick={() => setEditingPlayer(null)} className="py-4 bg-slate-800 text-slate-400 rounded-2xl font-black text-sm tracking-widest uppercase">Cancelar</button>
                       <button onClick={handleSave} style={{ backgroundColor: THEME.cta }} className="py-4 text-white rounded-2xl font-black shadow-lg hover:opacity-90 active:scale-95 text-sm tracking-widest uppercase flex items-center justify-center gap-2"><Save size={18}/> Guardar</button>
                   </div>
+              </div>
+          </div>
+      )}
+
+      {/* ALERT MODAL */}
+      {alertMessage && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+              <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${alertMessage.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                      {alertMessage.type === 'error' ? <AlertTriangle size={32} /> : <Check size={32} />}
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-2">{alertMessage.type === 'error' ? 'Atención' : 'Éxito'}</h3>
+                  <p className="text-slate-500 mb-6 text-sm">{alertMessage.message}</p>
+                  <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
               </div>
           </div>
       )}
