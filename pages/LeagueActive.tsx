@@ -4,14 +4,15 @@ import { useLeague } from '../store/LeagueContext';
 import { useTournament } from '../store/TournamentContext';
 import { 
     Edit3, X, Image as ImageIcon,
-    ChevronDown, ChevronUp, Clock, Info, GitMerge,
+    ChevronDown, ChevronUp, Clock, GitMerge,
     Users, ArrowRight, Settings, PlusCircle, CheckCircle,
-    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight, Edit2, AlertTriangle, Save, Trophy, UserPlus, ArrowRightCircle, ArrowLeftCircle, FolderPlus, BarChart3, AlertCircle, PlayCircle
+    LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight, Edit2, AlertTriangle, Save, Trophy, UserPlus, ArrowRightCircle, ArrowLeftCircle, FolderPlus, BarChart3, AlertCircle, Trash2
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PosterGenerator } from '../components/PosterGenerator';
 import { THEME } from '../utils/theme';
 import { PlayerSelector } from '../components/PlayerSelector';
+import { calculateDisplayRanking } from '../utils/Elo';
 
 interface Standing {
     pairId: string;
@@ -26,15 +27,16 @@ interface Standing {
 
 const LeagueActive: React.FC = () => {
     const { league, updateLeagueScore, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair, generateLeagueGroups, addLeagueCategory } = useLeague();
-    const { state, formatPlayerName, addPlayerToDB, getPairElo } = useTournament();
+    const { state, formatPlayerName, addPlayerToDB } = useTournament();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
 
     // TAB CONTROL VIA URL (Default: management)
     const activeTab = (searchParams.get('tab') as 'management' | 'registration' | 'standings' | 'calendar' | 'playoffs') || 'management';
 
-    // CATEGORY STATE (Default to 'overview')
-    const [activeCategoryId, setActiveCategoryId] = useState<string>('overview');
+    // NAVIGATION STATE (Context ID: can be 'overview', a categoryId, or a groupId)
+    const [activeContextId, setActiveContextId] = useState<string>('overview');
+    
     const [showAddCategory, setShowAddCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
 
@@ -96,21 +98,75 @@ const LeagueActive: React.FC = () => {
         );
     };
 
-    // Calculate Standings for a specific category (used in Overview and Detail)
-    const getCategoryStats = (catId: string) => {
-        const catPairs = league.pairs.filter(p => p.category_id === catId && p.player2Id);
-        const catMatches = league.matches.filter(m => m.category_id === catId && m.phase === 'group');
+    // --- NAVIGATION STRUCTURE BUILDER ---
+    // Maps Categories and Groups into a flat list of selectable tabs
+    const navItems = useMemo(() => {
+        const items: { id: string; label: string; type: 'category' | 'group' | 'overview'; parentId?: string }[] = [
+            { id: 'overview', label: 'Resumen', type: 'overview' }
+        ];
+
+        league.categories.forEach(cat => {
+            const catGroups = league.groups.filter(g => g.category_id === cat.id);
+            if (catGroups.length > 0) {
+                // If category has groups, create tabs for each group (e.g., "5ª A", "5ª B")
+                catGroups.sort((a,b) => a.name.localeCompare(b.name)).forEach(g => {
+                    // Try to shorten name: "Grupo A" -> "5ª A"
+                    const shortGroupName = g.name.replace('Grupo ', '');
+                    items.push({ 
+                        id: g.id, 
+                        label: `${cat.name} ${shortGroupName}`, 
+                        type: 'group',
+                        parentId: cat.id
+                    });
+                });
+            } else {
+                // Regular Category View
+                items.push({ id: cat.id, label: cat.name, type: 'category' });
+            }
+        });
+
+        return items;
+    }, [league.categories, league.groups]);
+
+    const currentContext = navItems.find(i => i.id === activeContextId) || navItems[0];
+
+    // --- DATA FILTERING HELPERS ---
+    
+    // Get Pairs for current view
+    const getFilteredPairs = () => {
+        if (currentContext.type === 'group') {
+            return league.pairs.filter(p => p.groupId === currentContext.id);
+        } else if (currentContext.type === 'category') {
+            return league.pairs.filter(p => p.category_id === currentContext.id);
+        }
+        return []; // Overview doesn't use this directly
+    };
+
+    // Get Matches for current view
+    const getFilteredMatches = () => {
+        if (currentContext.type === 'group') {
+            return league.matches.filter(m => m.group_id === currentContext.id);
+        } else if (currentContext.type === 'category') {
+            return league.matches.filter(m => m.category_id === currentContext.id);
+        }
+        return [];
+    };
+
+    // Calculate Standings Logic
+    const calculateStandings = useMemo(() => {
+        if (activeContextId === 'overview') return [];
         
-        const finishedMatches = catMatches.filter(m => m.isFinished).length;
-        const totalMatches = catMatches.length;
-        
-        // Calculate Leader
+        const contextPairs = getFilteredPairs();
+        const contextMatches = getFilteredMatches().filter(m => m.phase === 'group' && m.isFinished); // Only consider group phase matches for standings table
+
         const standings: Record<string, Standing> = {};
-        catPairs.forEach(p => {
+        
+        // Initialize with players in this context
+        contextPairs.filter(p => p.player2Id).forEach(p => {
             standings[p.id] = { pairId: p.id, pairName: getPairName(p.id), played: 0, won: 0, lost: 0, setsF: 0, setsC: 0, points: 0 };
         });
-        
-        catMatches.filter(m => m.isFinished).forEach(m => {
+
+        contextMatches.forEach(m => {
             if (standings[m.pairAId]) {
                 standings[m.pairAId].played++;
                 standings[m.pairAId].setsF += m.setsA || 0; standings[m.pairAId].setsC += m.setsB || 0;
@@ -125,47 +181,45 @@ const LeagueActive: React.FC = () => {
             }
         });
 
-        const sortedStandings = Object.values(standings).sort((a, b) => b.points !== a.points ? b.points - a.points : (b.setsF - b.setsC) - (a.setsF - a.setsC));
-        const leader = sortedStandings.length > 0 ? sortedStandings[0] : null;
+        return Object.values(standings).sort((a, b) => b.points !== a.points ? b.points - a.points : (b.setsF - b.setsC) - (a.setsF - a.setsC));
+    }, [league.matches, league.pairs, activeContextId]);
+
+    // Calculate Leader & Stats for Overview Card
+    const getCategoryOverviewStats = (catId: string) => {
+        const catPairs = league.pairs.filter(p => p.category_id === catId && p.player2Id);
+        const catMatches = league.matches.filter(m => m.category_id === catId && m.phase === 'group');
+        const finishedMatches = catMatches.filter(m => m.isFinished).length;
         
-        // Alerts
-        const inactivePairs = sortedStandings.filter(s => s.played === 0).length;
+        // Quick calc leader for the whole category (aggregating groups if any, or separate? Let's aggregate for overview card)
+        // Actually, if groups exist, usually you have a leader per group. 
+        // For simplicity in the overview card, let's just pick the pair with max points across the category.
+        
+        const standings: Record<string, number> = {};
+        catMatches.filter(m => m.isFinished).forEach(m => {
+            if (!standings[m.pairAId]) standings[m.pairAId] = 0;
+            if (!standings[m.pairBId]) standings[m.pairBId] = 0;
+            if (m.setsA! > m.setsB!) { standings[m.pairAId] += 3; standings[m.pairBId] += 1; }
+            else { standings[m.pairBId] += 3; standings[m.pairAId] += 1; }
+        });
+        
+        let leaderId = null;
+        let maxPoints = -1;
+        Object.entries(standings).forEach(([pid, pts]) => {
+            if (pts > maxPoints) { maxPoints = pts; leaderId = pid; }
+        });
+
+        const inactiveCount = catPairs.length - Object.keys(standings).length;
 
         return {
             totalPairs: catPairs.length,
             finishedMatches,
-            totalMatches,
-            progress: totalMatches > 0 ? Math.round((finishedMatches / totalMatches) * 100) : 0,
-            leader,
-            inactivePairs
+            totalMatches: catMatches.length,
+            progress: catMatches.length > 0 ? Math.round((finishedMatches / catMatches.length) * 100) : 0,
+            leaderName: leaderId ? getPairName(leaderId) : null,
+            leaderPoints: maxPoints > -1 ? maxPoints : 0,
+            inactivePairs: inactiveCount
         };
     };
-
-    const calculateStandings = useMemo(() => {
-        if (!activeCategoryId || activeCategoryId === 'overview') return [];
-        // Re-use logic for current view
-        const stats = getCategoryStats(activeCategoryId);
-        // We need the full array, so let's just re-run the sort logic which is cheap
-        const catPairs = league.pairs.filter(p => p.category_id === activeCategoryId && p.player2Id);
-        const catMatches = league.matches.filter(m => m.category_id === activeCategoryId && m.phase === 'group' && m.isFinished);
-        const standings: Record<string, Standing> = {};
-        catPairs.forEach(p => { standings[p.id] = { pairId: p.id, pairName: getPairName(p.id), played: 0, won: 0, lost: 0, setsF: 0, setsC: 0, points: 0 }; });
-        catMatches.forEach(m => {
-             if (standings[m.pairAId]) {
-                standings[m.pairAId].played++;
-                standings[m.pairAId].setsF += m.setsA || 0; standings[m.pairAId].setsC += m.setsB || 0;
-                if (m.setsA! > m.setsB!) { standings[m.pairAId].won++; standings[m.pairAId].points += 3; }
-                else { standings[m.pairAId].lost++; standings[m.pairAId].points += 1; }
-            }
-            if (standings[m.pairBId]) {
-                standings[m.pairBId].played++;
-                standings[m.pairBId].setsF += m.setsB || 0; standings[m.pairBId].setsC += m.setsA || 0;
-                if (m.setsB! > m.setsA!) { standings[m.pairBId].won++; standings[m.pairBId].points += 3; }
-                else { standings[m.pairBId].lost++; standings[m.pairBId].points += 1; }
-            }
-        });
-        return Object.values(standings).sort((a, b) => b.points !== a.points ? b.points - a.points : (b.setsF - b.setsC) - (a.setsF - a.setsC));
-    }, [league.matches, league.pairs, activeCategoryId]);
 
     const handleGenerateWinnerPoster = () => {
         const topPair = calculateStandings[0];
@@ -173,7 +227,7 @@ const LeagueActive: React.FC = () => {
         setPosterData({
             title: league.title,
             winnerNames: topPair.pairName,
-            category: 'Campeones',
+            category: currentContext.label,
             type: 'champions'
         });
         setShowPoster(true);
@@ -186,8 +240,8 @@ const LeagueActive: React.FC = () => {
     };
 
     const matchesByRound = useMemo(() => {
-        if (!activeCategoryId || activeCategoryId === 'overview') return {};
-        const matches = league.matches.filter(m => m.category_id === activeCategoryId && m.phase === 'group');
+        if (activeContextId === 'overview') return {};
+        const matches = getFilteredMatches().filter(m => m.phase === 'group');
         const rounds: Record<number, any[]> = {};
         matches.forEach(m => {
             const r = m.round || 1;
@@ -195,7 +249,7 @@ const LeagueActive: React.FC = () => {
             rounds[r].push(m);
         });
         return rounds;
-    }, [league.matches, activeCategoryId]);
+    }, [league.matches, activeContextId]);
 
     const roundNumbers = Object.keys(matchesByRound).map(Number).sort((a,b) => a - b);
 
@@ -218,7 +272,9 @@ const LeagueActive: React.FC = () => {
     };
 
     const handleSavePair = async () => {
-        const targetCategory = activeCategoryId === 'overview' ? league.categories[0]?.id : activeCategoryId;
+        // If in overview, add to first cat. If in Group View, add to parent category.
+        const targetCategory = currentContext.type === 'group' ? currentContext.parentId : (currentContext.type === 'category' ? currentContext.id : league.categories[0]?.id);
+        
         if (!p1 || !targetCategory) return; 
         
         if (editingPairId) {
@@ -256,8 +312,10 @@ const LeagueActive: React.FC = () => {
     // --- GENERATION LOGIC ---
 
     const handlePreGenerate = (method: 'elo-balanced' | 'elo-mixed') => {
-        if (!activeCategoryId || activeCategoryId === 'overview') return;
-        const pairsInCategory = league.pairs.filter(p => p.category_id === activeCategoryId && p.player2Id);
+        // Only allow generation from Category View (not group view, usually groups are made FROM category)
+        if (currentContext.type !== 'category') return;
+        
+        const pairsInCategory = league.pairs.filter(p => p.category_id === currentContext.id && p.player2Id);
         if (pairsInCategory.length < 4) {
             setAlertMessage({ type: 'error', message: "Se necesitan al menos 4 parejas completas para generar la liga." });
             return;
@@ -267,17 +325,20 @@ const LeagueActive: React.FC = () => {
     };
 
     const handleConfirmGenerate = async () => {
-        if (!activeCategoryId || activeCategoryId === 'overview') return;
-        const pairsInCategory = league.pairs.filter(p => p.category_id === activeCategoryId && p.player2Id);
+        if (currentContext.type !== 'category') return;
+        const pairsInCategory = league.pairs.filter(p => p.category_id === currentContext.id && p.player2Id);
         const groupsCount = pairsInCategory.length >= 12 ? 2 : 1;
-        await generateLeagueGroups(activeCategoryId, groupsCount, genMethod, doubleRound);
+        await generateLeagueGroups(currentContext.id, groupsCount, genMethod, doubleRound);
         setShowGenerateConfirm(false);
         setTab('calendar');
+        // Refresh? Context updates automatically.
     };
 
     const handleConfirmPlayoffs = async () => {
-        if (!activeCategoryId || activeCategoryId === 'overview') return;
-        await advanceToPlayoffs(activeCategoryId, {
+        const catId = currentContext.type === 'group' ? currentContext.parentId : currentContext.id;
+        if (!catId) return;
+        
+        await advanceToPlayoffs(catId, {
             qualifiersPerGroup: poQuota,
             crossType: poCross,
             mode: poFormat
@@ -342,13 +403,13 @@ const LeagueActive: React.FC = () => {
                 <div className="space-y-4">
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider ml-1">Resumen por Categoría</h3>
                     {league.categories.map(cat => {
-                        const stats = getCategoryStats(cat.id);
+                        const stats = getCategoryOverviewStats(cat.id);
                         const isSetup = stats.totalMatches === 0;
 
                         return (
                             <div 
                                 key={cat.id} 
-                                onClick={() => { setActiveCategoryId(cat.id); setTab('management'); }}
+                                onClick={() => { setActiveContextId(cat.id); setTab('management'); }}
                                 className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:scale-[1.02] active:scale-100 transition-all cursor-pointer relative overflow-hidden group"
                             >
                                 <div className="flex justify-between items-start mb-4">
@@ -366,8 +427,8 @@ const LeagueActive: React.FC = () => {
                                         </div>
                                     ) : (
                                         <div className="text-right">
-                                            <div className="text-2xl font-black text-slate-800">{stats.progress}%</div>
-                                            <div className="text-[9px] text-slate-400 uppercase font-bold">Jugado</div>
+                                            <div className="text-lg font-black text-slate-800">{stats.finishedMatches} / {stats.totalMatches}</div>
+                                            <div className="text-[9px] text-slate-400 uppercase font-bold">Partidos</div>
                                         </div>
                                     )}
                                 </div>
@@ -379,14 +440,19 @@ const LeagueActive: React.FC = () => {
                                     </div>
                                 ) : (
                                     <div className="mt-2 space-y-3">
+                                        {/* Visual Progress Bar */}
+                                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                            <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${stats.progress}%` }}></div>
+                                        </div>
+
                                         {/* Leader Mini Bar */}
                                         <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-3 border border-slate-100">
                                             <div className="bg-amber-100 text-amber-600 p-1.5 rounded-lg"><Trophy size={14}/></div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-[9px] font-bold text-slate-400 uppercase">Líder Actual</div>
-                                                <div className="text-sm font-bold text-slate-800 truncate">{stats.leader?.pairName || 'N/A'}</div>
+                                                <div className="text-sm font-bold text-slate-800 truncate">{stats.leaderName || 'N/A'}</div>
                                             </div>
-                                            <div className="text-lg font-black text-slate-900">{stats.leader?.points || 0} <span className="text-[9px] text-slate-400 font-normal">pts</span></div>
+                                            <div className="text-lg font-black text-slate-900">{stats.leaderPoints} <span className="text-[9px] text-slate-400 font-normal">pts</span></div>
                                         </div>
 
                                         {/* Alerts */}
@@ -405,17 +471,13 @@ const LeagueActive: React.FC = () => {
         );
     };
 
-    // IF LOADING OR NO CATEGORY SELECTED (SHOULD NOT HAPPEN WITH NEW LOGIC, BUT SAFEGUARD)
-    if (!activeCategoryId && league.categories.length === 0) return <div className="p-10 text-center animate-pulse text-white">Cargando datos de la liga...</div>;
+    // IF LOADING
+    if (activeContextId === 'overview' && league.categories.length === 0) return <div className="p-10 text-center animate-pulse text-white">Cargando datos de la liga...</div>;
 
-    // DATA PREP FOR SPECIFIC CATEGORY VIEW
-    const allPairs = league.pairs.filter(p => p.category_id === activeCategoryId);
-    const completePairs = allPairs.filter(p => p.player2Id).sort((a,b) => b.id.localeCompare(a.id));
-    const incompletePairs = allPairs.filter(p => !p.player2Id).sort((a,b) => b.id.localeCompare(a.id));
-    const displayPairs = [...incompletePairs, ...completePairs];
-
-    const hasMatches = league.matches.some(m => m.category_id === activeCategoryId);
-    const hasPlayoffMatches = league.matches.some(m => m.category_id === activeCategoryId && m.phase === 'playoff');
+    // DATA PREP FOR SPECIFIC VIEW
+    const displayPairs = [...getFilteredPairs().filter(p => !p.player2Id), ...getFilteredPairs().filter(p => p.player2Id)];
+    const hasMatches = getFilteredMatches().length > 0;
+    const hasPlayoffMatches = getFilteredMatches().some(m => m.phase === 'playoff');
     
     let currentCategoryStatus = 'Inscripción';
     if (hasMatches) currentCategoryStatus = 'Fase Grupos';
@@ -435,23 +497,23 @@ const LeagueActive: React.FC = () => {
                 </div>
             </div>
 
-            {/* CATEGORY NAV BAR */}
+            {/* CATEGORY / GROUP NAV BAR */}
             <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
                 <button 
-                    onClick={() => setActiveCategoryId('overview')}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${activeCategoryId === 'overview' ? 'bg-white text-indigo-900 border-white' : 'bg-white/10 text-white border-white/10 hover:bg-white/20'}`}
+                    onClick={() => setActiveContextId('overview')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${activeContextId === 'overview' ? 'bg-white text-indigo-900 border-white' : 'bg-white/10 text-white border-white/10 hover:bg-white/20'}`}
                 >
                     <LayoutGrid size={12}/> Resumen
                 </button>
                 <div className="w-px h-6 bg-white/20 mx-1"></div>
-                {league.categories.map(cat => (
+                {navItems.filter(i => i.type !== 'overview').map(item => (
                     <button 
-                        key={cat.id} 
-                        onClick={() => { setActiveCategoryId(cat.id); setTab('management'); }}
-                        style={{ backgroundColor: activeCategoryId === cat.id ? THEME.cta : 'rgba(255,255,255,0.1)', color: 'white' }}
-                        className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${activeCategoryId === cat.id ? 'border-transparent' : 'border-white/10 hover:bg-white/20'}`}
+                        key={item.id} 
+                        onClick={() => { setActiveContextId(item.id); setTab('management'); }}
+                        style={{ backgroundColor: activeContextId === item.id ? THEME.cta : 'rgba(255,255,255,0.1)', color: 'white' }}
+                        className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${activeContextId === item.id ? 'border-transparent' : 'border-white/10 hover:bg-white/20'}`}
                     >
-                        {cat.name}
+                        {item.label}
                     </button>
                 ))}
                 <button 
@@ -464,7 +526,7 @@ const LeagueActive: React.FC = () => {
 
             {/* --- VIEW ROUTER --- */}
             
-            {activeCategoryId === 'overview' ? (
+            {activeContextId === 'overview' ? (
                 renderOverview()
             ) : (
                 <>
@@ -474,7 +536,7 @@ const LeagueActive: React.FC = () => {
                             <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-indigo-100">
                                 <div className="flex justify-between items-start mb-6">
                                     <div>
-                                        <h3 className="text-lg font-black text-slate-900">Estado: {league.categories.find(c=>c.id===activeCategoryId)?.name}</h3>
+                                        <h3 className="text-lg font-black text-slate-900">Estado: {currentContext.label}</h3>
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className={`w-2.5 h-2.5 rounded-full ${!hasMatches ? 'bg-orange-500' : 'bg-emerald-500'}`}></span>
                                             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{currentCategoryStatus}</span>
@@ -485,14 +547,14 @@ const LeagueActive: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* GENERATOR MOVED HERE */}
-                                {!hasMatches ? (
+                                {/* GENERATOR (ONLY IN CATEGORY CONTEXT) */}
+                                {currentContext.type === 'category' && !hasMatches && (
                                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                                         <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
                                             <LayoutGrid size={16} className="text-indigo-500"/> Configuración Calendario
                                         </h4>
                                         
-                                        {completePairs.length < 4 ? (
+                                        {displayPairs.filter(p => p.player2Id).length < 4 ? (
                                             <div className="text-xs text-slate-500 italic bg-white p-3 rounded-lg border border-slate-200">
                                                 Se necesitan al menos 4 parejas para generar la liga.
                                                 <br/>
@@ -515,7 +577,9 @@ const LeagueActive: React.FC = () => {
                                             </div>
                                         )}
                                     </div>
-                                ) : (
+                                )}
+                                
+                                {hasMatches && (
                                     <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex items-center gap-3">
                                         <CheckCircle className="text-emerald-500" size={24}/>
                                         <div>
@@ -532,8 +596,8 @@ const LeagueActive: React.FC = () => {
                                     <div className="flex items-center gap-3">
                                         <Users size={20}/> 
                                         <div>
-                                            <div className="font-bold">Gestionar Inscripciones</div>
-                                            <div className="text-[10px] opacity-70">Añadir parejas y cerrar grupos</div>
+                                            <div className="font-bold">Listado Inscritos</div>
+                                            <div className="text-[10px] opacity-70">Ver parejas participantes</div>
                                         </div>
                                     </div>
                                     <ChevronRight size={20} className="opacity-50"/>
@@ -558,9 +622,10 @@ const LeagueActive: React.FC = () => {
                     {/* TAB: REGISTRATION (REGISTRO) */}
                     {activeTab === 'registration' && (
                         <div className="space-y-6 animate-slide-up">
+                            {/* Stats & Add Button (Only show add button if in Category View or if Groups allow adding reserves) */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-white rounded-[2rem] p-6 shadow-lg border border-indigo-100 text-center">
-                                    <div className="text-3xl font-black text-indigo-500">{completePairs.length}</div>
+                                    <div className="text-3xl font-black text-indigo-500">{displayPairs.filter(p=>p.player2Id).length}</div>
                                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Parejas</div>
                                 </div>
                                 <button 
@@ -573,14 +638,21 @@ const LeagueActive: React.FC = () => {
                             </div>
 
                             <div>
-                                <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 px-2">Listado {league.categories.find(c=>c.id===activeCategoryId)?.name}</h3>
+                                <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 px-2">Listado {currentContext.label}</h3>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {displayPairs.map((pair, idx) => {
                                         const player1 = state.players.find(p => p.id === pair.player1Id);
                                         const player2 = pair.player2Id ? state.players.find(p => p.id === pair.player2Id) : null;
                                         const isSolo = !player2;
-                                        const pairElo = getPairElo(pair, state.players);
+                                        
+                                        // Calculate Average ELO
+                                        let pairElo = 0;
+                                        if (player1) {
+                                            const p1Elo = calculateDisplayRanking(player1);
+                                            const p2Elo = player2 ? calculateDisplayRanking(player2) : p1Elo; // Use same elo if solo to estimate
+                                            pairElo = Math.round((p1Elo + p2Elo) / 2);
+                                        }
 
                                         return (
                                             <div 
@@ -601,8 +673,11 @@ const LeagueActive: React.FC = () => {
                                                 <div className="space-y-1 mb-3">
                                                     <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(player1)}</div>
                                                     {isSolo && player1 && (
-                                                        <div className="mt-1 flex items-center gap-2">
+                                                        <div className="mt-1 flex flex-wrap gap-2">
                                                             {getPositionLabel(player1.preferred_position, player1.play_both_sides)}
+                                                            <div className="bg-amber-100 px-2 py-0.5 rounded text-[10px] font-bold text-amber-700 uppercase flex items-center gap-1 border border-amber-200">
+                                                                <TrendingUp size={10}/> {calculateDisplayRanking(player1)}
+                                                            </div>
                                                         </div>
                                                     )}
                                                     
@@ -621,7 +696,7 @@ const LeagueActive: React.FC = () => {
                                                 {!isSolo && (
                                                     <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                                                         <div className="bg-slate-50 px-2 py-1 rounded text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                                                            <TrendingUp size={10}/> ELO {pairElo}
+                                                            <TrendingUp size={10}/> MEDIA {pairElo}
                                                         </div>
                                                     </div>
                                                 )}
@@ -713,7 +788,7 @@ const LeagueActive: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {league.matches.filter(m => m.category_id === activeCategoryId && m.phase === 'playoff').map(m => (
+                                    {league.matches.filter(m => (m.category_id === activeContextId || m.category_id === currentContext.parentId) && m.phase === 'playoff').map(m => (
                                         <MatchRow key={m.id} match={m} />
                                     ))}
                                 </div>
@@ -812,7 +887,7 @@ const LeagueActive: React.FC = () => {
                         </div>
                         <h3 className="text-xl font-black text-slate-900 mb-2">Generar Calendario</h3>
                         <p className="text-slate-500 mb-6 text-sm">
-                            Se generarán los grupos y partidos para <strong>{league.categories.find(c=>c.id===activeCategoryId)?.name}</strong>. <br/>
+                            Se generarán los grupos y partidos para <strong>{league.categories.find(c=>c.id===activeContextId)?.name}</strong>. <br/>
                             <strong>Método:</strong> {genMethod === 'elo-balanced' ? 'Equilibrado por Nivel' : 'Sorteo Mix'}.<br/>
                             <strong>Formato:</strong> {doubleRound ? 'Ida y Vuelta' : 'Solo Ida'}.
                         </p>
@@ -950,7 +1025,7 @@ const LeagueActive: React.FC = () => {
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50 space-y-3">
                             {league.matches
-                                .filter(m => (m.pairAId === selectedPairId || m.pairBId === selectedPairId) && m.category_id === activeCategoryId)
+                                .filter(m => (m.pairAId === selectedPairId || m.pairBId === selectedPairId) && (m.category_id === activeContextId || m.group_id === activeContextId))
                                 .sort((a,b) => (a.round || 0) - (b.round || 0))
                                 .map(m => (
                                     <div key={m.id} className="relative">
