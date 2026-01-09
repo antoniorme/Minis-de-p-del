@@ -473,7 +473,7 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             newPlayoffMatches.push({ 
                 id_stub: `${idStub}-L1`, league_id: league.id, category_id: categoryId, phase: 'playoff', 
                 pair_a_id: pairA, pair_b_id: pairB, 
-                round_label: 'Ida'
+                round_label: mode === 'double' ? 'Ida' : 'Eliminatoria'
             });
             
             // Vuelta (if double)

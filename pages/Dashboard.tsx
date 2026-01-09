@@ -267,14 +267,16 @@ const Dashboard: React.FC = () => {
           </div>
       </div>
 
-      {/* 2. KEY METRICS GRID */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* 2. KEY METRICS GRID (Responsive 2 cols -> 4 cols on Desktop) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard title="Inscritos" value={`${titularPairs.length}/${currentLimit}`} subValue={reservePairs.length > 0 ? `+${reservePairs.length} Reservas` : null} icon={Users} color="text-blue-400" active={true} onClick={() => navigate('/registration')} />
           {isActiveMode ? (
               <StatCard title="Ronda Actual" value={`Ronda ${state.currentRound}`} icon={Clock} color="text-emerald-400" active={true} onClick={() => navigate('/active')} />
           ) : (
               <StatCard title="Formato" value={`Mini ${currentLimit}`} icon={LayoutGrid} color="text-indigo-400" active={true} onClick={() => navigate('/setup')} />
           )}
+          <StatCard title="Control" value="Pistas" icon={Settings} color="text-slate-400" active={true} onClick={() => navigate('/checkin')} />
+          <StatCard title="Resultados" value="Live" icon={Trophy} color="text-amber-400" active={true} onClick={() => navigate('/results')} />
       </div>
 
       {/* 3. SETUP PHASE PANEL */}
@@ -325,10 +327,6 @@ const Dashboard: React.FC = () => {
                   <div className="flex items-center gap-3"><PlayCircle size={32} fill="currentColor"/> IR AL DIRECTO</div>
                   <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-full text-white uppercase tracking-wider">Gestionar Partidos</span>
               </button>
-              <div className="grid grid-cols-2 gap-4">
-                  <button onClick={() => navigate('/checkin')} className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-emerald-300 transition-all shadow-sm"><Clock size={24} className="text-emerald-500"/><span className="font-bold text-slate-700">Control Pistas</span></button>
-                  <button onClick={() => navigate('/results')} className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-blue-300 transition-all shadow-sm"><Trophy size={24} className="text-blue-500"/><span className="font-bold text-slate-700">Resultados</span></button>
-              </div>
           </div>
       )}
 

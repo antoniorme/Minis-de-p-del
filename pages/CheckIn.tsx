@@ -162,13 +162,13 @@ const CheckIn: React.FC = () => {
     <div className="space-y-8 pb-32">
       <h2 className="text-2xl font-bold text-slate-900">Control y Pistas</h2>
 
-      {/* Courts List */}
-      <div className="space-y-10">
+      {/* Courts List (Grid for Desktop) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {state.courts.map(court => {
             const pairsOnCourt = getPairsForCourt(court.id);
             
             return (
-                <div key={court.id} className="relative">
+                <div key={court.id} className="relative bg-white rounded-2xl shadow-sm border border-slate-200 p-2">
                     {/* Clean Header with Dynamic Color */}
                     <div style={{ backgroundColor: themeColor }} className="flex items-center justify-between mb-4 text-white p-4 rounded-xl shadow-md transition-colors duration-300">
                         <span className="text-xl font-black tracking-tight">PISTA {court.id}</span>
@@ -182,11 +182,11 @@ const CheckIn: React.FC = () => {
                     </div>
 
                     {/* Cards Container */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-2 border-l-4 border-slate-200">
+                    <div className="flex flex-col gap-3">
                         {pairsOnCourt.length > 0 ? pairsOnCourt.map((pair, idx) => (
                             <PairCard key={pair.id} pair={pair} idx={pair.id.split('-')[1] || idx+1} />
                         )) : (
-                            <div className="text-center py-6 text-slate-400 text-sm bg-slate-50 rounded-xl">Sin partidos asignados</div>
+                            <div className="text-center py-6 text-slate-400 text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">Sin partidos asignados</div>
                         )}
                     </div>
                 </div>
@@ -200,7 +200,7 @@ const CheckIn: React.FC = () => {
               <h3 className="text-slate-500 font-bold mb-6 uppercase flex items-center gap-2">
                   <Users size={20}/> Descansan Turno 1 (Grupo D)
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {restingPairs.map((pair, idx) => (
                       <PairCard key={pair.id} pair={pair} idx={pair.id.split('-')[1] || idx+1} />
                   ))}
@@ -216,7 +216,7 @@ const CheckIn: React.FC = () => {
                    <h3 className="text-lg font-bold text-slate-800">Banquillo / Reservas</h3>
                    <span className="bg-slate-200 text-slate-600 text-xs font-bold px-2 py-0.5 rounded-full">{reservePairs.length}</span>
                </div>
-               <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                    {reservePairs.map((pair, idx) => {
                        const p1 = getPlayer(pair.player1Id);
                        const p2 = getPlayer(pair.player2Id);

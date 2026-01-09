@@ -323,7 +323,7 @@ const ActiveTournament: React.FC = () => {
       );
   }
 
-  // 3. ACTIVE MATCHES STATE
+  // 3. ACTIVE MATCHES STATE ("DIRECTO")
   return (
     <div className="space-y-6 pb-32">
       
@@ -363,8 +363,9 @@ const ActiveTournament: React.FC = () => {
             </button>
       </div>
       
-      <div className="space-y-4">
-        {sortedMatchesPriority.length === 0 ? (<div className="text-center py-10 text-slate-400 italic">Cargando partidos...</div>) : (
+      {/* --- MATCH GRID (Command Center) --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {sortedMatchesPriority.length === 0 ? (<div className="text-center py-10 text-slate-400 italic col-span-full">Cargando partidos...</div>) : (
             sortedMatchesPriority.map(match => {
                 const isWaiting = match.courtId === 0; const isPlayable = playableMatchIds.has(match.id); const isTechnicalRest = !isPlayable && !isWaiting;
                 
@@ -379,8 +380,8 @@ const ActiveTournament: React.FC = () => {
                 const headerBg = isWaiting ? 'bg-slate-200' : isTechnicalRest ? 'bg-slate-200' : 'bg-white';
 
                 return (
-                <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${cardClasses}`}>
-                    <div className={`${headerBg} px-5 py-4 flex justify-between items-center border-b ${isWaiting ? 'border-slate-300' : 'border-slate-100'}`}>
+                <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${cardClasses} flex flex-col`}>
+                    <div className={`${headerBg} px-5 py-3 flex justify-between items-center border-b ${isWaiting ? 'border-slate-300' : 'border-slate-100'}`}>
                         
                         <div className="flex items-center gap-3">
                              {isWaiting ? (
@@ -410,37 +411,38 @@ const ActiveTournament: React.FC = () => {
                         
                         {match.isFinished && (
                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">Finalizado</span>
-                                <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1.5 text-slate-400 hover:text-blue-500 bg-slate-50 rounded-lg transition-colors"><Edit2 size={14} /></button>
+                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">Finalizado</span>
+                                <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1 text-slate-400 hover:text-blue-500 bg-slate-50 rounded-lg transition-colors"><Edit2 size={12} /></button>
                              </div>
                         )}
                     </div>
                     
-                    <div className="p-5">
-                        <div className="flex items-center justify-between mb-3 cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairAId)}><span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>{getPairName(match.pairAId)} <Info size={14} className="text-slate-300"/></span><span className="text-3xl font-black text-slate-900">{match.scoreA ?? '-'}</span></div>
-                        <div className="flex items-center justify-between cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairBId)}><span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>{getPairName(match.pairBId)} <Info size={14} className="text-slate-300"/></span><span className="text-3xl font-black text-slate-900">{match.scoreB ?? '-'}</span></div>
+                    <div className="p-4 flex-1 flex flex-col justify-center">
+                        <div className="flex items-center justify-between mb-2 cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairAId)}><span className={`text-base font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>{getPairName(match.pairAId)} <Info size={12} className="text-slate-300"/></span><span className="text-2xl font-black text-slate-900">{match.scoreA ?? '-'}</span></div>
+                        <div className="flex items-center justify-between cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairBId)}><span className={`text-base font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-400' : 'text-slate-800'}`}>{getPairName(match.pairBId)} <Info size={12} className="text-slate-300"/></span><span className="text-2xl font-black text-slate-900">{match.scoreB ?? '-'}</span></div>
                         
                         {!match.isFinished && !isTechnicalRest && !isWaiting && (
                             <button 
                                 onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} 
                                 style={{ backgroundColor: THEME.cta }} 
-                                className={`w-full mt-6 py-4 rounded-xl text-base font-bold text-white shadow-md touch-manipulation hover:opacity-90 active:scale-98 transition-transform`}
+                                className={`w-full mt-4 py-3 rounded-xl text-sm font-bold text-white shadow-md touch-manipulation hover:opacity-90 active:scale-98 transition-transform`}
                             >
                                 Introducir Resultado
                             </button>
                         )}
                         
-                        {isWaiting && !match.isFinished && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className={`w-full mt-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-center text-xs font-bold text-slate-500 uppercase transition-colors`}>Forzar Resultado (Opcional)</button>)}
-                        {isTechnicalRest && (<div className="w-full mt-4 py-2 bg-slate-200 rounded-lg text-center text-xs font-bold text-slate-400 uppercase">Pista Ocupada</div>)}
+                        {isWaiting && !match.isFinished && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className={`w-full mt-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-center text-[10px] font-bold text-slate-500 uppercase transition-colors`}>Forzar Resultado</button>)}
+                        {isTechnicalRest && (<div className="w-full mt-4 py-2 bg-slate-200 rounded-lg text-center text-[10px] font-bold text-slate-400 uppercase">Pista Ocupada</div>)}
                     </div>
                 </div>
                 );
             })
         )}
       </div>
+
       {!isTournamentFinished && (
-        <div className="fixed bottom-24 left-0 right-0 z-30 pointer-events-none">
-          <div className="max-w-3xl mx-auto relative px-4 text-center pointer-events-auto">
+        <div className="fixed bottom-6 left-0 right-0 md:left-64 z-30 pointer-events-none flex justify-center">
+          <div className="relative pointer-events-auto">
             {isFinalRound ? (
                 <button 
                     onClick={handleFinishTournament} 

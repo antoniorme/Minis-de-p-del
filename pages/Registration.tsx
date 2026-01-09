@@ -99,7 +99,7 @@ const Registration: React.FC = () => {
   const PairList = ({ pairs, title, colorClass }: { pairs: any[], title: string, colorClass: string }) => (
       <div className="mt-8">
             <h3 className={`text-sm uppercase font-bold mb-4 tracking-wider ${colorClass}`}>{title}</h3>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {pairs.map((pair, idx) => {
                     const p1 = state.players.find(p => p.id === pair.player1Id);
                     const p2 = state.players.find(p => p.id === pair.player2Id);
@@ -132,7 +132,7 @@ const Registration: React.FC = () => {
                         </div>
                     )
                 })}
-                 {pairs.length === 0 && <p className="text-slate-400 text-sm italic p-6 text-center border-2 border-dashed border-slate-200 rounded-xl">No hay parejas registradas.</p>}
+                 {pairs.length === 0 && <p className="text-slate-400 text-sm italic p-6 text-center border-2 border-dashed border-slate-200 rounded-xl col-span-full">No hay parejas registradas.</p>}
             </div>
       </div>
   );
@@ -156,7 +156,7 @@ const Registration: React.FC = () => {
                   <UserPlus className="text-amber-600"/>
                   <h3 className="text-sm uppercase font-bold tracking-wider text-amber-700">Bolsa de Jugadores (Sin Pareja)</h3>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   {soloPairs.map(solo => {
                       const p = state.players.find(p => p.id === solo.player1Id);
                       return (
@@ -179,8 +179,8 @@ const Registration: React.FC = () => {
 
       {/* PAIR MODAL */}
       {isPairModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
-              <div className="bg-white w-full h-full sm:h-[90vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col">
                   {/* Compact Header */}
                   <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
                       <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
