@@ -18,6 +18,7 @@ interface LeagueContextType {
     selectLeague: (id: string) => Promise<void>;
     updateLeagueScore: (matchId: string, setsA: number, setsB: number, scoreText: string) => Promise<void>;
     createLeague: (data: Partial<LeagueState> & { prizeWinner?: string, prizeRunnerUp?: string }) => Promise<string | null>;
+    addLeagueCategory: (name: string) => Promise<void>; // NEW FUNCTION
     generateLeagueGroups: (categoryId: string, groupsCount: number, method: 'elo-balanced' | 'elo-mixed', doubleRound: boolean) => Promise<void>;
     advanceToPlayoffs: (categoryId: string, config: PlayoffConfig) => Promise<void>;
     addPairToLeague: (pair: Partial<Pair>) => Promise<void>;
@@ -99,7 +100,7 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 { data: matches }
             ] = await Promise.all([
                 supabase.from('leagues').select('*').eq('id', id).single(),
-                supabase.from('league_categories').select('*').eq('league_id', id),
+                supabase.from('league_categories').select('*').eq('league_id', id).order('created_at', { ascending: true }),
                 supabase.from('league_groups').select('*').eq('league_id', id),
                 supabase.from('league_pairs').select('*').eq('league_id', id),
                 supabase.from('league_matches').select('*').eq('league_id', id)
@@ -165,6 +166,36 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (e) {
             console.error("Error loading league:", e);
             setLeague(prev => ({ ...prev, loading: false }));
+        }
+    };
+
+    const addLeagueCategory = async (name: string) => {
+        if (!league.id) return;
+
+        if (isOfflineMode) {
+            const newCat: LeagueCategory = {
+                id: `cat-${Date.now()}`,
+                name,
+                prize_winner: '',
+                prize_runnerup: '',
+                pairs_count: 0
+            };
+            const updatedLeague = { ...league, categories: [...league.categories, newCat] };
+            setLeague(updatedLeague);
+            localStorage.setItem(`league_data_${league.id}`, JSON.stringify(updatedLeague));
+            return;
+        }
+
+        try {
+            await supabase.from('league_categories').insert([{
+                league_id: league.id,
+                name: name,
+                prize_winner: '',
+                prize_runnerup: ''
+            }]);
+            await selectLeague(league.id);
+        } catch (e) {
+            console.error("Error creating category:", e);
         }
     };
 
@@ -401,6 +432,8 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 }
             }
 
+            // We don't update global league status to 'groups' unless ALL categories are generated? 
+            // For now, let's keep it simple: if ANY category generates, mark as groups.
             await supabase.from('leagues').update({ status: 'groups' }).eq('id', league.id);
             if (league.id) selectLeague(league.id);
 
@@ -564,7 +597,7 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return (
         <LeagueContext.Provider value={{
             league, leaguesList, fetchLeagues, selectLeague, updateLeagueScore, createLeague,
-            generateLeagueGroups, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair,
+            addLeagueCategory, generateLeagueGroups, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair,
             isLeagueModuleEnabled
         }}>
             {children}
