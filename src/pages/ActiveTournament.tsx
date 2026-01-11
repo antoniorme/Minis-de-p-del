@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
@@ -18,7 +17,6 @@ interface AlertState {
     message: string;
 }
 
-// FIX: Using default export function declaration
 export default function ActiveTournament() {
   const { state, updateScoreDB, nextRoundDB, resetToSetupDB, formatPlayerName, finishTournamentDB, archiveAndResetDB, pendingSyncCount } = useTournament();
   const { resetTimer } = useTimer();
@@ -625,5 +623,7 @@ export default function ActiveTournament() {
             {showRoundConfirm && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900"><div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 animate-pulse"><Play size={40} fill="currentColor" /></div><h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3><p className="text-slate-500 mb-8">Se generarán los partidos de la siguiente fase. Asegúrate de que todos los resultados actuales estén correctos.</p><div className="grid grid-cols-1 gap-3"><button onClick={confirmNextRound} style={{ backgroundColor: THEME.cta }} className="w-full py-4 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 hover:opacity-90">Confirmar y Avanzar</button><button onClick={() => setShowRoundConfirm(false)} className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">Revisar Resultados</button></div></div></div>)}
             {selectedPairId && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-end sm:items-center justify-center sm:p-4"><div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-md shadow-2xl animate-slide-up h-[80vh] sm:h-auto flex flex-col text-slate-900"><div className="flex justify-end mb-2"><button onClick={() => setSelectedPairId(null)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button></div><PairDetailContent pairId={selectedPairId} /></div></div>)}
     </div>
+    <div className="fixed inset-0 pointer-events-none" /> {/* Added missing closing div structure */}
+  </div>
   );
-};
+}
