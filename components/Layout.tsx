@@ -4,14 +4,13 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
     Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, 
     UserCog, History, Settings, HelpCircle, X, Bell, Shield, 
-    LayoutGrid, Home, CalendarRange, GitMerge, ArrowLeft, 
-    ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen 
+    LayoutGrid, Home, CalendarRange, GitMerge, PanelLeftClose, PanelLeftOpen,
+    ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../store/AuthContext';
 import { useHistory } from '../store/HistoryContext';
 import { useTournament } from '../store/TournamentContext';
 import { useNotifications } from '../store/NotificationContext';
-import { THEME } from '../utils/theme';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -25,21 +24,19 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // CONTEXT DETECTION
-  const isTournamentActive = !!state.id && state.status !== 'finished';
-  const isLeagueActiveView = location.pathname.includes('/league/active');
-  const isLeaguePath = location.pathname.startsWith('/league');
+  const isMiniList = location.pathname === '/minis';
+  const isSpecificMini = location.pathname.startsWith('/tournament/');
+  const isMiniContext = isMiniList || isSpecificMini;
+  const isLeagueContext = location.pathname.startsWith('/league');
   
-  // Specific Context Flags
-  const isActiveTournamentPage = location.pathname === '/active'; // The specific "Directo" page for minis
-  
-  const isContextMode = isTournamentActive || isLeaguePath;
-  // If we are in "Active Tournament" page, we use dark mode by default there (overridden by page content usually)
-  const isDarkMode = isActiveTournamentPage || isLeaguePath; 
+  // DARK MODE LOGIC: All "Mini" related pages are Dark Gradient
+  const isDarkMode = isMiniContext || true;
 
   // 1. GLOBAL NAVIGATION (SIDEBAR)
   const menuItems = [
-      { path: '/dashboard', label: 'Mis Torneos', icon: LayoutGrid },
-      { path: '/league', label: 'Ligas', icon: CalendarRange },
+      { path: '/dashboard', label: 'Inicio', icon: Home },
+      { path: '/minis', label: 'Minis', icon: Trophy }, // RESTORED
+      { path: '/league', label: 'Ligas', icon: CalendarRange }, // RESTORED
       { path: '/players', label: 'Jugadores', icon: UserCog },
       { path: '/history', label: 'Historial', icon: History },
       { path: '/club', label: 'Mi Club', icon: Settings },
@@ -51,13 +48,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }
 
   // 2. CONTEXT NAVIGATION (BOTTOM DOCK)
-  // Only for Active Tournament or Active League
+  // Only show when inside a specific tournament management flow
   const tournamentNavItems = [
-    { path: '/dashboard', label: 'Gestión', icon: Settings },
-    { path: '/registration', label: 'Registro', icon: Users },
-    { path: '/checkin', label: 'Control', icon: ClipboardList },
-    { path: '/active', label: 'Directo', icon: Activity },
-    { path: '/results', label: 'Clasi', icon: List },
+    { path: '/tournament/manage', label: 'Gestión', icon: Settings },
+    { path: '/tournament/registration', label: 'Registro', icon: Users },
+    { path: '/tournament/checkin', label: 'Control', icon: ClipboardList },
+    { path: '/tournament/active', label: 'Directo', icon: Activity },
+    { path: '/tournament/results', label: 'Clasi', icon: List },
   ];
 
   const leagueNavItems = [
@@ -69,8 +66,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   ];
 
   let contextNavItems = null;
-  if (isTournamentActive) contextNavItems = tournamentNavItems;
-  else if (isLeagueActiveView) contextNavItems = leagueNavItems;
+  // Show bottom nav ONLY when managing a SPECIFIC tournament (not the list)
+  if (isSpecificMini) contextNavItems = tournamentNavItems;
+  else if (isLeagueContext && location.pathname.includes('/league/active')) contextNavItems = leagueNavItems;
 
   const isPublicPage = location.pathname === '/' || location.pathname === '/auth';
 
@@ -80,69 +78,69 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const handleBackToHub = () => {
-      closeTournament();
-      navigate('/dashboard');
+      // Logic for back button depends on where we are
+      if (isSpecificMini) {
+          closeTournament();
+          navigate('/minis'); // Go back to Mini List
+      } else {
+          navigate('/dashboard'); // Go back to Main Hub
+      }
   };
 
   if (isPublicPage) {
     return <>{children}</>;
   }
 
-  const getBodyBackground = () => {
-      // "Active Tournament" page handles its own dark background with gradients
-      if (isActiveTournamentPage) return 'bg-slate-900'; 
-      // League: Indigo 500 (Corporate Blue) requested
-      if (isLeaguePath) return 'bg-indigo-500'; 
-      // Default Active Tournament Setup pages
-      if (isTournamentActive) return 'bg-indigo-600'; 
-      // Dashboard/Hub
-      return 'bg-slate-50';
-  };
+  // BACKGROUND LOGIC
+  let bgClass = 'bg-slate-50'; 
+  if (isMiniContext) bgClass = 'bg-slate-900 text-white'; // Dark Gradient for ALL Mini pages (List & Specific)
+  else if (isLeagueContext) bgClass = 'bg-indigo-500'; 
 
   const showDefaultBranding = clubData.name === 'Mi Club de Padel' || clubData.name === 'ParaPadel';
-  
-  // Sidebar Styling Logic
-  const useDarkSidebar = true; 
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 flex flex-col md:flex-row ${getBodyBackground()} ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+    <div className={`min-h-screen transition-colors duration-500 flex flex-col md:flex-row ${bgClass}`}>
       
+      {/* BACKGROUND DECOR FOR MINIS */}
+      {isMiniContext && (
+        <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
+            <div className="absolute -top-20 -left-20 w-96 h-96 bg-blue-600 rounded-full blur-[128px] opacity-20"></div>
+            <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-600 rounded-full blur-[128px] opacity-20"></div>
+        </div>
+      )}
+
       {/* --- DESKTOP SIDEBAR (GLOBAL NAV) --- */}
       <aside 
-        className={`hidden md:flex flex-col fixed inset-y-0 z-50 border-r transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} ${useDarkSidebar ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}
+        className={`hidden md:flex flex-col fixed inset-y-0 z-50 border-r transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-slate-900 border-slate-800 text-white`}
       >
-          {/* Logo Area */}
           <div className={`p-6 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} h-20 shrink-0`}>
-              <div className={`w-8 h-8 rounded-lg overflow-hidden shrink-0 border-2 ${isContextMode ? 'border-indigo-200 bg-indigo-600' : useDarkSidebar ? 'border-slate-800 bg-slate-800' : 'border-slate-100 bg-slate-50'} flex items-center justify-center`}>
+              <div className={`w-8 h-8 rounded-lg overflow-hidden shrink-0 border-2 border-slate-700 bg-slate-800 flex items-center justify-center`}>
                     {clubData.logoUrl ? (
                         <img src={clubData.logoUrl} alt="Logo" className="w-full h-full object-cover" />
                     ) : (
-                        <Trophy size={16} className={isContextMode ? 'text-indigo-200' : useDarkSidebar ? 'text-slate-300' : 'text-slate-400'} />
+                        <Trophy size={16} className="text-slate-400" />
                     )}
               </div>
               {!isSidebarCollapsed && (
-                  <h1 className={`text-sm font-black leading-tight truncate ${useDarkSidebar ? 'text-white' : 'text-slate-900'}`}>
+                  <h1 className="text-sm font-black leading-tight truncate text-white">
                       {showDefaultBranding ? 'ParaPádel' : clubData.name}
                   </h1>
               )}
           </div>
 
-          {/* Navigation Items */}
           <div className="flex-1 overflow-y-auto px-3 space-y-2 mt-4 custom-scrollbar">
               {menuItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+                  const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path) && !isMiniContext && !isLeagueContext);
                   
                   return (
                       <Link 
                         key={item.path} 
                         to={item.path}
-                        className={`group relative flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl font-bold transition-all ${isActive ? 'bg-[#575AF9] text-white shadow-md' : (useDarkSidebar ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900')}`}
+                        className={`group relative flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl font-bold transition-all ${isActive ? 'bg-[#575AF9] text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                       >
                           <Icon size={20} strokeWidth={2.5} /> 
                           {!isSidebarCollapsed && <span className="text-sm">{item.label}</span>}
-                          
-                          {/* Tooltip on Hover when Collapsed */}
                           {isSidebarCollapsed && (
                               <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-[60] pointer-events-none shadow-xl border border-slate-700">
                                   {item.label}
@@ -153,14 +151,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               })}
           </div>
 
-          {/* Footer Actions (Collapse & Logout) */}
           <div className="p-3 border-t border-white/5 space-y-2 mt-auto bg-inherit z-10 relative">
-              
-              {/* Collapse Button (Moved Bottom) */}
               <button 
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl transition-colors ${useDarkSidebar ? 'text-slate-500 hover:bg-white/5 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
-                title={isSidebarCollapsed ? "Expandir Menú" : "Contraer Menú"}
+                className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl transition-colors text-slate-500 hover:bg-white/5 hover:text-white`}
               >
                   {isSidebarCollapsed ? <PanelLeftOpen size={20}/> : <PanelLeftClose size={20}/>}
                   {!isSidebarCollapsed && <span className="text-xs font-bold uppercase">Contraer</span>}
@@ -172,54 +166,50 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               >
                   <LogOut size={20} /> 
                   {!isSidebarCollapsed && "Salir"}
-                  {isSidebarCollapsed && (
-                      <div className="absolute left-full ml-3 px-3 py-1.5 bg-rose-900 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-[60] pointer-events-none shadow-xl">
-                          Cerrar Sesión
-                      </div>
-                  )}
               </button>
           </div>
       </aside>
 
       {/* --- MAIN CONTENT AREA --- */}
-      <div className={`flex-1 flex flex-col ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'} min-h-screen transition-all duration-300`}>
+      <div className={`flex-1 flex flex-col ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'} min-h-screen transition-all duration-300 relative z-10`}>
           
-          {/* MOBILE HEADER (Visible only on mobile) */}
+          {/* MOBILE HEADER */}
           <div className="md:hidden pt-2 px-2 pb-2 sticky top-0 z-40 transition-colors duration-500">
-              <header className={`px-4 py-3 flex justify-between items-center border rounded-2xl shadow-sm transition-all duration-500 ${isContextMode ? 'bg-indigo-500 border-indigo-300 shadow-indigo-500/20' : 'bg-white border-slate-200'}`}>
+              <header className={`px-4 py-3 flex justify-between items-center border rounded-2xl shadow-sm transition-all duration-500 ${isMiniContext ? 'bg-slate-900/90 border-slate-700 backdrop-blur-md text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
                 <div className="flex items-center gap-3 overflow-hidden">
-                    {isTournamentActive && (
-                        <button onClick={handleBackToHub} className="p-1.5 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors shrink-0" title="Volver a Mis Torneos">
-                            <Home size={18} className="text-slate-600"/>
+                    {/* BACK BUTTON LOGIC */}
+                    {isMiniContext && (
+                        <button onClick={handleBackToHub} className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-colors shrink-0 text-white" title="Volver">
+                            <ArrowLeft size={18}/>
                         </button>
                     )}
-                    {!isTournamentActive && isLeagueActiveView && (
-                        <button onClick={() => navigate('/league')} className="p-1.5 bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shrink-0 border border-indigo-400" title="Salir de la Liga">
-                            <ArrowLeft size={18} className="text-white"/>
+                    {isLeagueContext && (
+                        <button onClick={() => navigate('/dashboard')} className="p-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors shrink-0 text-white" title="Volver al Panel">
+                            <ArrowLeft size={18}/>
                         </button>
                     )}
 
-                    <div className={`w-8 h-8 rounded-lg overflow-hidden shrink-0 border-2 ${isContextMode ? 'border-indigo-200 bg-indigo-600' : 'border-slate-100 bg-slate-50'} flex items-center justify-center`}>
+                    <div className={`w-8 h-8 rounded-lg overflow-hidden shrink-0 border-2 flex items-center justify-center ${isMiniContext ? 'border-slate-600 bg-slate-800' : 'border-slate-100 bg-slate-50'}`}>
                         {clubData.logoUrl ? (
                             <img src={clubData.logoUrl} alt="Logo" className="w-full h-full object-cover" />
                         ) : (
-                            <Trophy size={16} className={isContextMode ? 'text-indigo-200' : 'text-slate-300'} />
+                            <Trophy size={16} className={isMiniContext ? 'text-slate-400' : 'text-slate-300'} />
                         )}
                     </div>
                     
                     <div className="flex flex-col overflow-hidden">
-                        <h1 className={`text-sm font-black truncate leading-tight ${isContextMode ? 'text-white' : 'text-slate-900'}`}>
+                        <h1 className={`text-sm font-black truncate leading-tight`}>
                             {clubData.name}
                         </h1>
                     </div>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                    <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full transition-colors ${isContextMode ? 'text-slate-300 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+                    <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full transition-colors ${isMiniContext ? 'text-slate-300 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
                         <Bell size={20} />
                         {unreadCount > 0 && <span className="absolute top-1 right-1 w-3 h-3 bg-rose-500 rounded-full border border-white"></span>}
                     </button>
-                    <button onClick={() => setIsMenuOpen(true)} className={`p-2 rounded-full transition-colors ${isContextMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                    <button onClick={() => setIsMenuOpen(true)} className={`p-2 rounded-full transition-colors ${isMiniContext ? 'text-slate-200' : 'text-slate-700'}`}>
                       <Menu size={24} />
                     </button>
                 </div>
@@ -229,11 +219,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           {/* DESKTOP TOP BAR */}
           <div className="hidden md:flex justify-end items-center p-6 pb-2">
                <div className="flex items-center gap-4">
-                   <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full hover:bg-white/10 transition-colors ${isDarkMode ? 'text-white' : 'text-slate-600'}`}>
+                   <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full hover:bg-white/10 transition-colors ${isMiniContext || isLeagueContext ? 'text-white' : 'text-slate-600'}`}>
                        <Bell size={24}/>
                        {unreadCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
                    </button>
-                   <div className={`h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold border-2 ${isDarkMode ? 'border-slate-700' : 'border-white'}`}>
+                   <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold border-2 ${isMiniContext ? 'bg-indigo-600 border-slate-700' : 'bg-indigo-500 border-white'}`}>
                        {clubData.name.charAt(0)}
                    </div>
                </div>
@@ -248,27 +238,28 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </div>
 
       {/* --- CONTEXT NAVIGATION (BOTTOM DOCK) --- */}
-      {/* Visible on Mobile AND Desktop when inside a specific module */}
       {contextNavItems && (
         <div className="fixed bottom-0 left-0 right-0 z-[40] p-4 pointer-events-none flex justify-center md:pl-20">
-            <nav className={`w-full max-w-md backdrop-blur-md border rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex justify-around items-center px-2 py-1 pointer-events-auto transition-all duration-500 ${isContextMode ? 'bg-indigo-500/95 border-indigo-400' : 'bg-white/95 border-slate-200'}`}>
+            <nav className={`w-full max-w-md backdrop-blur-md border rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex justify-around items-center px-2 py-1 pointer-events-auto transition-all duration-500 ${isSpecificMini ? 'bg-slate-900/90 border-slate-700 shadow-slate-900/50' : 'bg-white/95 border-slate-200'}`}>
               {contextNavItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = isLeagueActiveView 
-                    ? location.pathname + location.search === item.path
-                    : location.pathname === item.path;
+                const isActive = location.pathname + location.search === item.path || location.pathname === item.path;
+
+                // For Minis (Dark Theme)
+                const activeColor = isSpecificMini ? 'text-white' : 'text-[#575AF9]';
+                const inactiveColor = isSpecificMini ? 'text-slate-500' : 'text-slate-400';
+                const activeBg = isSpecificMini ? 'bg-white/10 scale-110' : 'bg-[#575AF9]/10 scale-110';
 
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    replace={isLeagueActiveView}
-                    className={`flex flex-col items-center justify-center py-2 px-2 w-full transition-all rounded-xl group ${isActive ? '' : 'hover:bg-white/5'}`}
+                    className={`flex flex-col items-center justify-center py-2 px-2 w-full transition-all rounded-xl group hover:bg-white/5`}
                   >
-                    <div className={`p-1.5 rounded-xl mb-0.5 transition-all ${isActive ? (isContextMode ? 'bg-white/20 scale-110' : 'bg-[#575AF9]/10 scale-110') : 'bg-transparent'}`}>
-                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors ${isActive ? (isContextMode ? 'text-white' : 'text-[#575AF9]') : (isContextMode ? 'text-white/50' : 'text-slate-400')}`}/>
+                    <div className={`p-1.5 rounded-xl mb-0.5 transition-all ${isActive ? activeBg : 'bg-transparent'}`}>
+                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors ${isActive ? activeColor : inactiveColor}`}/>
                     </div>
-                    <span className={`text-[9px] font-bold transition-colors ${isActive ? (isContextMode ? 'text-white' : 'text-[#2B2DBF]') : (isContextMode ? 'text-white/50' : 'text-slate-400')}`}>{item.label}</span>
+                    <span className={`text-[9px] font-bold transition-colors ${isActive ? activeColor : inactiveColor}`}>{item.label}</span>
                   </Link>
                 );
               })}
@@ -276,29 +267,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       )}
 
-      {/* MOBILE BOTTOM NAV (GLOBAL FALLBACK) */}
-      {/* Only visible on mobile if NOT in a specific context */}
-      {!contextNavItems && user && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-2 pointer-events-none md:hidden">
-            <nav className={`max-w-md mx-auto backdrop-blur-md border rounded-2xl shadow-lg flex justify-around items-center px-2 py-1 pointer-events-auto bg-white/95 border-slate-200`}>
-              {menuItems.slice(0, 5).map((item) => { // Show first 5 items on mobile
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`flex flex-col items-center justify-center py-3 px-2 w-full transition-all rounded-xl ${isActive ? 'text-[#575AF9]' : 'text-slate-400'}`}
-                  >
-                    <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
-                  </Link>
-                );
-              })}
-            </nav>
-        </div>
-      )}
-
-      {/* MOBILE MENU DRAWER (Overlay) */}
+      {/* MOBILE MENU DRAWER */}
       {isMenuOpen && (
           <div className="fixed inset-0 z-[100] md:hidden">
               <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}></div>
@@ -308,12 +277,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       <button onClick={() => setIsMenuOpen(false)} className={`p-2 rounded-full transition-colors bg-slate-800 text-slate-400`}><X size={20}/></button>
                   </div>
                   <div className="space-y-4 flex-1">
-                      {isTournamentActive && (
-                          <button onClick={() => { handleBackToHub(); setIsMenuOpen(false); }} className={`flex w-full items-center gap-3 p-3 rounded-xl font-bold transition-colors bg-slate-800 text-white`}>
-                              <Home size={20} /> Volver a Mis Torneos
-                          </button>
-                      )}
-                      {menuItems.map(item => (
+                      <button onClick={() => { navigate('/dashboard'); setIsMenuOpen(false); }} className="flex w-full items-center gap-3 p-3 rounded-xl font-bold transition-colors bg-slate-800 text-white">
+                          <Home size={20} /> Ir al Inicio
+                      </button>
+                      
+                      {menuItems.slice(1).map(item => (
                           <Link key={item.path} to={item.path} onClick={() => setIsMenuOpen(false)} className={`flex items-center gap-3 p-3 rounded-xl font-medium transition-colors text-slate-300 hover:bg-slate-800`}>
                               <item.icon size={20} /> {item.label}
                           </Link>

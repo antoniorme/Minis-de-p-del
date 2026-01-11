@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
+import { useTournament } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
 import { Users, Trash2, Edit2, Save, X, AlertTriangle, TrendingUp, Link as LinkIcon, UserPlus, Activity } from 'lucide-react';
 import { PlayerSelector } from '../components/PlayerSelector';
@@ -38,7 +38,6 @@ const Registration: React.FC = () => {
       return !isAssigned;
   });
 
-  // HELPER: Calculate Average ELO for sorting and display
   const getPairAverageElo = (pair: any) => {
       const p1 = state.players.find(p => p.id === pair.player1Id);
       const p2 = state.players.find(p => p.id === pair.player2Id);
@@ -47,7 +46,6 @@ const Registration: React.FC = () => {
       return Math.round((elo1 + elo2) / 2);
   };
 
-  // HELPER: Sophisticated Range Parsing
   const getTournamentRange = () => {
       const text = (state.levelRange || '').toLowerCase();
       
@@ -85,7 +83,6 @@ const Registration: React.FC = () => {
 
   const tournamentRange = getTournamentRange();
 
-  // SORTED PAIRS (Highest Average ELO first)
   const sortedActivePairs = useMemo(() => {
       return [...activePairs].sort((a, b) => getPairAverageElo(b) - getPairAverageElo(a));
   }, [activePairs, state.players]);
@@ -148,9 +145,9 @@ const Registration: React.FC = () => {
       setSelectedSoloPartner('');
   };
 
-  const PairList = ({ pairs, title, colorClass }: { pairs: any[], title: string, colorClass: string }) => (
+  const PairList = ({ pairs, title }: { pairs: any[], title: string }) => (
       <div className="mt-8">
-            <h3 className={`text-sm uppercase font-bold mb-4 tracking-wider ${colorClass}`}>{title}</h3>
+            <h3 className="text-sm uppercase font-bold mb-4 tracking-wider text-white/70">{title}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {pairs.map((pair, idx) => {
                     const p1 = state.players.find(p => p.id === pair.player1Id);
@@ -158,28 +155,28 @@ const Registration: React.FC = () => {
                     const avgElo = getPairAverageElo(pair);
                     
                     return (
-                        <div key={pair.id} className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col">
+                        <div key={pair.id} className="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden flex flex-col">
                             {/* TOP PART: NAMES AND ACTIONS */}
                             <div className="p-4 flex items-center justify-between">
                                 <div className="flex items-center gap-3 overflow-hidden w-full">
-                                    <span className="bg-slate-100 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-slate-500 border border-slate-200">{idx + 1}</span>
+                                    <span className="bg-slate-700 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-slate-300 border border-slate-600">{idx + 1}</span>
                                     <div className="flex flex-col w-full min-w-0">
-                                        <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(p1)}</div>
+                                        <div className="text-sm font-bold text-white truncate">{formatPlayerName(p1)}</div>
                                         <div className="flex items-center gap-1.5 mt-0.5">
                                             <span style={{ color: THEME.cta }} className="text-[10px] font-black">&</span>
-                                            <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(p2)}</div>
+                                            <div className="text-sm font-bold text-white truncate">{formatPlayerName(p2)}</div>
                                         </div>
                                     </div>
                                 </div>
                                 
                                 <div className="flex items-center gap-1 shrink-0 ml-2">
-                                    <button onClick={() => startEditPair(pair.id)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg hover:bg-blue-50 transition-colors"><Edit2 size={16}/></button>
-                                    <button onClick={() => setShowDeleteModal(pair.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
+                                    <button onClick={() => startEditPair(pair.id)} className="p-2 text-slate-400 hover:text-white bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors"><Edit2 size={16}/></button>
+                                    <button onClick={() => setShowDeleteModal(pair.id)} className="p-2 text-slate-400 hover:text-rose-500 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors"><Trash2 size={16}/></button>
                                 </div>
                             </div>
 
                             {/* BOTTOM STRIP: ELO BAR */}
-                            <div className="bg-slate-50 px-4 py-2 border-t border-slate-100">
+                            <div className="bg-slate-900/50 px-4 py-2 border-t border-slate-700">
                                 <LevelProgressBar 
                                     elo={avgElo} 
                                     rangeMin={tournamentRange?.min} 
@@ -189,41 +186,41 @@ const Registration: React.FC = () => {
                         </div>
                     )
                 })}
-                 {pairs.length === 0 && <p className="text-slate-400 text-sm italic p-6 text-center border-2 border-dashed border-slate-200 rounded-xl col-span-full">No hay parejas registradas.</p>}
+                 {pairs.length === 0 && <p className="text-slate-500 text-sm italic p-6 text-center border-2 border-dashed border-slate-700 rounded-xl col-span-full">No hay parejas registradas.</p>}
             </div>
       </div>
   );
 
   return (
-    <div className="space-y-6 pb-20">
-      <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div><h2 className="text-2xl font-bold text-slate-900">Registro</h2><p className="text-sm text-slate-500">Gestión de Inscripciones</p></div>
-        <div className={`flex flex-col items-end text-blue-600`}><span className="text-4xl font-bold">{totalRegistered}</span></div>
+    <div className="space-y-6 pb-20 text-white">
+      <div className="flex justify-between items-center bg-slate-800/80 backdrop-blur-md p-6 rounded-xl border border-slate-700 shadow-sm">
+        <div><h2 className="text-2xl font-bold text-white">Registro</h2><p className="text-sm text-slate-400">Gestión de Inscripciones</p></div>
+        <div className={`flex flex-col items-end text-[#575AF9]`}><span className="text-4xl font-bold">{totalRegistered}</span></div>
       </div>
 
-      <button onClick={openNewPairModal} className="w-full bg-white hover:bg-indigo-50 border-2 border-indigo-100 hover:border-[#575AF9] p-6 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shadow-sm active:scale-95 group">
-          <div style={{ color: THEME.cta }} className="bg-indigo-100 p-3 rounded-full group-hover:bg-indigo-200 transition-colors"><Users size={32} /></div>
-          <span className="font-black text-indigo-900 text-lg">AÑADIR NUEVA PAREJA</span>
+      <button onClick={openNewPairModal} className="w-full bg-slate-800/80 hover:bg-slate-800 border-2 border-slate-700 hover:border-[#575AF9] p-6 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shadow-lg active:scale-95 group">
+          <div style={{ color: THEME.cta }} className="bg-slate-700 p-3 rounded-full group-hover:bg-slate-600 transition-colors"><Users size={32} /></div>
+          <span className="font-black text-white text-lg">AÑADIR NUEVA PAREJA</span>
       </button>
       
       {/* SOLO PLAYERS BAG */}
       {soloPairs.length > 0 && (
-          <div className="mt-8 bg-amber-50 p-6 rounded-2xl border border-amber-100">
+          <div className="mt-8 bg-amber-900/20 p-6 rounded-2xl border border-amber-800/50">
               <div className="flex items-center gap-2 mb-4">
-                  <UserPlus className="text-amber-600"/>
-                  <h3 className="text-sm uppercase font-bold tracking-wider text-amber-700">Bolsa de Jugadores (Sin Pareja)</h3>
+                  <UserPlus className="text-amber-500"/>
+                  <h3 className="text-sm uppercase font-bold tracking-wider text-amber-500">Bolsa de Jugadores (Sin Pareja)</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   {soloPairs.map(solo => {
                       const p = state.players.find(p => p.id === solo.player1Id);
                       return (
-                          <div key={solo.id} className="bg-white p-4 rounded-xl shadow-sm border border-amber-200 flex justify-between items-center">
-                              <div className="font-bold text-slate-800">{formatPlayerName(p)}</div>
+                          <div key={solo.id} className="bg-slate-800 p-4 rounded-xl shadow-sm border border-amber-900/50 flex justify-between items-center">
+                              <div className="font-bold text-white">{formatPlayerName(p)}</div>
                               <div className="flex gap-2">
-                                  <button onClick={() => handleOpenSoloMatch(solo.id)} className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-200 flex items-center gap-1">
+                                  <button onClick={() => handleOpenSoloMatch(solo.id)} className="px-3 py-1.5 bg-amber-500/20 text-amber-500 rounded-lg text-xs font-bold hover:bg-amber-500/30 flex items-center gap-1 border border-amber-500/20">
                                       <LinkIcon size={12}/> Emparejar
                                   </button>
-                                  <button onClick={() => setShowDeleteModal(solo.id)} className="p-1.5 text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
+                                  <button onClick={() => setShowDeleteModal(solo.id)} className="p-1.5 text-slate-400 hover:text-rose-500"><Trash2 size={16}/></button>
                               </div>
                           </div>
                       );
@@ -232,11 +229,11 @@ const Registration: React.FC = () => {
           </div>
       )}
 
-      <PairList pairs={sortedActivePairs} title="Parejas Inscritas (Por Nivel)" colorClass="text-white opacity-80" />
+      <PairList pairs={sortedActivePairs} title="Parejas Inscritas (Por Nivel)" />
 
       {/* PAIR MODAL */}
       {isPairModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col">
                   {/* Compact Header */}
                   <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
@@ -250,7 +247,7 @@ const Registration: React.FC = () => {
                   </div>
                   
                   {/* Scrollable Body */}
-                  <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                  <div className="flex-1 overflow-y-auto p-6 custom-scrollbar text-slate-900">
                       <PlayerSelector 
                         label="JUGADOR 1" 
                         selectedId={selectedP1} 
@@ -286,7 +283,7 @@ const Registration: React.FC = () => {
       
       {/* SOLO MATCH MODAL */}
       {showSoloMatchModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
                   <h3 className="text-lg font-bold text-slate-900 mb-4">Emparejar Jugador</h3>
                   <p className="text-sm text-slate-500 mb-4">Elige un compañero. Puedes buscar en el club o seleccionar a otro jugador suelto.</p>
@@ -319,7 +316,7 @@ const Registration: React.FC = () => {
       )}
 
       {showDeleteModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
                   <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
                       <Trash2 size={32} />
@@ -338,7 +335,7 @@ const Registration: React.FC = () => {
       )}
 
       {alertMessage && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
                   <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-600">
                       <AlertTriangle size={32} />

@@ -11,10 +11,11 @@ import { Layout } from './components/Layout';
 import { PlayerLayout } from './components/PlayerLayout';
 
 // Pages
-import Dashboard from './pages/Dashboard';
+import GeneralDashboard from './pages/GeneralDashboard'; // Hub Principal
+import MiniDashboard from './pages/MiniDashboard';       // Listado de Minis
+import TournamentManager from './pages/TournamentManager'; // Gestión de 1 Mini
 import Registration from './pages/Registration';
 import CheckIn from './pages/CheckIn';
-// FIX: Using default import
 import ActiveTournament from './pages/ActiveTournament';
 import Results from './pages/Results';
 import Landing from './pages/Landing';
@@ -50,58 +51,30 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   const { clubData, loadingClub } = useHistory(); 
   const location = useLocation();
 
-  // Unified Loading State
   if (loading || (requireAdmin && user && role === 'admin' && loadingClub)) {
       return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold animate-pulse">Cargando...</div>;
   }
   
   if (!user) return <Navigate to="/" replace />;
-  
-  // STRICT ACCESS CONTROL: If no role is assigned, deny access completely.
-  // This prevents the "default to admin" behavior.
-  if (role === null) {
-      // User is authenticated but has no valid role (Zombie User).
-      // Redirect to Landing or handle appropriately. Do NOT let them through.
-      return <Navigate to="/" replace />;
-  }
-
-  if (role === 'pending' && location.pathname !== '/pending') {
-      return <Navigate to="/pending" replace />;
-  }
-
-  if (requireSuperAdmin && role !== 'superadmin') {
-      return <Navigate to="/dashboard" replace />;
-  }
-
-  // If trying to access Admin routes but is a Player -> Go to Player Dashboard
-  if (requireAdmin && role === 'player') {
-      return <Navigate to="/p/dashboard" replace />;
-  }
-
-  // ROBUST ONBOARDING CHECK:
-  // Only if we are confirmed as 'admin', enforce onboarding if club data is missing.
-  if (requireAdmin && role === 'admin' && !loadingClub && !clubData.id && location.pathname !== '/onboarding') {
-      return <Navigate to="/onboarding" replace />;
-  }
+  if (role === null) return <Navigate to="/" replace />;
+  if (role === 'pending' && location.pathname !== '/pending') return <Navigate to="/pending" replace />;
+  if (requireSuperAdmin && role !== 'superadmin') return <Navigate to="/dashboard" replace />;
+  if (requireAdmin && role === 'player') return <Navigate to="/p/dashboard" replace />;
+  if (requireAdmin && role === 'admin' && !loadingClub && !clubData.id && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
 
   return <>{children}</>;
 };
 
 const AppRoutes = () => {
   const { user, role, loading } = useAuth();
-
   if (loading) null;
 
   const getHomeRoute = () => {
       if (!user) return <Landing />;
-      // STRICT: If no role, stay on Landing (or go to specific "No Access" page)
       if (role === null) return <Landing />;
-      
       if (role === 'superadmin') return <Navigate to="/superadmin" replace />;
       if (role === 'player') return <Navigate to="/p/dashboard" replace />;
       if (role === 'pending') return <Navigate to="/pending" replace />;
-      
-      // Default to Admin Dashboard if role is admin
       return <Navigate to="/dashboard" replace />;
   };
 
@@ -111,13 +84,11 @@ const AppRoutes = () => {
         <Route path="/auth" element={user ? getHomeRoute() : <AuthPage />} />
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
-        
-        {/* Onboarding is strictly for admins */}
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
-        
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
         <Route path="/notifications/settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
 
+        {/* PLAYER APP ROUTES */}
         <Route path="/p/*" element={
             <ProtectedRoute>
                 <PlayerLayout>
@@ -133,6 +104,7 @@ const AppRoutes = () => {
             </ProtectedRoute>
         } />
 
+        {/* SUPER ADMIN ROUTES */}
         <Route path="/superadmin" element={
             <Layout>
                 <ProtectedRoute requireSuperAdmin>
@@ -141,15 +113,21 @@ const AppRoutes = () => {
             </Layout>
         } />
 
+        {/* CLUB ADMIN ROUTES */}
         <Route path="/*" element={
             <Layout>
                 <Routes>
-                    <Route path="/dashboard" element={<ProtectedRoute requireAdmin><Dashboard /></ProtectedRoute>} />
+                    {/* HUB & LISTS */}
+                    <Route path="/dashboard" element={<ProtectedRoute requireAdmin><GeneralDashboard /></ProtectedRoute>} />
+                    <Route path="/minis" element={<ProtectedRoute requireAdmin><MiniDashboard /></ProtectedRoute>} />
+                    
+                    {/* SPECIFIC MINI TOURNAMENT ROUTES */}
+                    <Route path="/tournament/manage" element={<ProtectedRoute requireAdmin><TournamentManager /></ProtectedRoute>} />
                     <Route path="/setup" element={<ProtectedRoute requireAdmin><TournamentSetup /></ProtectedRoute>} />
-                    <Route path="/registration" element={<ProtectedRoute requireAdmin><Registration /></ProtectedRoute>} />
-                    <Route path="/checkin" element={<ProtectedRoute requireAdmin><CheckIn /></ProtectedRoute>} />
-                    <Route path="/active" element={<ProtectedRoute requireAdmin><ActiveTournament /></ProtectedRoute>} />
-                    <Route path="/results" element={<ProtectedRoute requireAdmin><Results /></ProtectedRoute>} />
+                    <Route path="/tournament/registration" element={<ProtectedRoute requireAdmin><Registration /></ProtectedRoute>} />
+                    <Route path="/tournament/checkin" element={<ProtectedRoute requireAdmin><CheckIn /></ProtectedRoute>} />
+                    <Route path="/tournament/active" element={<ProtectedRoute requireAdmin><ActiveTournament /></ProtectedRoute>} />
+                    <Route path="/tournament/results" element={<ProtectedRoute requireAdmin><Results /></ProtectedRoute>} />
                     
                     {/* LEAGUE ROUTES */}
                     <Route path="/league" element={<ProtectedRoute requireAdmin><LeagueDashboard /></ProtectedRoute>} />
@@ -157,6 +135,7 @@ const AppRoutes = () => {
                     <Route path="/league/groups/:categoryId" element={<ProtectedRoute requireAdmin><LeagueGroups /></ProtectedRoute>} />
                     <Route path="/league/active" element={<ProtectedRoute requireAdmin><LeagueActive /></ProtectedRoute>} />
                     
+                    {/* SHARED MODULES */}
                     <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
                     <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><AdminPlayerProfile /></ProtectedRoute>} />
                     <Route path="/history" element={<ProtectedRoute requireAdmin><History /></ProtectedRoute>} />
