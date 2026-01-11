@@ -18,8 +18,9 @@ interface LeagueContextType {
     selectLeague: (id: string) => Promise<void>;
     updateLeagueScore: (matchId: string, setsA: number, setsB: number, scoreText: string) => Promise<void>;
     createLeague: (data: Partial<LeagueState> & { prizeWinner?: string, prizeRunnerUp?: string }) => Promise<string | null>;
-    updateLeague: (id: string, data: Partial<LeagueState>) => Promise<void>; // NEW
+    updateLeague: (id: string, data: Partial<LeagueState>) => Promise<void>;
     addLeagueCategory: (name: string) => Promise<void>;
+    updateLeagueCategory: (id: string, name: string) => Promise<void>; // NEW
     generateLeagueGroups: (categoryId: string, groupsCount: number, method: 'elo-balanced' | 'elo-mixed', doubleRound: boolean) => Promise<void>;
     advanceToPlayoffs: (categoryId: string, config: PlayoffConfig) => Promise<void>;
     addPairToLeague: (pair: Partial<Pair>) => Promise<void>;
@@ -215,6 +216,27 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await selectLeague(league.id);
         } catch (e) {
             console.error("Error creating category:", e);
+        }
+    };
+
+    const updateLeagueCategory = async (id: string, name: string) => {
+        if (isOfflineMode) {
+            const updatedCategories = league.categories.map(c => c.id === id ? { ...c, name } : c);
+            const updatedLeague = { ...league, categories: updatedCategories };
+            setLeague(updatedLeague);
+            localStorage.setItem(`league_data_${league.id}`, JSON.stringify(updatedLeague));
+            return;
+        }
+
+        try {
+            await supabase.from('league_categories').update({ name }).eq('id', id);
+            // Optimistic update
+            setLeague(prev => ({
+                ...prev,
+                categories: prev.categories.map(c => c.id === id ? { ...c, name } : c)
+            }));
+        } catch (e) {
+            console.error("Error updating category:", e);
         }
     };
 
@@ -555,7 +577,7 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return (
         <LeagueContext.Provider value={{
             league, leaguesList, fetchLeagues, selectLeague, updateLeagueScore, createLeague, updateLeague,
-            addLeagueCategory, generateLeagueGroups, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair,
+            addLeagueCategory, updateLeagueCategory, generateLeagueGroups, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair,
             isLeagueModuleEnabled
         }}>
             {children}

@@ -27,7 +27,7 @@ interface Standing {
 }
 
 const LeagueActive: React.FC = () => {
-    const { league, updateLeagueScore, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair, generateLeagueGroups, addLeagueCategory } = useLeague();
+    const { league, updateLeagueScore, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair, generateLeagueGroups, addLeagueCategory, updateLeagueCategory } = useLeague();
     const { state, formatPlayerName, addPlayerToDB } = useTournament();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -40,6 +40,9 @@ const LeagueActive: React.FC = () => {
     
     const [showAddCategory, setShowAddCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
+
+    // Category Editing State
+    const [editingCategory, setEditingCategory] = useState<{ id: string, name: string } | null>(null);
 
     // Match Editing
     const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
@@ -217,10 +220,6 @@ const LeagueActive: React.FC = () => {
         const catMatches = league.matches.filter(m => m.category_id === catId && m.phase === 'group');
         const finishedMatches = catMatches.filter(m => m.isFinished).length;
         
-        // Quick calc leader for the whole category (aggregating groups if any, or separate? Let's aggregate for overview card)
-        // Actually, if groups exist, usually you have a leader per group. 
-        // For simplicity in the overview card, let's just pick the pair with max points across the category.
-        
         const standings: Record<string, number> = {};
         catMatches.filter(m => m.isFinished).forEach(m => {
             if (!standings[m.pairAId]) standings[m.pairAId] = 0;
@@ -336,6 +335,12 @@ const LeagueActive: React.FC = () => {
         setNewCategoryName('');
     };
 
+    const handleUpdateCategory = async () => {
+        if (!editingCategory || !editingCategory.name) return;
+        await updateLeagueCategory(editingCategory.id, editingCategory.name);
+        setEditingCategory(null);
+    };
+
     // --- GENERATION LOGIC ---
 
     const handlePreGenerate = (method: 'elo-balanced' | 'elo-mixed') => {
@@ -440,11 +445,13 @@ const LeagueActive: React.FC = () => {
                                 className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:scale-[1.02] active:scale-100 transition-all cursor-pointer relative overflow-hidden group"
                             >
                                 <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h4 className="text-lg font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{cat.name}</h4>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className={`w-2 h-2 rounded-full ${isSetup ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
-                                            <span className="text-xs font-bold text-slate-500 uppercase">{isSetup ? 'Inscripción' : 'En Juego'}</span>
+                                    <div className="flex items-center gap-2">
+                                        <div>
+                                            <h4 className="text-lg font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{cat.name}</h4>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`w-2 h-2 rounded-full ${isSetup ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                                                <span className="text-xs font-bold text-slate-500 uppercase">{isSetup ? 'Inscripción' : 'En Juego'}</span>
+                                            </div>
                                         </div>
                                     </div>
                                     {isSetup ? (
@@ -541,9 +548,18 @@ const LeagueActive: React.FC = () => {
                         key={item.id} 
                         onClick={() => { setActiveContextId(item.id); setTab('management'); }}
                         style={{ backgroundColor: activeContextId === item.id ? THEME.cta : 'rgba(255,255,255,0.1)', color: 'white' }}
-                        className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${activeContextId === item.id ? 'border-transparent' : 'border-white/10 hover:bg-white/20'}`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${activeContextId === item.id ? 'border-transparent' : 'border-white/10 hover:bg-white/20'}`}
                     >
                         {item.label}
+                        {/* Only show edit icon on category items if they are active */}
+                        {item.type === 'category' && activeContextId === item.id && (
+                            <div 
+                                onClick={(e) => { e.stopPropagation(); setEditingCategory({ id: item.id, name: item.label }); }}
+                                className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                            >
+                                <Edit2 size={10} className="text-white/80 hover:text-white"/>
+                            </div>
+                        )}
                     </button>
                 ))}
                 <button 
@@ -566,7 +582,18 @@ const LeagueActive: React.FC = () => {
                             <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-indigo-100">
                                 <div className="flex justify-between items-start mb-6">
                                     <div>
-                                        <h3 className="text-lg font-black text-slate-900">Estado: {currentContext.label}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-lg font-black text-slate-900">Estado: {currentContext.label}</h3>
+                                            {/* ALSO ALLOW EDITING HERE IF IT IS A CATEGORY */}
+                                            {currentContext.type === 'category' && (
+                                                <button 
+                                                    onClick={() => setEditingCategory({ id: currentContext.id, name: currentContext.label })} 
+                                                    className="p-1.5 bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                >
+                                                    <Edit2 size={14}/>
+                                                </button>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className={`w-2.5 h-2.5 rounded-full ${!hasMatches ? 'bg-orange-500' : 'bg-emerald-500'}`}></span>
                                             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{currentCategoryStatus}</span>
@@ -839,6 +866,25 @@ const LeagueActive: React.FC = () => {
                         <div className="flex gap-2">
                             <button onClick={() => setShowAddCategory(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
                             <button onClick={handleAddCategory} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg">Crear</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* EDIT CATEGORY MODAL */}
+            {editingCategory && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
+                        <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2"><Edit2 className="text-indigo-500"/> Editar Categoría</h3>
+                        <input 
+                            autoFocus 
+                            value={editingCategory.name} 
+                            onChange={e => setEditingCategory({...editingCategory, name: e.target.value})} 
+                            className="w-full p-3 border rounded-xl bg-slate-50 outline-none focus:border-indigo-500 font-bold mb-4 text-slate-800"
+                        />
+                        <div className="flex gap-2">
+                            <button onClick={() => setEditingCategory(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
+                            <button onClick={handleUpdateCategory} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg">Guardar</button>
                         </div>
                     </div>
                 </div>
