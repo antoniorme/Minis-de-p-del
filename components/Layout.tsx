@@ -29,8 +29,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isLeagueActiveView = location.pathname.includes('/league/active');
   const isLeaguePath = location.pathname.startsWith('/league');
   
-  // "Context Mode" means we are inside an active module (League or Mini) -> Blue Background
+  // Specific Context Flags
+  const isActiveTournamentPage = location.pathname === '/active'; // The specific "Directo" page for minis
+  
   const isContextMode = isTournamentActive || isLeaguePath;
+  // If we are in "Active Tournament" page, we use dark mode by default there (overridden by page content usually)
   const isDarkMode = !isContextMode; 
 
   // 1. GLOBAL NAVIGATION (SIDEBAR)
@@ -86,31 +89,41 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }
 
   const getBodyBackground = () => {
-      if (isContextMode) return 'bg-indigo-600'; // Unified Blue Background for Active Modules
-      if (isDarkMode) return 'bg-slate-950'; // Dark for Hub/Landing
-      return 'bg-slate-50'; // Fallback
+      // "Active Tournament" page handles its own dark background
+      if (isActiveTournamentPage) return 'bg-slate-900'; 
+      // League: Light background for readability
+      if (isLeaguePath) return 'bg-slate-50'; 
+      // Default Active Tournament Setup pages
+      if (isTournamentActive) return 'bg-indigo-600'; 
+      // Dashboard/Hub
+      return 'bg-slate-50';
   };
 
   const showDefaultBranding = clubData.name === 'Mi Club de Padel' || clubData.name === 'ParaPadel';
+  
+  // Sidebar Styling Logic
+  // Use dark sidebar if in context mode (except league) or if user prefers dark mode in general?
+  // Let's keep Sidebar dark for contrast against the main content in most cases.
+  const useDarkSidebar = true; 
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 flex flex-col md:flex-row ${getBodyBackground()} ${isDarkMode || isContextMode ? 'text-slate-50' : 'text-slate-900'}`}>
+    <div className={`min-h-screen transition-colors duration-500 flex flex-col md:flex-row ${getBodyBackground()} ${isActiveTournamentPage ? 'text-white' : 'text-slate-900'}`}>
       
       {/* --- DESKTOP SIDEBAR (GLOBAL NAV) --- */}
       <aside 
-        className={`hidden md:flex flex-col fixed inset-y-0 z-50 border-r transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} ${isDarkMode || isContextMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}
+        className={`hidden md:flex flex-col fixed inset-y-0 z-50 border-r transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} ${useDarkSidebar ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}
       >
           {/* Logo Area */}
           <div className={`p-6 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} h-20 shrink-0`}>
-              <div className={`w-8 h-8 rounded-lg overflow-hidden shrink-0 border-2 ${isContextMode ? 'border-indigo-200 bg-indigo-600' : isDarkMode ? 'border-slate-800 bg-slate-800' : 'border-slate-100 bg-slate-50'} flex items-center justify-center`}>
+              <div className={`w-8 h-8 rounded-lg overflow-hidden shrink-0 border-2 ${isContextMode ? 'border-indigo-200 bg-indigo-600' : useDarkSidebar ? 'border-slate-800 bg-slate-800' : 'border-slate-100 bg-slate-50'} flex items-center justify-center`}>
                     {clubData.logoUrl ? (
                         <img src={clubData.logoUrl} alt="Logo" className="w-full h-full object-cover" />
                     ) : (
-                        <Trophy size={16} className={isDarkMode || isContextMode ? 'text-indigo-200' : 'text-slate-300'} />
+                        <Trophy size={16} className={isContextMode ? 'text-indigo-200' : useDarkSidebar ? 'text-slate-300' : 'text-slate-400'} />
                     )}
               </div>
               {!isSidebarCollapsed && (
-                  <h1 className={`text-sm font-black leading-tight truncate ${isDarkMode || isContextMode ? 'text-white' : 'text-slate-900'}`}>
+                  <h1 className={`text-sm font-black leading-tight truncate ${useDarkSidebar ? 'text-white' : 'text-slate-900'}`}>
                       {showDefaultBranding ? 'ParaPádel' : clubData.name}
                   </h1>
               )}
@@ -126,7 +139,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       <Link 
                         key={item.path} 
                         to={item.path}
-                        className={`group relative flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl font-bold transition-all ${isActive ? 'bg-[#575AF9] text-white shadow-md' : (isDarkMode || isContextMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900')}`}
+                        className={`group relative flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl font-bold transition-all ${isActive ? 'bg-[#575AF9] text-white shadow-md' : (useDarkSidebar ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900')}`}
                       >
                           <Icon size={20} strokeWidth={2.5} /> 
                           {!isSidebarCollapsed && <span className="text-sm">{item.label}</span>}
@@ -148,7 +161,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               {/* Collapse Button (Moved Bottom) */}
               <button 
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl transition-colors ${isDarkMode || isContextMode ? 'text-slate-500 hover:bg-white/5 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
+                className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl transition-colors ${useDarkSidebar ? 'text-slate-500 hover:bg-white/5 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
                 title={isSidebarCollapsed ? "Expandir Menú" : "Contraer Menú"}
               >
                   {isSidebarCollapsed ? <PanelLeftOpen size={20}/> : <PanelLeftClose size={20}/>}
@@ -192,23 +205,23 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                         {clubData.logoUrl ? (
                             <img src={clubData.logoUrl} alt="Logo" className="w-full h-full object-cover" />
                         ) : (
-                            <Trophy size={16} className={isDarkMode || isContextMode ? 'text-indigo-200' : 'text-slate-300'} />
+                            <Trophy size={16} className={isContextMode ? 'text-indigo-200' : 'text-slate-300'} />
                         )}
                     </div>
                     
                     <div className="flex flex-col overflow-hidden">
-                        <h1 className={`text-sm font-black truncate leading-tight ${isDarkMode || isContextMode ? 'text-white' : 'text-slate-900'}`}>
+                        <h1 className={`text-sm font-black truncate leading-tight ${isContextMode ? 'text-white' : 'text-slate-900'}`}>
                             {clubData.name}
                         </h1>
                     </div>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                    <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full transition-colors ${isDarkMode || isContextMode ? 'text-slate-300 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+                    <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full transition-colors ${isContextMode ? 'text-slate-300 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
                         <Bell size={20} />
                         {unreadCount > 0 && <span className="absolute top-1 right-1 w-3 h-3 bg-rose-500 rounded-full border border-white"></span>}
                     </button>
-                    <button onClick={() => setIsMenuOpen(true)} className={`p-2 rounded-full transition-colors ${isDarkMode || isContextMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                    <button onClick={() => setIsMenuOpen(true)} className={`p-2 rounded-full transition-colors ${isContextMode ? 'text-slate-200' : 'text-slate-700'}`}>
                       <Menu size={24} />
                     </button>
                 </div>
@@ -218,11 +231,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           {/* DESKTOP TOP BAR */}
           <div className="hidden md:flex justify-end items-center p-6 pb-2">
                <div className="flex items-center gap-4">
-                   <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full hover:bg-white/10 transition-colors ${isDarkMode || isContextMode ? 'text-white' : 'text-slate-600'}`}>
+                   <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full hover:bg-white/10 transition-colors ${isActiveTournamentPage ? 'text-white' : 'text-slate-600'}`}>
                        <Bell size={24}/>
                        {unreadCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
                    </button>
-                   <div className={`h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold border-2 ${isDarkMode || isContextMode ? 'border-slate-700' : 'border-white'}`}>
+                   <div className={`h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold border-2 ${isActiveTournamentPage ? 'border-slate-700' : 'border-white'}`}>
                        {clubData.name.charAt(0)}
                    </div>
                </div>
@@ -240,12 +253,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       {/* Visible on Mobile AND Desktop when inside a specific module */}
       {contextNavItems && (
         <div className="fixed bottom-0 left-0 right-0 z-[40] p-4 pointer-events-none flex justify-center md:pl-20">
-            <nav className={`w-full max-w-md backdrop-blur-md border rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex justify-around items-center px-2 py-1 pointer-events-auto transition-all duration-500 ${isContextMode ? 'bg-indigo-500/95 border-indigo-400' : isDarkMode ? 'bg-slate-900/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
+            <nav className={`w-full max-w-md backdrop-blur-md border rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex justify-around items-center px-2 py-1 pointer-events-auto transition-all duration-500 ${isContextMode && isActiveTournamentPage ? 'bg-slate-900/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
               {contextNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = isLeagueActiveView 
                     ? location.pathname + location.search === item.path
                     : location.pathname === item.path;
+
+                // Adjust color for light/dark nav
+                const activeColor = isActiveTournamentPage ? 'text-white' : 'text-[#575AF9]';
+                const inactiveColor = isActiveTournamentPage ? 'text-slate-500' : 'text-slate-400';
 
                 return (
                   <Link
@@ -254,10 +271,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     replace={isLeagueActiveView}
                     className={`flex flex-col items-center justify-center py-2 px-2 w-full transition-all rounded-xl group ${isActive ? '' : 'hover:bg-white/5'}`}
                   >
-                    <div className={`p-1.5 rounded-xl mb-0.5 transition-all ${isActive ? (isDarkMode || isContextMode ? 'bg-white/20 scale-110' : 'bg-[#575AF9]/10 scale-110') : 'bg-transparent'}`}>
-                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors ${isActive ? (isDarkMode || isContextMode ? 'text-white' : 'text-[#575AF9]') : (isDarkMode || isContextMode ? 'text-white/50' : 'text-slate-400')}`}/>
+                    <div className={`p-1.5 rounded-xl mb-0.5 transition-all ${isActive ? (isActiveTournamentPage ? 'bg-white/10 scale-110' : 'bg-[#575AF9]/10 scale-110') : 'bg-transparent'}`}>
+                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors ${isActive ? activeColor : inactiveColor}`}/>
                     </div>
-                    <span className={`text-[9px] font-bold transition-colors ${isActive ? (isDarkMode || isContextMode ? 'text-white' : 'text-[#2B2DBF]') : (isDarkMode || isContextMode ? 'text-white/50' : 'text-slate-400')}`}>{item.label}</span>
+                    <span className={`text-[9px] font-bold transition-colors ${isActive ? activeColor : inactiveColor}`}>{item.label}</span>
                   </Link>
                 );
               })}
@@ -291,24 +308,24 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       {isMenuOpen && (
           <div className="fixed inset-0 z-[100] md:hidden">
               <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}></div>
-              <div className={`absolute right-0 top-0 bottom-0 w-72 shadow-2xl p-6 animate-slide-left flex flex-col transition-colors duration-500 ${isDarkMode || isContextMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}`}>
+              <div className={`absolute right-0 top-0 bottom-0 w-72 shadow-2xl p-6 animate-slide-left flex flex-col transition-colors duration-500 bg-slate-900 text-white`}>
                   <div className="flex justify-between items-center mb-8">
                       <span className="font-bold text-slate-400 uppercase text-xs tracking-wider">Menú Principal</span>
-                      <button onClick={() => setIsMenuOpen(false)} className={`p-2 rounded-full transition-colors ${isDarkMode || isContextMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-600'}`}><X size={20}/></button>
+                      <button onClick={() => setIsMenuOpen(false)} className={`p-2 rounded-full transition-colors bg-slate-800 text-slate-400`}><X size={20}/></button>
                   </div>
                   <div className="space-y-4 flex-1">
                       {isTournamentActive && (
-                          <button onClick={() => { handleBackToHub(); setIsMenuOpen(false); }} className={`flex w-full items-center gap-3 p-3 rounded-xl font-bold transition-colors ${isDarkMode || isContextMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                          <button onClick={() => { handleBackToHub(); setIsMenuOpen(false); }} className={`flex w-full items-center gap-3 p-3 rounded-xl font-bold transition-colors bg-slate-800 text-white`}>
                               <Home size={20} /> Volver a Mis Torneos
                           </button>
                       )}
                       {menuItems.map(item => (
-                          <Link key={item.path} to={item.path} onClick={() => setIsMenuOpen(false)} className={`flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${isDarkMode || isContextMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100'}`}>
+                          <Link key={item.path} to={item.path} onClick={() => setIsMenuOpen(false)} className={`flex items-center gap-3 p-3 rounded-xl font-medium transition-colors text-slate-300 hover:bg-slate-800`}>
                               <item.icon size={20} /> {item.label}
                           </Link>
                       ))}
                   </div>
-                  <div className={`border-t pt-6 ${isDarkMode || isContextMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                  <div className={`border-t pt-6 border-slate-800`}>
                       <button onClick={handleLogout} className="flex w-full items-center gap-3 p-3 rounded-xl text-rose-500 hover:bg-rose-500/10 font-bold transition-colors">
                           <LogOut size={20} /> Cerrar Sesión
                       </button>

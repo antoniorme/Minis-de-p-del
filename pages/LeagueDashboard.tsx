@@ -4,7 +4,7 @@ import { useLeague } from '../store/LeagueContext';
 import { useTournament } from '../store/TournamentContext';
 import { useAuth } from '../store/AuthContext';
 import { THEME } from '../utils/theme';
-import { Plus, ChevronRight, Calendar, Users, Trophy, Activity, Info, ArrowLeft } from 'lucide-react';
+import { Plus, ChevronRight, Calendar, Users, Trophy, Activity, Info, ArrowLeft, Edit2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import LeaguePromo from './LeaguePromo';
 
@@ -30,19 +30,20 @@ const LeagueDashboard: React.FC = () => {
         <div className="space-y-8 pb-20 animate-fade-in">
             {/* BACK BUTTON & HEADER */}
             <div>
-                <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-indigo-100 font-bold text-sm hover:text-white transition-colors mb-4 px-1">
+                <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-slate-500 font-bold text-sm hover:text-slate-800 transition-colors mb-4 px-1">
                     <ArrowLeft size={18}/> Volver al Club
                 </button>
                 <div className="flex justify-between items-center px-1">
                     <div className="flex flex-col">
-                        <h2 className="text-2xl font-black text-white drop-shadow-sm">Mis Ligas</h2>
+                        <h2 className="text-2xl font-black text-slate-800 drop-shadow-sm">Mis Ligas</h2>
                         {role === 'superadmin' && !isLeagueModuleEnabled && (
-                            <span className="text-[10px] font-bold text-amber-300 uppercase tracking-tighter">Acceso SuperAdmin (Módulo desactivado)</span>
+                            <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">Acceso SuperAdmin (Módulo desactivado)</span>
                         )}
                     </div>
                     <button 
                         onClick={() => navigate('/league/setup')} 
-                        className="flex items-center gap-2 px-5 py-2.5 bg-white text-indigo-500 rounded-xl font-bold text-sm shadow-xl shadow-indigo-600/20 active:scale-95 transition-transform hover:bg-indigo-50"
+                        style={{ backgroundColor: THEME.cta }}
+                        className="flex items-center gap-2 px-5 py-2.5 text-white rounded-xl font-bold text-sm shadow-xl shadow-indigo-200 active:scale-95 transition-transform hover:opacity-90"
                     >
                         <Plus size={20}/> NUEVA LIGA
                     </button>
@@ -50,15 +51,15 @@ const LeagueDashboard: React.FC = () => {
             </div>
 
             {leaguesList.length === 0 ? (
-                <div className="text-center py-20 bg-white/10 backdrop-blur-md rounded-[2.5rem] border-2 border-dashed border-white/20">
-                    <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 text-white">
+                <div className="text-center py-20 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200">
+                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-300">
                         <Trophy size={40}/>
                     </div>
-                    <h3 className="text-xl font-bold text-white">No hay ligas creadas</h3>
-                    <p className="text-indigo-100 text-sm mb-8 max-w-xs mx-auto">Configura tu primera liga profesional para empezar a gestionar grupos y resultados.</p>
+                    <h3 className="text-xl font-bold text-slate-400">No hay ligas creadas</h3>
+                    <p className="text-slate-400 text-sm mb-8 max-w-xs mx-auto">Configura tu primera liga profesional para empezar a gestionar grupos y resultados.</p>
                     <button 
                         onClick={() => navigate('/league/setup')}
-                        className="px-8 py-3 bg-white text-indigo-500 font-black rounded-xl text-sm hover:bg-indigo-50 transition-colors shadow-lg"
+                        className="px-8 py-3 bg-indigo-50 text-indigo-600 font-black rounded-xl text-sm hover:bg-indigo-100 transition-colors shadow-sm"
                     >
                         CONFIGURAR LIGA
                     </button>
@@ -68,12 +69,11 @@ const LeagueDashboard: React.FC = () => {
                     {leaguesList.map(l => (
                         <div 
                             key={l.id}
-                            onClick={() => { selectLeague(l.id); navigate('/league/active?tab=management'); }} // Default to management view
-                            className="bg-white rounded-[2rem] border border-transparent shadow-xl overflow-hidden cursor-pointer hover:translate-y-[-4px] transition-all group relative"
+                            className="bg-white rounded-[2rem] border border-slate-100 shadow-xl overflow-hidden cursor-pointer hover:translate-y-[-4px] transition-all group relative"
                         >
                             <div className="p-6">
                                 <div className="flex justify-between items-start">
-                                    <div>
+                                    <div onClick={() => { selectLeague(l.id); navigate('/league/active?tab=management'); }} className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
                                             {l.status === 'registration' && (
                                                 <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></span>
@@ -88,7 +88,7 @@ const LeagueDashboard: React.FC = () => {
                                                 {l.status === 'registration' ? 'Fase Inscripción' : l.status === 'groups' ? 'Fase Grupos' : l.status === 'playoffs' ? 'Playoffs' : 'Finalizada'}
                                             </span>
                                         </div>
-                                        <h3 className="font-black text-slate-900 text-2xl leading-tight group-hover:text-indigo-500 transition-colors">{l.title}</h3>
+                                        <h3 className="font-black text-slate-900 text-2xl leading-tight group-hover:text-indigo-600 transition-colors">{l.title}</h3>
                                         <div className="flex items-center gap-4 mt-3">
                                             <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold uppercase">
                                                 <Calendar size={14} className="text-indigo-400"/>
@@ -100,8 +100,20 @@ const LeagueDashboard: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="p-3 bg-indigo-50 text-indigo-500 rounded-2xl group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-                                        <ChevronRight size={24} />
+                                    <div className="flex flex-col gap-2">
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); selectLeague(l.id); navigate('/league/active?tab=management'); }}
+                                            className="p-3 bg-indigo-50 text-indigo-500 rounded-2xl hover:bg-indigo-500 hover:text-white transition-colors"
+                                        >
+                                            <ChevronRight size={24} />
+                                        </button>
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); navigate(`/league/setup?edit=${l.id}`); }}
+                                            className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-colors"
+                                            title="Editar Configuración"
+                                        >
+                                            <Edit2 size={20} />
+                                        </button>
                                     </div>
                                 </div>
                                 

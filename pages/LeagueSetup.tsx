@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLeague } from '../store/LeagueContext';
 import { THEME } from '../utils/theme';
 import { 
@@ -11,8 +11,13 @@ import {
 
 const LeagueSetup: React.FC = () => {
     const navigate = useNavigate();
-    const { createLeague } = useLeague();
+    const [searchParams] = useSearchParams();
+    const { createLeague, updateLeague, leaguesList } = useLeague();
     
+    // Check for edit mode
+    const editId = searchParams.get('edit');
+    const existingLeague = editId ? leaguesList.find(l => l.id === editId) : null;
+
     const [title, setTitle] = useState('');
     const [startDate, setStartDate] = useState('2024-01-12');
     const [endDate, setEndDate] = useState('2024-04-15');
@@ -22,17 +27,36 @@ const LeagueSetup: React.FC = () => {
     const [prizeWinner, setPrizeWinner] = useState('');
     const [prizeRunnerUp, setPrizeRunnerUp] = useState('');
 
+    useEffect(() => {
+        if (existingLeague) {
+            setTitle(existingLeague.title || '');
+            setStartDate(existingLeague.start_date || '');
+            setEndDate(existingLeague.end_date || '');
+            setPlayoffDate(existingLeague.playoff_date || '');
+            // Note: Prizes might need separate fetch if not in list overview, but simplified here
+        }
+    }, [existingLeague]);
+
     const handleSave = async () => {
         if (!title) return alert("Ponle un nombre a la liga");
         
-        await createLeague({
-            title,
-            startDate,
-            endDate,
-            playoffDate,
-            prizeWinner,
-            prizeRunnerUp
-        });
+        if (editId) {
+            await updateLeague(editId, {
+                title,
+                startDate,
+                endDate,
+                playoffDate
+            });
+        } else {
+            await createLeague({
+                title,
+                startDate,
+                endDate,
+                playoffDate,
+                prizeWinner,
+                prizeRunnerUp
+            });
+        }
         
         navigate('/league');
     };
@@ -40,14 +64,14 @@ const LeagueSetup: React.FC = () => {
     return (
         <div className="space-y-8 pb-32 animate-fade-in">
             <div className="flex items-center gap-4">
-                <button onClick={() => navigate('/league')} className="p-2 bg-white/20 text-white rounded-full hover:bg-white/30 transition-colors">
+                <button onClick={() => navigate('/league')} className="p-2 bg-white rounded-full text-slate-600 hover:bg-slate-100 transition-colors border border-slate-200">
                     <ArrowLeft size={20} />
                 </button>
-                <h2 className="text-2xl font-black text-white">Configurar Nueva Liga</h2>
+                <h2 className="text-2xl font-black text-slate-800">{editId ? 'Editar Liga' : 'Configurar Nueva Liga'}</h2>
             </div>
 
             {/* Ficha Principal */}
-            <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-indigo-200 space-y-8">
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-indigo-100 space-y-8">
                 <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre de la Competición (Ej. 1ª División)</label>
                     <input 
@@ -102,8 +126,9 @@ const LeagueSetup: React.FC = () => {
                 </div>
             </div>
 
-            {/* Premios Directos */}
-            <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-indigo-200 animate-slide-up">
+            {/* Premios Directos - Only create mode for simplicity now, or load if edit implemented fully */}
+            {!editId && (
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-indigo-100 animate-slide-up">
                 <div className="flex items-center gap-2 mb-6">
                     <Gift className="text-amber-500" size={24}/>
                     <h3 className="text-lg font-black text-slate-900">Premios</h3>
@@ -134,14 +159,16 @@ const LeagueSetup: React.FC = () => {
                     </div>
                 </div>
             </div>
+            )}
 
             {/* Guardar */}
             <div className="pt-6">
                 <button 
                     onClick={handleSave}
-                    className="w-full py-6 bg-white text-indigo-500 rounded-[1.5rem] font-black text-lg shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3"
+                    style={{ backgroundColor: THEME.cta }}
+                    className="w-full py-6 text-white rounded-[1.5rem] font-black text-lg shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 hover:opacity-90"
                 >
-                    <Save size={24}/> CREAR LIGA Y CONTINUAR
+                    <Save size={24}/> {editId ? 'GUARDAR CAMBIOS' : 'CREAR LIGA Y CONTINUAR'}
                 </button>
             </div>
         </div>

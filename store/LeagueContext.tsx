@@ -18,7 +18,8 @@ interface LeagueContextType {
     selectLeague: (id: string) => Promise<void>;
     updateLeagueScore: (matchId: string, setsA: number, setsB: number, scoreText: string) => Promise<void>;
     createLeague: (data: Partial<LeagueState> & { prizeWinner?: string, prizeRunnerUp?: string }) => Promise<string | null>;
-    addLeagueCategory: (name: string) => Promise<void>; // NEW FUNCTION
+    updateLeague: (id: string, data: Partial<LeagueState>) => Promise<void>; // NEW
+    addLeagueCategory: (name: string) => Promise<void>;
     generateLeagueGroups: (categoryId: string, groupsCount: number, method: 'elo-balanced' | 'elo-mixed', doubleRound: boolean) => Promise<void>;
     advanceToPlayoffs: (categoryId: string, config: PlayoffConfig) => Promise<void>;
     addPairToLeague: (pair: Partial<Pair>) => Promise<void>;
@@ -81,7 +82,6 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const saved = localStorage.getItem(`league_data_${id}`);
             if (saved) {
                 const parsed = JSON.parse(saved);
-                // Ensure mainCategoryId is set if missing
                 if (parsed.categories?.length > 0 && !parsed.mainCategoryId) {
                     parsed.mainCategoryId = parsed.categories[0].id;
                 }
@@ -134,7 +134,7 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 category_id: m.category_id,
                 group_id: m.group_id,
                 phase: m.phase as any,
-                round: m.round, // Now loading round number
+                round: m.round, 
                 pairAId: m.pair_a_id,
                 pairBId: m.pair_b_id,
                 setsA: m.sets_a,
@@ -144,7 +144,6 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 winnerId: m.winner_id
             }));
 
-            // Logic: Pick the first category as the main one (Single Category Mode)
             const loadedCats = (categories || []).map(c => ({...c, pairs_count: 0}));
             const mainCatId = loadedCats.length > 0 ? loadedCats[0].id : undefined;
 
@@ -166,6 +165,26 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (e) {
             console.error("Error loading league:", e);
             setLeague(prev => ({ ...prev, loading: false }));
+        }
+    };
+
+    const updateLeague = async (id: string, data: Partial<LeagueState>) => {
+        if (isOfflineMode) {
+            // Local update logic would go here
+            return;
+        }
+        try {
+            await supabase.from('leagues').update({
+                title: data.title,
+                start_date: data.startDate,
+                end_date: data.endDate,
+                playoff_date: data.playoffDate
+            }).eq('id', id);
+            
+            setLeague(prev => prev.id === id ? { ...prev, ...data } : prev);
+            fetchLeagues();
+        } catch (e) {
+            console.error("Error updating league:", e);
         }
     };
 
@@ -203,11 +222,10 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const newId = isOfflineMode ? `league-${Date.now()}` : undefined;
         
         if (isOfflineMode) {
-            // Local mode: create implicit category
             const implicitCatId = `cat-local-${Date.now()}`;
             const newCategory: LeagueCategory = {
                 id: implicitCatId,
-                name: data.title || 'General', // Category name mirrors League Title
+                name: data.title || 'General',
                 prize_winner: data.prizeWinner || '',
                 prize_runnerup: data.prizeRunnerUp || '',
                 pairs_count: 0
@@ -240,16 +258,14 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             if (error) throw error;
 
-            // Create Single Implicit Category
             const { data: catData } = await supabase.from('league_categories').insert([{
                 league_id: lData.id,
-                name: data.title, // Name implies the league level
+                name: data.title,
                 prize_winner: data.prizeWinner,
                 prize_runnerup: data.prizeRunnerUp
             }]).select().single();
 
             await fetchLeagues(); 
-            // Select immediately to populate state with category ID
             await selectLeague(lData.id);
             return lData.id;
         } catch (e) {
@@ -315,7 +331,6 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     };
 
-    // --- GENERATION ALGORITHM (BERGER TABLES) ---
     const generateRoundRobinMatches = (pairs: Pair[], doubleRound: boolean) => {
         const matches = [];
         const n = pairs.length;
@@ -333,27 +348,14 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const p2 = teamIds[numTeams - 1 - i];
                 
                 if (p1 !== 'BYE' && p2 !== 'BYE') {
-                    // Round 1..N (Ida)
-                    matches.push({
-                        round: round + 1,
-                        pairAId: p1,
-                        pairBId: p2
-                    });
-                    
-                    // (Vuelta)
+                    matches.push({ round: round + 1, pairAId: p1, pairBId: p2 });
                     if (doubleRound) {
-                        matches.push({
-                            round: round + 1 + numRounds,
-                            pairAId: p2,
-                            pairBId: p1
-                        });
+                        matches.push({ round: round + 1 + numRounds, pairAId: p2, pairBId: p1 });
                     }
                 }
             }
-            // Rotate Array for next round (keep first, rotate rest)
             teamIds.splice(1, 0, teamIds.pop()!);
         }
-        
         return matches;
     };
 
@@ -361,21 +363,16 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const categoryPairs = league.pairs.filter(p => p.category_id === categoryId);
         if (categoryPairs.length < 4) throw new Error("Mínimo 4 parejas por categoría");
 
-        // Simple Random Sort for now (Improve later with ELO logic)
         const sortedPairs = [...categoryPairs].sort(() => Math.random() - 0.5);
         
         if (isOfflineMode) {
             const newGroups: LeagueGroup[] = [];
             const newMatches: LeagueMatch[] = [];
-            
             for (let i = 0; i < groupsCount; i++) {
                 const gId = `group-${categoryId}-${i}`;
                 const groupPairs = sortedPairs.filter((_, idx) => idx % groupsCount === i);
                 newGroups.push({ id: gId, category_id: categoryId, name: `Grupo ${String.fromCharCode(65 + i)}`, pairIds: groupPairs.map(p => p.id) });
-                
-                // Use Round Robin Generator
                 const rounds = generateRoundRobinMatches(groupPairs, doubleRound);
-                
                 rounds.forEach(r => {
                     newMatches.push({
                         id: `lm-${Date.now()}-${Math.random()}`,
@@ -396,7 +393,6 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return;
         }
 
-        // ONLINE GENERATION
         try {
             for (let i = 0; i < groupsCount; i++) {
                 const { data: groupData } = await supabase.from('league_groups').insert([{
@@ -407,13 +403,9 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
                 if (groupData) {
                     const groupPairs = sortedPairs.filter((_, idx) => idx % groupsCount === i);
-                    
-                    // Update Pairs Group
                     for (const p of groupPairs) {
                         await supabase.from('league_pairs').update({ group_id: groupData.id }).eq('id', p.id);
                     }
-
-                    // Generate Matches
                     const rounds = generateRoundRobinMatches(groupPairs, doubleRound);
                     const matchesBatch = rounds.map(r => ({
                         league_id: league.id,
@@ -425,18 +417,13 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         pair_b_id: r.pairBId,
                         is_finished: false
                     }));
-
                     if (matchesBatch.length > 0) {
                         await supabase.from('league_matches').insert(matchesBatch);
                     }
                 }
             }
-
-            // We don't update global league status to 'groups' unless ALL categories are generated? 
-            // For now, let's keep it simple: if ANY category generates, mark as groups.
             await supabase.from('leagues').update({ status: 'groups' }).eq('id', league.id);
             if (league.id) selectLeague(league.id);
-
         } catch (e) {
             console.error("Error generating groups:", e);
         }
@@ -476,95 +463,66 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const calculateStandings = (catId: string, groupId: string) => {
         const group = league.groups.find(g => g.id === groupId);
         if (!group) return [];
-
         const standings = group.pairIds.map(pId => {
             const pairMatches = league.matches.filter(m => m.category_id === catId && m.group_id === groupId && m.isFinished && (m.pairAId === pId || m.pairBId === pId));
             let pts = 0;
             pairMatches.forEach(m => {
                 const isA = m.pairAId === pId;
                 const won = isA ? (m.setsA! > m.setsB!) : (m.setsB! > m.setsA!);
-                // 3 Pts Win, 1 Pt Loss (Played), 0 WO (implied if not played but marked?)
                 pts += won ? 3 : 1; 
             });
             return { id: pId, pts };
         });
-
         return standings.sort((a, b) => b.pts - a.pts);
     };
 
     const advanceToPlayoffs = async (categoryId: string, config: PlayoffConfig) => {
         const catGroups = league.groups.filter(g => g.category_id === categoryId);
         const newPlayoffMatches: any[] = [];
-        
         const { qualifiersPerGroup, crossType, mode } = config;
         
-        // Helper to queue match generation
         const queueMatch = (idStub: string, pairA: string, pairB: string) => {
             if (!pairA || !pairB) return;
-            
-            // Ida
             newPlayoffMatches.push({ 
                 id_stub: `${idStub}-L1`, league_id: league.id, category_id: categoryId, phase: 'playoff', 
-                pair_a_id: pairA, pair_b_id: pairB, 
-                round_label: mode === 'double' ? 'Ida' : 'Eliminatoria'
+                pair_a_id: pairA, pair_b_id: pairB, round_label: mode === 'double' ? 'Ida' : 'Eliminatoria'
             });
-            
-            // Vuelta (if double)
             if (mode === 'double') {
                 newPlayoffMatches.push({ 
                     id_stub: `${idStub}-L2`, league_id: league.id, category_id: categoryId, phase: 'playoff', 
-                    pair_a_id: pairB, pair_b_id: pairA, 
-                    round_label: 'Vuelta'
+                    pair_a_id: pairB, pair_b_id: pairA, round_label: 'Vuelta'
                 });
             }
         };
 
-        // Logic based on Number of Groups
         if (catGroups.length === 1) {
-            // Single Group: Pair 1 vs N, 2 vs N-1, etc.
             const standings = calculateStandings(categoryId, catGroups[0].id);
             const qualified = standings.slice(0, qualifiersPerGroup);
-            
-            // Generate standard bracket pairings (1 vs 4, 2 vs 3)
             for (let i = 0; i < qualifiersPerGroup / 2; i++) {
                 const p1 = qualified[i];
                 const p2 = qualified[qualified.length - 1 - i];
-                if (p1 && p2) {
-                    queueMatch(`qf-${i+1}`, p1.id, p2.id);
-                }
+                if (p1 && p2) queueMatch(`qf-${i+1}`, p1.id, p2.id);
             }
-        } 
-        else if (catGroups.length === 2) {
-            // Two Groups (A and B)
-            const stA = calculateStandings(categoryId, catGroups[0].id); // Group A
-            const stB = calculateStandings(categoryId, catGroups[1].id); // Group B
-            
+        } else if (catGroups.length === 2) {
+            const stA = calculateStandings(categoryId, catGroups[0].id);
+            const stB = calculateStandings(categoryId, catGroups[1].id);
             const qA = stA.slice(0, qualifiersPerGroup);
             const qB = stB.slice(0, qualifiersPerGroup);
 
             if (crossType === 'crossed') {
-                // A1 vs B(last), B1 vs A(last)
                 for (let i = 0; i < qualifiersPerGroup; i++) {
-                    // Match i: A(i) vs B(n-1-i)
                     const pA = qA[i];
                     const pB = qB[qualifiersPerGroup - 1 - i];
                     if (pA && pB) queueMatch(`cross-${i+1}`, pA.id, pB.id);
                 }
             } else {
-                // Internal: A1 vs A(last), B1 vs B(last)
-                // Just pair internal to group A
                 for (let i = 0; i < qualifiersPerGroup / 2; i++) {
                     const topA = qA[i]; const botA = qA[qualifiersPerGroup - 1 - i];
                     if (topA && botA) queueMatch(`internal-A-${i+1}`, topA.id, botA.id);
-                    
                     const topB = qB[i]; const botB = qB[qualifiersPerGroup - 1 - i];
                     if (topB && botB) queueMatch(`internal-B-${i+1}`, topB.id, botB.id);
                 }
             }
-        } else {
-            // Fallback for > 2 groups: Just take top X overall? 
-            // Too complex for auto-wizard. For now, warn user or do basic cross.
-            console.warn("Auto-playoff for >2 groups not fully supported. Use Manual.");
         }
 
         if (isOfflineMode) {
@@ -596,7 +554,7 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     return (
         <LeagueContext.Provider value={{
-            league, leaguesList, fetchLeagues, selectLeague, updateLeagueScore, createLeague,
+            league, leaguesList, fetchLeagues, selectLeague, updateLeagueScore, createLeague, updateLeague,
             addLeagueCategory, generateLeagueGroups, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair,
             isLeagueModuleEnabled
         }}>
