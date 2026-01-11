@@ -376,7 +376,7 @@ export default function ActiveTournament() {
 
   // 3. ACTIVE MATCHES STATE ("DIRECTO")
   return (
-    <div className="fixed inset-0 overflow-y-auto text-white transition-colors duration-500" style={{ backgroundColor: themeColor }}>
+    <div className="fixed inset-0 overflow-y-auto bg-slate-900 text-white">
         {/* Background Decor */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20 z-0">
             <div className="absolute -top-20 -left-20 w-80 h-80 bg-blue-600 rounded-full blur-[100px]"></div>
