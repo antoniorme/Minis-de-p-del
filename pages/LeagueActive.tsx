@@ -13,6 +13,7 @@ import { PosterGenerator } from '../components/PosterGenerator';
 import { THEME } from '../utils/theme';
 import { PlayerSelector } from '../components/PlayerSelector';
 import { calculateDisplayRanking } from '../utils/Elo';
+import { LevelProgressBar } from '../components/LevelProgressBar';
 
 interface Standing {
     pairId: string;
@@ -96,6 +97,32 @@ const LeagueActive: React.FC = () => {
                 {both && <span title="Juega en ambos lados">+</span>}
             </div>
         );
+    };
+
+    // Helper for Range Parsing (Duplicated from Registration but simplified)
+    const getContextRange = () => {
+        // Find category name
+        let name = '';
+        if (currentContext.type === 'category') name = currentContext.label;
+        else if (currentContext.type === 'group') {
+            const cat = league.categories.find(c => c.id === currentContext.parentId);
+            if(cat) name = cat.name;
+        }
+        name = name.toLowerCase();
+
+        let baseMin = 0; let baseMax = 6000;
+        if (name.includes('iniciacion') || name.includes('iniciación')) return { min: 0, max: 1000 };
+        if (name.includes('5')) { baseMin = 1000; baseMax = 2000; }
+        else if (name.includes('4')) { baseMin = 2000; baseMax = 3000; }
+        else if (name.includes('3')) { baseMin = 3000; baseMax = 4000; }
+        else if (name.includes('2')) { baseMin = 4000; baseMax = 5000; }
+        else if (name.includes('1')) { baseMin = 5000; baseMax = 6000; }
+        else return undefined; // No explicit range
+
+        if (name.includes('alta')) baseMin = baseMin + 500; 
+        else if (name.includes('baja')) baseMax = baseMax - 500;
+        
+        return { min: baseMin, max: baseMax };
     };
 
     // --- NAVIGATION STRUCTURE BUILDER ---
@@ -483,6 +510,9 @@ const LeagueActive: React.FC = () => {
     if (hasMatches) currentCategoryStatus = 'Fase Grupos';
     if (hasPlayoffMatches) currentCategoryStatus = 'Playoffs';
 
+    // Rango ELO para la barra
+    const contextRange = getContextRange();
+
     return (
         <div className="space-y-6 pb-32 animate-fade-in">
             {/* Header (General for all tabs) */}
@@ -657,47 +687,47 @@ const LeagueActive: React.FC = () => {
                                         return (
                                             <div 
                                                 key={pair.id} 
-                                                className={`p-4 rounded-xl flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isSolo ? 'bg-amber-50 border-2 border-amber-200 order-first' : 'bg-white border border-slate-200'}`}
+                                                className={`rounded-xl flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isSolo ? 'bg-amber-50 border-2 border-amber-200 order-first' : 'bg-white border border-slate-200'}`}
                                             >
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isSolo ? 'bg-amber-200 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{idx + 1}</span>
-                                                        {isSolo && <span className="text-[9px] uppercase font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">Busca Pareja</span>}
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <button onClick={() => openEditModal(pair.id)} className={`p-1.5 rounded-lg transition-colors ${isSolo ? 'text-amber-600 hover:bg-amber-100' : 'text-slate-400 hover:text-blue-600 hover:bg-slate-50'}`}><Edit2 size={16}/></button>
-                                                        <button onClick={() => setShowDeleteConfirm(pair.id)} className={`p-1.5 rounded-lg transition-colors ${isSolo ? 'text-amber-600 hover:bg-amber-100' : 'text-slate-400 hover:text-red-600 hover:bg-slate-50'}`}><Trash2 size={16}/></button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-1 mb-3">
-                                                    <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(player1)}</div>
-                                                    {isSolo && player1 && (
-                                                        <div className="mt-1 flex flex-wrap gap-2">
-                                                            {getPositionLabel(player1.preferred_position, player1.play_both_sides)}
-                                                            <div className="bg-amber-100 px-2 py-0.5 rounded text-[10px] font-bold text-amber-700 uppercase flex items-center gap-1 border border-amber-200">
-                                                                <TrendingUp size={10}/> {calculateDisplayRanking(player1)}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    
-                                                    {player2 ? (
+                                                <div className="p-4 flex flex-col h-full">
+                                                    <div className="flex justify-between items-start mb-3">
                                                         <div className="flex items-center gap-2">
-                                                            <span style={{ color: THEME.cta }} className="text-xs font-black">&</span>
-                                                            <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(player2)}</div>
+                                                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isSolo ? 'bg-amber-200 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{idx + 1}</span>
+                                                            {isSolo && <span className="text-[9px] uppercase font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">Busca Pareja</span>}
                                                         </div>
-                                                    ) : (
-                                                        <div className="text-xs text-amber-500 italic mt-1 flex items-center gap-1">
-                                                            <UserPlus size={12}/> Esperando compañero...
+                                                        <div className="flex items-center gap-1">
+                                                            <button onClick={() => openEditModal(pair.id)} className={`p-1.5 rounded-lg transition-colors ${isSolo ? 'text-amber-600 hover:bg-amber-100' : 'text-slate-400 hover:text-blue-600 hover:bg-slate-50'}`}><Edit2 size={16}/></button>
+                                                            <button onClick={() => setShowDeleteConfirm(pair.id)} className={`p-1.5 rounded-lg transition-colors ${isSolo ? 'text-amber-600 hover:bg-amber-100' : 'text-slate-400 hover:text-red-600 hover:bg-slate-50'}`}><Trash2 size={16}/></button>
                                                         </div>
-                                                    )}
+                                                    </div>
+
+                                                    <div className="space-y-1 mb-3 flex-1">
+                                                        <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(player1)}</div>
+                                                        {isSolo && player1 && (
+                                                            <div className="mt-1 flex flex-wrap gap-2">
+                                                                {getPositionLabel(player1.preferred_position, player1.play_both_sides)}
+                                                                <div className="bg-amber-100 px-2 py-0.5 rounded text-[10px] font-bold text-amber-700 uppercase flex items-center gap-1 border border-amber-200">
+                                                                    <TrendingUp size={10}/> {calculateDisplayRanking(player1)}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {player2 ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <span style={{ color: THEME.cta }} className="text-xs font-black">&</span>
+                                                                <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(player2)}</div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-xs text-amber-500 italic mt-1 flex items-center gap-1">
+                                                                <UserPlus size={12}/> Esperando compañero...
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 
                                                 {!isSolo && (
-                                                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                                                        <div className="bg-slate-50 px-2 py-1 rounded text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                                                            <TrendingUp size={10}/> MEDIA {pairElo}
-                                                        </div>
+                                                    <div className="bg-slate-50 px-4 py-2 border-t border-slate-100">
+                                                        <LevelProgressBar elo={pairElo} rangeMin={contextRange?.min} rangeMax={contextRange?.max} />
                                                     </div>
                                                 )}
                                             </div>

@@ -376,276 +376,250 @@ export default function ActiveTournament() {
 
   // 3. ACTIVE MATCHES STATE ("DIRECTO")
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-slate-900 text-white">
-        {/* Background Decor */}
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20 z-0">
-            <div className="absolute -top-20 -left-20 w-80 h-80 bg-blue-600 rounded-full blur-[100px]"></div>
-            <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-600 rounded-full blur-[100px]"></div>
+    <div className="space-y-6">
+        {/* ROUND HEADER */}
+        <div style={{ backgroundColor: themeColor }} className="rounded-2xl shadow-xl p-6 flex items-center justify-between border border-white/10">
+                <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-black tracking-tight text-white">Ronda {state.currentRound}</h2>
+                    <span className="px-3 py-1 bg-white/20 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm border border-white/10">
+                        {state.currentRound <= (state.format === '16_mini' ? 4 : 3) ? 'Fase de Grupos' : 'Playoffs'}
+                    </span>
+                </div>
+                <button 
+                    onClick={() => setShowResetConfirm(true)} 
+                    className="p-2 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors"
+                    title="Reiniciar Configuración"
+                >
+                    <RotateCcw size={20}/>
+                </button>
+        </div>
+        
+        {/* MATCH GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {sortedMatchesPriority.length === 0 ? (<div className="text-center py-10 text-white/50 italic col-span-full">Cargando partidos...</div>) : (
+                sortedMatchesPriority.map(match => {
+                    const isWaiting = match.courtId === 0; 
+                    const isPlayable = playableMatchIds.has(match.id); 
+                    const isTechnicalRest = !isPlayable && !isWaiting;
+                    
+                    const cardClasses = isWaiting 
+                        ? 'bg-slate-100 border-slate-300 opacity-90' 
+                        : isTechnicalRest 
+                            ? 'bg-slate-200 opacity-70' 
+                            : match.isFinished 
+                                ? 'bg-white border-emerald-400'
+                                : 'bg-white border-slate-200 shadow-lg';
+                    
+                    const headerBg = isWaiting ? 'bg-slate-300' : isTechnicalRest ? 'bg-slate-300' : 'bg-slate-50';
+
+                    return (
+                    <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${cardClasses} flex flex-col text-slate-900`}>
+                        <div className={`${headerBg} px-5 py-3 flex justify-between items-center border-b ${isWaiting ? 'border-slate-400' : 'border-slate-100'}`}>
+                            <div className="flex items-center gap-3">
+                                {isWaiting ? (
+                                    <span className="flex items-center gap-2 text-slate-600 font-bold text-xs uppercase">
+                                        <Coffee size={16}/> EN ESPERA
+                                    </span>
+                                ) : isTechnicalRest ? (
+                                    <span className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase">
+                                        <Coffee size={16}/> DESCANSO (Pista {match.courtId})
+                                    </span>
+                                ) : (
+                                    <span 
+                                        className="px-3 py-1 rounded-lg text-xs font-black tracking-wider uppercase border"
+                                        style={{ 
+                                            color: themeColor, 
+                                            backgroundColor: `${themeColor}15`, 
+                                            borderColor: `${themeColor}20`
+                                        }}
+                                    >
+                                        PISTA {match.courtId}
+                                    </span>
+                                )}
+                                
+                                {getPhaseLabel(match) && <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">{getPhaseLabel(match)}</span>}
+                                {match.bracket === 'consolation' && <span className="text-blue-600 text-[10px] font-bold uppercase tracking-wider">Cons.</span>}
+                            </div>
+                            {match.isFinished && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full border border-emerald-200">Finalizado</span>
+                                    <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1 text-slate-500 hover:text-blue-600 bg-white rounded-lg transition-colors border border-slate-200"><Edit2 size={12} /></button>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="p-4 flex-1 flex flex-col justify-center">
+                            <div className="flex items-center justify-between mb-2 cursor-pointer hover:bg-slate-100 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairAId)}><span className={`text-base font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-500' : 'text-slate-800'}`}>{getPairName(match.pairAId)} <Info size={12} className="text-slate-300"/></span><span className="text-2xl font-black text-slate-900">{match.scoreA ?? '-'}</span></div>
+                            <div className="flex items-center justify-between cursor-pointer hover:bg-slate-100 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairBId)}><span className={`text-base font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-500' : 'text-slate-800'}`}>{getPairName(match.pairBId)} <Info size={12} className="text-slate-300"/></span><span className="text-2xl font-black text-slate-900">{match.scoreB ?? '-'}</span></div>
+                            {!match.isFinished && !isTechnicalRest && !isWaiting && (
+                                <button 
+                                    onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} 
+                                    style={{ backgroundColor: THEME.cta }} 
+                                    className={`w-full mt-4 py-3 rounded-xl text-sm font-bold text-white shadow-md touch-manipulation hover:opacity-90 active:scale-98 transition-transform`}
+                                >
+                                    Introducir Resultado
+                                </button>
+                            )}
+                            {isWaiting && !match.isFinished && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className={`w-full mt-4 py-2 bg-slate-300 hover:bg-slate-400 rounded-lg text-center text-[10px] font-bold text-slate-600 uppercase transition-colors`}>Forzar Resultado</button>)}
+                            {isTechnicalRest && (<div className="w-full mt-4 py-2 bg-slate-300 rounded-lg text-center text-[10px] font-bold text-slate-500 uppercase">Pista Ocupada</div>)}
+                        </div>
+                    </div>
+                    );
+                })
+            )}
         </div>
 
-        <div className="relative z-10 p-4 md:p-8 space-y-6 pb-32 max-w-[1600px] mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-slate-300 font-bold text-sm hover:text-white transition-colors">
-                    <ArrowRight size={18} className="rotate-180"/> Volver al Panel
-                </button>
-                {!isOnline ? (
-                    <div className="bg-amber-500/20 border border-amber-500/50 rounded-full px-4 py-1 flex items-center gap-2 text-amber-200 text-xs font-bold uppercase">
-                        <CloudOff size={14}/> {pendingSyncCount} Pendientes
-                    </div>
-                ) : pendingSyncCount > 0 ? (
-                    <div className="bg-blue-500/20 border border-blue-500/50 rounded-full px-4 py-1 flex items-center gap-2 text-blue-200 text-xs font-bold uppercase">
-                        <RefreshCw size={14} className="animate-spin"/> Sincronizando...
-                    </div>
-                ) : null}
-            </div>
-
-            {/* ROUND HEADER */}
-            <div style={{ backgroundColor: themeColor }} className="rounded-2xl shadow-xl p-6 flex items-center justify-between border border-white/10">
-                    <div className="flex items-center gap-3">
-                        <h2 className="text-2xl font-black tracking-tight text-white">Ronda {state.currentRound}</h2>
-                        <span className="px-3 py-1 bg-white/20 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm border border-white/10">
-                            {state.currentRound <= (state.format === '16_mini' ? 4 : 3) ? 'Fase de Grupos' : 'Playoffs'}
-                        </span>
-                    </div>
+        {!isTournamentFinished && (
+            <div className="fixed bottom-6 left-0 right-0 md:left-64 z-30 pointer-events-none flex justify-center">
+            <div className="relative pointer-events-auto">
+                {isFinalRound ? (
                     <button 
-                        onClick={() => setShowResetConfirm(true)} 
-                        className="p-2 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors"
-                        title="Reiniciar Configuración"
+                        onClick={handleFinishTournament} 
+                        disabled={!allMatchesFinished}
+                        className={`inline-flex items-center gap-2 px-8 py-4 rounded-full shadow-2xl font-black text-lg transition-all border-4 ${allMatchesFinished ? 'bg-purple-600 text-white hover:bg-purple-500 animate-bounce border-purple-400' : 'bg-slate-800 text-slate-400 opacity-90 border-slate-700'}`}
                     >
-                        <RotateCcw size={20}/>
+                        <Trophy size={24} /> Finalizar Torneo
                     </button>
-            </div>
-            
-            {/* MATCH GRID */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {sortedMatchesPriority.length === 0 ? (<div className="text-center py-10 text-slate-400 italic col-span-full">Cargando partidos...</div>) : (
-                    sortedMatchesPriority.map(match => {
-                        const isWaiting = match.courtId === 0; 
-                        const isPlayable = playableMatchIds.has(match.id); 
-                        const isTechnicalRest = !isPlayable && !isWaiting;
-                        
-                        const cardClasses = isWaiting 
-                            ? 'bg-slate-100 border-slate-300 opacity-90' 
-                            : isTechnicalRest 
-                                ? 'bg-slate-200 opacity-70' 
-                                : match.isFinished 
-                                    ? 'bg-white border-emerald-400'
-                                    : 'bg-white border-slate-200 shadow-lg';
-                        
-                        const headerBg = isWaiting ? 'bg-slate-300' : isTechnicalRest ? 'bg-slate-300' : 'bg-slate-50';
-
-                        return (
-                        <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${cardClasses} flex flex-col text-slate-900`}>
-                            <div className={`${headerBg} px-5 py-3 flex justify-between items-center border-b ${isWaiting ? 'border-slate-400' : 'border-slate-100'}`}>
-                                <div className="flex items-center gap-3">
-                                    {isWaiting ? (
-                                        <span className="flex items-center gap-2 text-slate-600 font-bold text-xs uppercase">
-                                            <Coffee size={16}/> EN ESPERA
-                                        </span>
-                                    ) : isTechnicalRest ? (
-                                        <span className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase">
-                                            <Coffee size={16}/> DESCANSO (Pista {match.courtId})
-                                        </span>
-                                    ) : (
-                                        <span 
-                                            className="px-3 py-1 rounded-lg text-xs font-black tracking-wider uppercase border"
-                                            style={{ 
-                                                color: themeColor, 
-                                                backgroundColor: `${themeColor}15`, 
-                                                borderColor: `${themeColor}20`
-                                            }}
-                                        >
-                                            PISTA {match.courtId}
-                                        </span>
-                                    )}
-                                    
-                                    {getPhaseLabel(match) && <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">{getPhaseLabel(match)}</span>}
-                                    {match.bracket === 'consolation' && <span className="text-blue-600 text-[10px] font-bold uppercase tracking-wider">Cons.</span>}
-                                </div>
-                                {match.isFinished && (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full border border-emerald-200">Finalizado</span>
-                                        <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1 text-slate-500 hover:text-blue-600 bg-white rounded-lg transition-colors border border-slate-200"><Edit2 size={12} /></button>
-                                    </div>
-                                )}
-                            </div>
-                            
-                            <div className="p-4 flex-1 flex flex-col justify-center">
-                                <div className="flex items-center justify-between mb-2 cursor-pointer hover:bg-slate-100 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairAId)}><span className={`text-base font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-500' : 'text-slate-800'}`}>{getPairName(match.pairAId)} <Info size={12} className="text-slate-300"/></span><span className="text-2xl font-black text-slate-900">{match.scoreA ?? '-'}</span></div>
-                                <div className="flex items-center justify-between cursor-pointer hover:bg-slate-100 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairBId)}><span className={`text-base font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-500' : 'text-slate-800'}`}>{getPairName(match.pairBId)} <Info size={12} className="text-slate-300"/></span><span className="text-2xl font-black text-slate-900">{match.scoreB ?? '-'}</span></div>
-                                {!match.isFinished && !isTechnicalRest && !isWaiting && (
-                                    <button 
-                                        onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} 
-                                        style={{ backgroundColor: THEME.cta }} 
-                                        className={`w-full mt-4 py-3 rounded-xl text-sm font-bold text-white shadow-md touch-manipulation hover:opacity-90 active:scale-98 transition-transform`}
-                                    >
-                                        Introducir Resultado
-                                    </button>
-                                )}
-                                {isWaiting && !match.isFinished && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className={`w-full mt-4 py-2 bg-slate-300 hover:bg-slate-400 rounded-lg text-center text-[10px] font-bold text-slate-600 uppercase transition-colors`}>Forzar Resultado</button>)}
-                                {isTechnicalRest && (<div className="w-full mt-4 py-2 bg-slate-300 rounded-lg text-center text-[10px] font-bold text-slate-500 uppercase">Pista Ocupada</div>)}
-                            </div>
-                        </div>
-                        );
-                    })
+                ) : (
+                    <button 
+                        onClick={handleNextRoundClick} 
+                        className={`inline-flex items-center gap-2 px-8 py-4 rounded-full shadow-2xl font-black text-lg transition-all text-white bg-slate-900 hover:bg-slate-800 active:scale-95 border-2 border-white/20`}
+                    >
+                        Siguiente Ronda <ChevronRight size={24} />
+                    </button>
                 )}
             </div>
-
-            {!isTournamentFinished && (
-                <div className="fixed bottom-6 left-0 right-0 md:left-64 z-30 pointer-events-none flex justify-center">
-                <div className="relative pointer-events-auto">
-                    {isFinalRound ? (
-                        <button 
-                            onClick={handleFinishTournament} 
-                            disabled={!allMatchesFinished}
-                            className={`inline-flex items-center gap-2 px-8 py-4 rounded-full shadow-2xl font-black text-lg transition-all border-4 ${allMatchesFinished ? 'bg-purple-600 text-white hover:bg-purple-500 animate-bounce border-purple-400' : 'bg-slate-800 text-slate-400 opacity-90 border-slate-700'}`}
-                        >
-                            <Trophy size={24} /> Finalizar Torneo
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={handleNextRoundClick} 
-                            className={`inline-flex items-center gap-2 px-8 py-4 rounded-full shadow-2xl font-black text-lg transition-all text-white bg-slate-900 hover:bg-slate-800 active:scale-95 border-2 border-white/20`}
-                        >
-                            Siguiente Ronda <ChevronRight size={24} />
-                        </button>
-                    )}
-                </div>
-                </div>
-            )}
-            
-            {/* SCORE MODAL */}
-            {selectedMatchId && (
+            </div>
+        )}
+        
+        {/* SCORE MODAL */}
+        {selectedMatchId && (
+            <div 
+                className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in"
+                onClick={() => setSelectedMatchId(null)}
+            >
                 <div 
-                    className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in"
-                    onClick={() => setSelectedMatchId(null)}
+                    className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in relative text-slate-900"
+                    onClick={(e) => e.stopPropagation()}
                 >
-                    <div 
-                        className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in relative text-slate-900"
-                        onClick={(e) => e.stopPropagation()}
+                    <button 
+                        onClick={() => setSelectedMatchId(null)} 
+                        className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
                     >
-                        <button 
-                            onClick={() => setSelectedMatchId(null)} 
-                            className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
-                        >
-                            <X size={20}/>
-                        </button>
+                        <X size={20}/>
+                    </button>
 
-                        <div className="text-center mb-6">
-                            <h3 className="text-3xl font-black text-slate-900 mb-1">
-                                PISTA {state.matches.find(m => m.id === selectedMatchId)?.courtId}
-                            </h3>
-                            <div className="inline-block px-3 py-1 bg-slate-100 rounded-full text-slate-500 font-bold text-xs uppercase tracking-wider">
-                                Ronda {state.matches.find(m => m.id === selectedMatchId)?.round}
-                            </div>
-                        </div>
-                        
-                        <div className="flex items-center justify-between gap-4 mb-8">
-                            <div className="flex-1 w-1/2">
-                                <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-2 mb-2">
-                                    <input 
-                                        type="tel" 
-                                        value={scoreA} 
-                                        onChange={(e) => setScoreA(e.target.value)} 
-                                        className="w-full bg-transparent text-center text-5xl font-black text-slate-900 outline-none p-2" 
-                                        autoFocus
-                                    />
-                                </div>
-                                <p className="text-xs font-bold text-center text-slate-500 px-1 mt-2 h-8 flex items-center justify-center leading-tight line-clamp-2 overflow-hidden">
-                                    {state.matches.find(m => m.id === selectedMatchId) ? getPairName(state.matches.find(m => m.id === selectedMatchId)!.pairAId) : 'P1'}
-                                </p>
-                            </div>
-                            
-                            <span className="text-2xl font-black text-slate-300 pb-8">-</span>
-                            
-                            <div className="flex-1 w-1/2">
-                                <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-2 mb-2">
-                                    <input 
-                                        type="tel" 
-                                        value={scoreB} 
-                                        onChange={(e) => setScoreB(e.target.value)} 
-                                        className="w-full bg-transparent text-center text-5xl font-black text-slate-900 outline-none p-2"
-                                    />
-                                </div>
-                                <p className="text-xs font-bold text-center text-slate-500 px-1 mt-2 h-8 flex items-center justify-center leading-tight line-clamp-2 overflow-hidden">
-                                    {state.matches.find(m => m.id === selectedMatchId) ? getPairName(state.matches.find(m => m.id === selectedMatchId)!.pairBId) : 'P2'}
-                                </p>
-                            </div>
-                        </div>
-                        
-                        <div className="flex gap-3">
-                            <button onClick={() => setSelectedMatchId(null)} className="flex-1 py-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">Cancelar</button>
-                            <button onClick={handleSaveScore} style={{ backgroundColor: THEME.cta }} className="flex-1 py-4 rounded-xl font-bold text-white shadow-lg transition-colors hover:opacity-90">Guardar</button>
+                    <div className="text-center mb-6">
+                        <h3 className="text-3xl font-black text-slate-900 mb-1">
+                            PISTA {state.matches.find(m => m.id === selectedMatchId)?.courtId}
+                        </h3>
+                        <div className="inline-block px-3 py-1 bg-slate-100 rounded-full text-slate-500 font-bold text-xs uppercase tracking-wider">
+                            Ronda {state.matches.find(m => m.id === selectedMatchId)?.round}
                         </div>
                     </div>
-                </div>
-            )}
-            
-            {/* NEXT MATCH INFO MODAL */}
-            {nextMatchInfo && (
-                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900">
-                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
-                            <Info size={32} />
+                    
+                    <div className="flex items-center justify-between gap-4 mb-8">
+                        <div className="flex-1 w-1/2">
+                            <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-2 mb-2">
+                                <input 
+                                    type="tel" 
+                                    value={scoreA} 
+                                    onChange={(e) => setScoreA(e.target.value)} 
+                                    className="w-full bg-transparent text-center text-5xl font-black text-slate-900 outline-none p-2" 
+                                    autoFocus
+                                />
+                            </div>
+                            <p className="text-xs font-bold text-center text-slate-500 px-1 mt-2 h-8 flex items-center justify-center leading-tight line-clamp-2 overflow-hidden">
+                                {state.matches.find(m => m.id === selectedMatchId) ? getPairName(state.matches.find(m => m.id === selectedMatchId)!.pairAId) : 'P1'}
+                            </p>
                         </div>
-                        <h3 className="text-xl font-black text-slate-900 mb-4">Información Post-Partido</h3>
                         
-                        <div className="space-y-3 mb-6 text-left">
-                            <div className={`p-3 rounded-xl border ${nextMatchInfo.pairA.highlight ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
-                                <div className="flex justify-between items-center mb-1">
-                                    <p className="text-xs font-bold text-slate-400 uppercase">Pareja 1</p>
-                                    {nextMatchInfo.pairA.status === 'win' ? <CheckCircle size={14} className="text-emerald-500"/> : <XCircle size={14} className="text-slate-400"/>}
-                                </div>
-                                <div className="font-bold text-slate-800 truncate">{nextMatchInfo.pairA.name}</div>
-                                <div className={`font-bold text-sm mt-1 flex items-center gap-1 ${nextMatchInfo.pairA.highlight ? 'text-emerald-600' : 'text-slate-500'}`}>
-                                    <ArrowRight size={14}/> {nextMatchInfo.pairA.nextText}
-                                </div>
+                        <span className="text-2xl font-black text-slate-300 pb-8">-</span>
+                        
+                        <div className="flex-1 w-1/2">
+                            <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-2 mb-2">
+                                <input 
+                                    type="tel" 
+                                    value={scoreB} 
+                                    onChange={(e) => setScoreB(e.target.value)} 
+                                    className="w-full bg-transparent text-center text-5xl font-black text-slate-900 outline-none p-2"
+                                />
                             </div>
-
-                            <div className={`p-3 rounded-xl border ${nextMatchInfo.pairB.highlight ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
-                                <div className="flex justify-between items-center mb-1">
-                                    <p className="text-xs font-bold text-slate-400 uppercase">Pareja 2</p>
-                                    {nextMatchInfo.pairB.status === 'win' ? <CheckCircle size={14} className="text-emerald-500"/> : <XCircle size={14} className="text-slate-400"/>}
-                                </div>
-                                <div className="font-bold text-slate-800 truncate">{nextMatchInfo.pairB.name}</div>
-                                <div className={`font-bold text-sm mt-1 flex items-center gap-1 ${nextMatchInfo.pairB.highlight ? 'text-emerald-600' : 'text-slate-500'}`}>
-                                    <ArrowRight size={14}/> {nextMatchInfo.pairB.nextText}
-                                </div>
+                            <p className="text-xs font-bold text-center text-slate-500 px-1 mt-2 h-8 flex items-center justify-center leading-tight line-clamp-2 overflow-hidden">
+                                {state.matches.find(m => m.id === selectedMatchId) ? getPairName(state.matches.find(m => m.id === selectedMatchId)!.pairBId) : 'P2'}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-3">
+                        <button onClick={() => setSelectedMatchId(null)} className="flex-1 py-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">Cancelar</button>
+                        <button onClick={handleSaveScore} style={{ backgroundColor: THEME.cta }} className="flex-1 py-4 rounded-xl font-bold text-white shadow-lg transition-colors hover:opacity-90">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        )}
+        
+        {/* NEXT MATCH INFO MODAL */}
+        {nextMatchInfo && (
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+                <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
+                        <Info size={32} />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 mb-4">Información Post-Partido</h3>
+                    
+                    <div className="space-y-3 mb-6 text-left">
+                        <div className={`p-3 rounded-xl border ${nextMatchInfo.pairA.highlight ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
+                            <div className="flex justify-between items-center mb-1">
+                                <p className="text-xs font-bold text-slate-400 uppercase">Pareja 1</p>
+                                {nextMatchInfo.pairA.status === 'win' ? <CheckCircle size={14} className="text-emerald-500"/> : <XCircle size={14} className="text-slate-400"/>}
+                            </div>
+                            <div className="font-bold text-slate-800 truncate">{nextMatchInfo.pairA.name}</div>
+                            <div className={`font-bold text-sm mt-1 flex items-center gap-1 ${nextMatchInfo.pairA.highlight ? 'text-emerald-600' : 'text-slate-500'}`}>
+                                <ArrowRight size={14}/> {nextMatchInfo.pairA.nextText}
                             </div>
                         </div>
 
-                        <button onClick={handleCloseInfoModal} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">
-                            Continuar y Siguiente Partido
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* ALERT MODAL */}
-            {alertMessage && (
-                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900">
-                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${alertMessage.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
-                            {alertMessage.type === 'error' ? <X size={32} /> : <AlertTriangle size={32} />}
+                        <div className={`p-3 rounded-xl border ${nextMatchInfo.pairB.highlight ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
+                            <div className="flex justify-between items-center mb-1">
+                                <p className="text-xs font-bold text-slate-400 uppercase">Pareja 2</p>
+                                {nextMatchInfo.pairB.status === 'win' ? <CheckCircle size={14} className="text-emerald-500"/> : <XCircle size={14} className="text-slate-400"/>}
+                            </div>
+                            <div className="font-bold text-slate-800 truncate">{nextMatchInfo.pairB.name}</div>
+                            <div className={`font-bold text-sm mt-1 flex items-center gap-1 ${nextMatchInfo.pairB.highlight ? 'text-emerald-600' : 'text-slate-500'}`}>
+                                <ArrowRight size={14}/> {nextMatchInfo.pairB.nextText}
+                            </div>
                         </div>
-                        <h3 className="text-xl font-black text-slate-900 mb-2">{alertMessage.title}</h3>
-                        <p className="text-slate-500 mb-6">{alertMessage.message}</p>
-                        <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
-                            Entendido
-                        </button>
                     </div>
-                </div>
-            )}
 
-            {showResetConfirm && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900"><div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><RotateCcw size={32} /></div><h3 className="text-xl font-black text-slate-900 mb-2">¿Reiniciar Configuración?</h3><p className="text-slate-500 mb-6 text-sm">Se borrarán todos los partidos generados y volverás a la pantalla de configuración. <strong className="block mt-2 text-slate-800">Las parejas inscritas NO se borrarán.</strong></p><div className="flex gap-3"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button><button onClick={handleResetToSetup} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg">Reiniciar</button></div></div></div>)}
-            {showRoundConfirm && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900"><div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 animate-pulse"><Play size={40} fill="currentColor" /></div><h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3><p className="text-slate-500 mb-8">Se generarán los partidos de la siguiente fase. Asegúrate de que todos los resultados actuales estén correctos.</p><div className="grid grid-cols-1 gap-3"><button onClick={confirmNextRound} style={{ backgroundColor: THEME.cta }} className="w-full py-4 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 hover:opacity-90">Confirmar y Avanzar</button><button onClick={() => setShowRoundConfirm(false)} className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">Revisar Resultados</button></div></div></div>)}
-            
-            {/* PAIR DETAIL MODAL USAGE */}
-            {selectedPairId && <PairDetailModal pairId={selectedPairId} onClose={() => setSelectedPairId(null)} />}
-            
-    </div> 
-    {/* Correctly closing the main container div and the root div */}
+                    <button onClick={handleCloseInfoModal} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">
+                        Continuar y Siguiente Partido
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {/* ALERT MODAL */}
+        {alertMessage && (
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${alertMessage.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                        {alertMessage.type === 'error' ? <X size={32} /> : <AlertTriangle size={32} />}
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 mb-2">{alertMessage.title}</h3>
+                    <p className="text-slate-500 mb-6">{alertMessage.message}</p>
+                    <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
+                        Entendido
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {showResetConfirm && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900"><div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><RotateCcw size={32} /></div><h3 className="text-xl font-black text-slate-900 mb-2">¿Reiniciar Configuración?</h3><p className="text-slate-500 mb-6 text-sm">Se borrarán todos los partidos generados y volverás a la pantalla de configuración. <strong className="block mt-2 text-slate-800">Las parejas inscritas NO se borrarán.</strong></p><div className="flex gap-3"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button><button onClick={handleResetToSetup} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg">Reiniciar</button></div></div></div>)}
+        {showRoundConfirm && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900"><div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 animate-pulse"><Play size={40} fill="currentColor" /></div><h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3><p className="text-slate-500 mb-8">Se generarán los partidos de la siguiente fase. Asegúrate de que todos los resultados actuales estén correctos.</p><div className="grid grid-cols-1 gap-3"><button onClick={confirmNextRound} style={{ backgroundColor: THEME.cta }} className="w-full py-4 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 hover:opacity-90">Confirmar y Avanzar</button><button onClick={() => setShowRoundConfirm(false)} className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">Revisar Resultados</button></div></div></div>)}
+        
+        {/* PAIR DETAIL MODAL USAGE */}
+        {selectedPairId && <PairDetailModal pairId={selectedPairId} onClose={() => setSelectedPairId(null)} />}
     </div>
   );
 }
