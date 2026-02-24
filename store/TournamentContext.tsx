@@ -31,7 +31,7 @@ interface TournamentContextType {
     state: TournamentState; dispatch: React.Dispatch<TournamentAction>; loadData: () => Promise<void>;
     addPlayerToDB: (p: Partial<Player>, ownerId?: string) => Promise<string | null>; updatePlayerInDB: (p: Partial<Player>) => Promise<void>;
     deletePlayerDB: (id: string) => Promise<void>;
-    createPairInDB: (p1: string, p2: string | null, status?: 'confirmed' | 'pending') => Promise<string | null>; 
+    createPairInDB: (p1: string, p2: string | null, status?: 'confirmed' | 'pending', tournamentIdOverride?: string) => Promise<string | null>; 
     updatePairDB: (pairId: string, p1: string, p2: string) => Promise<void>;
     assignPartnerDB: (pairId: string, partnerId: string, mergeWithPairId?: string) => Promise<void>;
     startTournamentDB: (method: GenerationMethod, customOrderedPairs?: Pair[]) => Promise<void>;
@@ -44,7 +44,7 @@ interface TournamentContextType {
     finishTournamentDB: () => Promise<void>;
     respondToInviteDB: (pairId: string, action: 'accept' | 'reject') => Promise<void>;
     updateTournamentSettings: (settings: Partial<TournamentState>) => Promise<void>;
-    createNewTournament: (metadata: Partial<TournamentState>) => Promise<void>;
+    createNewTournament: (metadata: Partial<TournamentState>, overrideUserId?: string) => Promise<string | null>;
     
     // NEW MULTI-TOURNAMENT METHODS
     fetchTournamentList: () => Promise<void>;
@@ -56,6 +56,8 @@ interface TournamentContextType {
     toggleBallsDB: (courtId: number) => Promise<void>;
     
     pendingSyncCount: number; // Expose to UI
+    isOverlayOpen: boolean;
+    setOverlayOpen: (isOpen: boolean) => void;
 }
 
 const TournamentContext = createContext<TournamentContextType>({
@@ -65,10 +67,12 @@ const TournamentContext = createContext<TournamentContextType>({
     deletePairDB: async () => {}, archiveAndResetDB: async () => {}, resetToSetupDB: async () => {}, regenerateMatchesDB: async () => "", hardResetDB: async () => {},
     formatPlayerName: () => '', setTournamentFormat: async () => {}, getPairElo: () => 1200, substitutePairDB: async () => {},
     finishTournamentDB: async () => {}, respondToInviteDB: async () => {}, updateTournamentSettings: async () => {},
-    createNewTournament: async () => {},
+    createNewTournament: async () => null,
     fetchTournamentList: async () => {}, selectTournament: async () => {}, closeTournament: () => {},
     togglePaymentDB: async () => {}, toggleWaterDB: async () => {}, toggleBallsDB: async () => {},
-    pendingSyncCount: 0
+    pendingSyncCount: 0,
+    isOverlayOpen: false,
+    setOverlayOpen: () => {}
 });
 
 const reducer = (state: TournamentState, action: TournamentAction): TournamentState => {
@@ -93,6 +97,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const { clubData } = useHistory(); 
     const { addNotification } = useNotifications(); 
     const [pendingSyncCount, setPendingSyncCount] = useState(0);
+    const [isOverlayOpen, setOverlayOpen] = useState(false);
 
     // SYNC LOGIC
     useEffect(() => {
@@ -152,8 +157,24 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const formatPlayerName = useCallback((p?: Player) => {
         if (!p) return 'Jugador';
-        if (p.nickname) return p.nickname;
-        const parts = p.name.trim().split(/\s+/);
+        
+        let nameToFormat = p.nickname || p.name;
+        
+        // CLEANING LOGIC
+        // 1. Remove Keycap sequences globally (e.g. 1️⃣)
+        nameToFormat = nameToFormat.replace(/[\d#\*]\uFE0F?\u20E3/g, '');
+        // 2. Remove standard emojis globally (Surrogate pairs)
+        nameToFormat = nameToFormat.replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])+/g, '');
+        // 3. Remove other symbols and dingbats globally
+        nameToFormat = nameToFormat.replace(/[\u2600-\u27BF\u2B00-\u2BFF\u2000-\u206F\uFE0F]+/g, '');
+        // 4. Remove leading numbering (e.g. "1.", "1)", "1-") - Only at start
+        nameToFormat = nameToFormat.replace(/^[\d]+[\.\-\)\s]+\s*/, '');
+        
+        nameToFormat = nameToFormat.trim();
+
+        if (p.nickname) return nameToFormat;
+
+        const parts = nameToFormat.split(/\s+/);
         if (parts.length >= 2) return `${parts[0]} ${parts[1].substring(0, 3)}.`;
         return parts[0];
     }, []);
@@ -414,25 +435,117 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     };
 
-    const createNewTournament = async (metadata: Partial<TournamentState>) => {
-        if (isOfflineMode) { /* ... */ return; }
+    const createNewTournament = async (metadata: Partial<TournamentState>, overrideUserId?: string) => {
+        if (isOfflineMode) { 
+            const newId = `local-tournament-${Date.now()}`;
+            const newTournament: TournamentState = {
+                ...initialState,
+                id: newId,
+                status: 'setup',
+                format: metadata.format || '16_mini',
+                title: metadata.title || 'Torneo Local',
+                price: metadata.price || 0,
+                prizes: metadata.prizes || [],
+                description: metadata.description || '',
+                levelRange: metadata.levelRange || 'Abierto',
+                includedItems: metadata.includedItems || [],
+                startDate: metadata.startDate || new Date().toISOString(),
+                players: [],
+                pairs: [],
+                matches: [],
+                groups: [],
+                courts: []
+            };
+            
+            // Save to local storage
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(newTournament));
+            dispatch({ type: 'SET_STATE', payload: newTournament });
+            
+            // Update list
+            dispatch({ type: 'SET_TOURNAMENT_LIST', payload: [{
+                id: newId,
+                title: newTournament.title,
+                date: newTournament.startDate,
+                status: 'setup',
+                format: newTournament.format,
+                playerCount: 0
+            }]});
+            
+            return newId;
+        }
         checkOnline();
-        if (user) {
+        
+        // Ensure we have a user, even if context is stale
+        const currentUser = overrideUserId ? { id: overrideUserId } : (user || (await supabase.auth.getUser()).data.user);
+
+        if (currentUser) {
+            console.log("Creating tournament for user:", currentUser.id);
             const { data, error } = await supabase.from('tournaments').insert([{ 
-                user_id: user.id, status: 'setup', format: metadata.format || '16_mini',
+                user_id: currentUser.id, status: 'setup', format: metadata.format || '16_mini',
                 title: metadata.title, price: metadata.price, prizes: metadata.prizes,
                 description: metadata.description, level_range: metadata.levelRange,
                 included_items: metadata.includedItems, date: metadata.startDate
             }]).select().single();
-            if (error) throw error;
+            
+            if (error) {
+                console.error("createNewTournament Error:", error);
+                throw error;
+            }
+            
             await selectTournament(data.id);
+            return data.id;
         }
+        
+        console.error("createNewTournament: No user found. Context User:", user);
+        return null;
     };
 
     const addPlayerToDB = async (p: Partial<Player>, ownerId?: string) => {
-        if (isOfflineMode) { /* ... */ return 'local-id'; }
+        if (isOfflineMode) { 
+            // Read latest from local storage to avoid race conditions in loops
+            const localData = localStorage.getItem(STORAGE_KEY);
+            const currentData = localData ? JSON.parse(localData) : initialState;
+            const currentPlayers = currentData.players || [];
+
+            // Check if player already exists locally
+            const existing = currentPlayers.find((cp: Player) => cp.name.toLowerCase() === (p.name || '').trim().toLowerCase());
+            if (existing) return existing.id;
+
+            const newPlayer: Player = {
+                id: `local-player-${Date.now()}-${Math.random()}`,
+                name: p.name || 'Jugador',
+                email: p.email,
+                phone: p.phone,
+                level: p.level || 3,
+                matchesPlayed: 0,
+                matchesWon: 0,
+                elo: 1200,
+                ...p
+            } as Player;
+            
+            const newPlayers = [...currentPlayers, newPlayer];
+            const newState = { ...currentData, players: newPlayers };
+            
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+            dispatch({ type: 'SET_STATE', payload: { players: newPlayers } });
+            
+            return newPlayer.id; 
+        }
         checkOnline();
         const targetUserId = ownerId || user?.id;
+        
+        // 1. Try to find existing player to avoid duplicates
+        if (p.name) {
+             const { data: existing } = await supabase.from('players')
+                .select('id')
+                .eq('user_id', targetUserId)
+                .ilike('name', p.name.trim())
+                .maybeSingle();
+             
+             if (existing) return existing.id;
+        }
+
+        // 2. Create if not exists
         const { data, error } = await supabase.from('players').insert([{ ...p, user_id: targetUserId }]).select().single();
         if (error) { console.error("Error creating player:", error); return null; } 
         const newPlayers = [...state.players, data];
@@ -457,14 +570,41 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         dispatch({ type: 'SET_STATE', payload: { players: newPlayers } });
     };
 
-    const createPairInDB = async (p1: string, p2: string | null, status: 'confirmed' | 'pending' = 'confirmed') => {
-        if (isOfflineMode) { /* ... */ return 'pair-id'; }
+    const createPairInDB = async (p1: string, p2: string | null, status: 'confirmed' | 'pending' = 'confirmed', tournamentIdOverride?: string) => {
+        if (isOfflineMode) { 
+            // Read latest from local storage to avoid race conditions in loops
+            const localData = localStorage.getItem(STORAGE_KEY);
+            const currentData = localData ? JSON.parse(localData) : initialState;
+            const currentPairs = currentData.pairs || [];
+
+            const newPair: Pair = {
+                id: `local-pair-${Date.now()}-${Math.random()}`,
+                tournament_id: tournamentIdOverride || state.id || 'local',
+                player1Id: p1,
+                player2Id: p2,
+                name: 'Pareja Local',
+                status: status,
+                stats: { played: 0, won: 0, gameDiff: 0 },
+                isReserve: false,
+                waterReceived: false,
+                paidP1: false,
+                paidP2: false
+            };
+            const newPairs = [...currentPairs, newPair];
+            const newState = { ...currentData, pairs: newPairs };
+            
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+            dispatch({ type: 'SET_STATE', payload: { pairs: newPairs } });
+            
+            return newPair.id; 
+        }
         checkOnline();
-        let tournamentId = state.id; 
+        let tournamentId = tournamentIdOverride || state.id; 
         if (!tournamentId) return null;
         const { data } = await supabase.from('tournament_pairs').insert([{ tournament_id: tournamentId, player1_id: p1, player2_id: p2, status }]).select().single(); 
         if (p2 && status === 'pending') { const inviter = state.players.find(p => p.id === p1)?.name || 'Un jugador'; addNotification(p2, 'invite', 'Invitación a Torneo', `${inviter} te ha invitado a formar pareja.`, '/p/tournaments'); }
-        await selectTournament(tournamentId); 
+        // Only select if it's the current tournament, otherwise we might switch context unexpectedly
+        if (state.id === tournamentId) await selectTournament(tournamentId); 
         return data?.id || null;
     };
     
@@ -502,29 +642,43 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const startTournamentDB = async (method: GenerationMethod, customOrderedPairs?: Pair[]) => {
-        if (isOfflineMode) { /* ... */ return; }
+        if (isOfflineMode) { 
+            // ... offline logic ...
+            return; 
+        }
         checkOnline();
-        // Logic to generate matches...
+        
         let limit = 16;
         if(state.format === '10_mini') limit = 10;
         if(state.format === '12_mini') limit = 12;
         if(state.format === '8_mini') limit = 8;
         
+        // Get confirmed pairs
         const allPairs = state.pairs.filter(p => p.status === 'confirmed' && p.player2Id !== null); 
         if (allPairs.length < limit) throw new Error(`Se necesitan al menos ${limit} parejas confirmadas y completas.`);
 
-        let orderedPairs = customOrderedPairs || allPairs;
-        if (method !== 'manual' && !customOrderedPairs) orderedPairs = Logic.sortPairsByMethod(allPairs, state.players, method);
+        // Determine order
+        let orderedPairs: Pair[] = [];
+        
+        if (method === 'manual' && customOrderedPairs) {
+            orderedPairs = customOrderedPairs;
+        } else {
+            // For ELO methods, sort them
+            orderedPairs = Logic.sortPairsByMethod(allPairs, state.players, method);
+        }
 
+        // Generate Groups based on the order
+        // If manual, we assume orderedPairs is already [Group A..., Group B..., etc]
         const groups = Logic.generateGroupsHelper(orderedPairs, state.players, method, state.format);
+        
+        // Generate Matches
         let matches: Partial<Match>[] = [];
         if (state.format === '10_mini') matches = Logic.generateMatches10(groups);
         else if (state.format === '8_mini') matches = Logic.generateMatches8(groups);
         else if (state.format === '12_mini') matches = Logic.generateMatches12(groups, clubData.courtCount);
         else matches = Logic.generateMatches16(groups, clubData.courtCount);
 
-        const activeIds = new Set(groups.flatMap(g => g.pairIds));
-        
+        // ... rest of the function ...
         if (!state.id) throw new Error("ID de torneo perdido.");
         await supabase.from('matches').delete().eq('tournament_id', state.id);
         await supabase.from('tournaments').update({ status: 'active', current_round: 1, format: state.format }).eq('id', state.id);
@@ -532,8 +686,18 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const matchesDB = matches.map(m => ({ tournament_id: state.id, round: m.round, phase: m.phase, bracket: m.bracket, court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, score_a: m.scoreA, score_b: m.scoreB, is_finished: m.isFinished }));
         const { error } = await supabase.from('matches').insert(matchesDB);
         if (error) { if (error.message.includes('phase')) { const matchesNoPhase = matchesDB.map(({ phase, ...rest }) => rest); const { error: retryError } = await supabase.from('matches').insert(matchesNoPhase); if (retryError) throw retryError; } else { throw error; } }
-        activeIds.forEach(pairId => { const pair = state.pairs.find(p => p.id === pairId); if (pair) { addNotification(pair.player1Id, 'match_start', 'Torneo Iniciado', 'El torneo ha comenzado. Revisa tu pista.', '/p/tournaments'); if (pair.player2Id) addNotification(pair.player2Id, 'match_start', 'Torneo Iniciado', 'El torneo ha comenzado. Revisa tu pista.', '/p/tournaments'); } });
-        if(state.id) await selectTournament(state.id);
+        
+        // Notify players
+        const activeIds = new Set(groups.flatMap(g => g.pairIds));
+        activeIds.forEach(pairId => { 
+            const pair = state.pairs.find(p => p.id === pairId); 
+            if (pair) { 
+                addNotification(pair.player1Id, 'match_start', 'Torneo Iniciado', 'El torneo ha comenzado. Revisa tu pista.', '/p/tournaments'); 
+                if (pair.player2Id) addNotification(pair.player2Id, 'match_start', 'Torneo Iniciado', 'El torneo ha comenzado. Revisa tu pista.', '/p/tournaments'); 
+            } 
+        });
+
+        await selectTournament(state.id);
     };
 
     const nextRoundDB = async () => {
@@ -624,7 +788,8 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             updateTournamentSettings, createNewTournament,
             fetchTournamentList, selectTournament, closeTournament,
             togglePaymentDB, toggleWaterDB, toggleBallsDB,
-            pendingSyncCount
+            pendingSyncCount,
+            isOverlayOpen, setOverlayOpen
         }}>
             {children}
         </TournamentContext.Provider>

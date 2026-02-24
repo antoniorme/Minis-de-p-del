@@ -28,7 +28,7 @@ interface Standing {
 
 const LeagueActive: React.FC = () => {
     const { league, updateLeagueScore, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair, generateLeagueGroups, addLeagueCategory, updateLeagueCategory } = useLeague();
-    const { state, formatPlayerName, addPlayerToDB } = useTournament();
+    const { state, formatPlayerName, addPlayerToDB, setOverlayOpen } = useTournament();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -76,6 +76,13 @@ const LeagueActive: React.FC = () => {
     // Poster Logic
     const [showPoster, setShowPoster] = useState(false);
     const [posterData, setPosterData] = useState<any>(null);
+
+    // Sync Overlay State
+    const isAnyModalOpen = !!(editingCategory || showAddCategory || isPairModalOpen || showDeleteConfirm || showGenerateConfirm || showPlayoffWizard || alertMessage || editingMatchId || selectedPairId || showPoster);
+    useEffect(() => {
+        setOverlayOpen(isAnyModalOpen);
+        return () => setOverlayOpen(false);
+    }, [isAnyModalOpen, setOverlayOpen]);
 
     // Helper: Change tab
     const setTab = (tab: string) => {

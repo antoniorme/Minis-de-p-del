@@ -39,10 +39,10 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
     const [currentGroupIdx, setCurrentGroupIdx] = useState(0); 
     const [orderedPairs, setOrderedPairs] = useState<Pair[]>([]);
     
-    let groupNames = ['A', 'B', 'C', 'D'];
-    if (limit === 10) groupNames = ['A', 'B'];
-    if (limit === 8) groupNames = ['A', 'B'];
-    if (limit === 12) groupNames = ['A', 'B', 'C'];
+    let groupNames = ['G1', 'G2', 'G3', 'G4'];
+    if (limit === 10) groupNames = ['G1', 'G2'];
+    if (limit === 8) groupNames = ['G1', 'G2'];
+    if (limit === 12) groupNames = ['G1', 'G2', 'G3'];
     
     const effectiveGroupSize = limit === 10 ? 5 : 4;
     const currentGroup = groupNames[currentGroupIdx];
@@ -68,18 +68,23 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[150] flex flex-col items-center justify-center p-4">
             <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl h-[85vh] flex flex-col">
                 <div className="text-center mb-4"><h3 className="text-2xl font-black text-slate-900">Configurar Grupo {currentGroup}</h3><p className="text-slate-500 text-sm">Selecciona {effectiveGroupSize} parejas de la lista</p></div>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-2 mb-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto pr-2 mb-4 custom-scrollbar">
+                    <div className="grid grid-cols-2 gap-2">
                     {availablePairs.map(pair => {
                         const p1 = players.find(p => p.id === pair.player1Id);
                         const p2 = players.find(p => p.id === pair.player2Id);
                         const isSelected = selectedForGroup.includes(pair.id);
                         return (
-                            <div key={pair.id} onClick={() => toggleSelection(pair.id)} className={`p-3 rounded-xl border-2 flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-300'}`}>
-                                <div><div className="font-bold text-slate-800 text-sm">{formatName(p1)}</div><div className="font-bold text-slate-800 text-sm">& {formatName(p2)}</div></div>
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-[#575AF9] border-[#575AF9]' : 'border-slate-300'}`}>{isSelected && <CheckIcon size={14} className="text-white" strokeWidth={3}/>}</div>
+                            <div key={pair.id} onClick={() => toggleSelection(pair.id)} className={`p-2 rounded-xl border-2 flex flex-col items-start cursor-pointer transition-all ${isSelected ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-300'}`}>
+                                <div className="w-full">
+                                    <div className="font-bold text-slate-800 text-xs truncate">{formatName(p1)}</div>
+                                    <div className="font-bold text-slate-600 text-xs truncate">{formatName(p2)}</div>
+                                </div>
+                                {isSelected && <div className="mt-1 self-end"><CheckIcon size={14} className="text-[#575AF9]" strokeWidth={3}/></div>}
                             </div>
                         )
                     })}
+                    </div>
                 </div>
                 <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
                     <div className="text-center font-bold text-[#575AF9] mb-2">Seleccionadas: {selectedForGroup.length} / {effectiveGroupSize}</div>

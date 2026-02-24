@@ -461,17 +461,40 @@ const SuperAdmin: React.FC = () => {
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Módulos Contratados</span>
                                     </div>
                                     <div className="flex gap-3">
-                                        {/* Minis Module (Always Active) */}
-                                        <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm w-1/2">
-                                            <Trophy size={14} className="text-blue-500"/>
-                                            <span className="text-xs font-bold text-slate-700 flex-1">Minis</span>
-                                            <Check size={14} className="text-emerald-500 ml-auto"/>
-                                        </div>
+                                        {/* Minis Module (Toggleable) */}
+                                        <button 
+                                            onClick={() => {
+                                                const newState = !club.minis_full_enabled;
+                                                supabase.from('clubs').update({ minis_full_enabled: newState }).eq('id', club.id).then(({ error }) => {
+                                                    if (!error) setClubs(prev => prev.map(c => c.id === club.id ? { ...c, minis_full_enabled: newState } : c));
+                                                });
+                                            }}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-all w-1/3 ${club.minis_full_enabled !== false ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
+                                        >
+                                            <Trophy size={14} className={club.minis_full_enabled !== false ? 'text-blue-600' : 'text-slate-400'}/>
+                                            <span className={`text-xs font-bold flex-1 text-left ${club.minis_full_enabled !== false ? 'text-blue-700' : 'text-slate-500'}`}>Minis</span>
+                                            <div className={`w-3 h-3 rounded-full border ${club.minis_full_enabled !== false ? 'bg-blue-500 border-blue-600' : 'bg-slate-200 border-slate-300'}`}></div>
+                                        </button>
+
+                                        {/* Minis Lite Module (Toggleable) */}
+                                        <button 
+                                            onClick={() => {
+                                                const newState = !club.minis_lite_enabled;
+                                                supabase.from('clubs').update({ minis_lite_enabled: newState }).eq('id', club.id).then(({ error }) => {
+                                                    if (!error) setClubs(prev => prev.map(c => c.id === club.id ? { ...c, minis_lite_enabled: newState } : c));
+                                                });
+                                            }}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-all w-1/3 ${club.minis_lite_enabled ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
+                                        >
+                                            <Smartphone size={14} className={club.minis_lite_enabled ? 'text-emerald-600' : 'text-slate-400'}/>
+                                            <span className={`text-xs font-bold flex-1 text-left ${club.minis_lite_enabled ? 'text-emerald-700' : 'text-slate-500'}`}>Lite</span>
+                                            <div className={`w-3 h-3 rounded-full border ${club.minis_lite_enabled ? 'bg-emerald-500 border-emerald-600' : 'bg-slate-200 border-slate-300'}`}></div>
+                                        </button>
 
                                         {/* League Module (Toggleable) */}
                                         <button 
                                             onClick={() => toggleLeagueModule(club)}
-                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-all w-1/2 ${club.league_enabled ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-all w-1/3 ${club.league_enabled ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
                                         >
                                             <CalendarRange size={14} className={club.league_enabled ? 'text-indigo-600' : 'text-slate-400'}/>
                                             <span className={`text-xs font-bold flex-1 text-left ${club.league_enabled ? 'text-indigo-700' : 'text-slate-500'}`}>Ligas</span>

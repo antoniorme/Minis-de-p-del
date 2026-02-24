@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
 import { useHistory } from '../store/HistoryContext';
@@ -9,7 +9,7 @@ import {
     Link, Check, Settings, Edit, Shuffle, 
     ListOrdered, TrendingUp, X, Check as CheckIcon, 
     AlertTriangle, Lock, ArrowLeft, Calendar, LayoutGrid, 
-    Hourglass, Gift, FileText, MessageCircle, Copy
+    Hourglass, Gift, FileText, MessageCircle, Copy, Plus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
@@ -35,55 +35,171 @@ interface WizardProps {
 }
 
 const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplete, onCancel, formatName, limit }) => {
-    const [currentGroupIdx, setCurrentGroupIdx] = useState(0); 
-    const [orderedPairs, setOrderedPairs] = useState<Pair[]>([]);
-    
-    let groupNames = ['A', 'B', 'C', 'D'];
-    if (limit === 10) groupNames = ['A', 'B'];
-    if (limit === 8) groupNames = ['A', 'B'];
-    if (limit === 12) groupNames = ['A', 'B', 'C'];
+    // Determine groups based on limit
+    let groupNames = ['G1', 'G2', 'G3', 'G4'];
+    if (limit === 10) groupNames = ['G1', 'G2'];
+    if (limit === 8) groupNames = ['G1', 'G2'];
+    if (limit === 12) groupNames = ['G1', 'G2', 'G3'];
     
     const effectiveGroupSize = limit === 10 ? 5 : 4;
-    const currentGroup = groupNames[currentGroupIdx];
-    const assignedIds = new Set(orderedPairs.map(p => p.id));
-    const availablePairs = pairs.filter(p => !assignedIds.has(p.id));
-    const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
 
-    const toggleSelection = (id: string) => {
-        if (selectedForGroup.includes(id)) setSelectedForGroup(selectedForGroup.filter(pid => pid !== id));
-        else if (selectedForGroup.length < effectiveGroupSize) setSelectedForGroup([...selectedForGroup, id]);
+    // State: Map of GroupName -> Array of Pair IDs
+    const [groups, setGroups] = useState<Record<string, string[]>>(() => {
+        const initial: Record<string, string[]> = {};
+        groupNames.forEach(g => initial[g] = []);
+        return initial;
+    });
+
+    const [activeGroup, setActiveGroup] = useState<string>(groupNames[0]);
+
+    // Derived: Available pairs (not in any group)
+    const assignedPairIds = new Set(Object.values(groups).flat());
+    const availablePairs = pairs.filter(p => !assignedPairIds.has(p.id));
+
+    const isComplete = Object.values(groups).every(g => g.length === effectiveGroupSize);
+    const totalAssigned = assignedPairIds.size;
+
+    const handleAddPair = (pairId: string) => {
+        if (groups[activeGroup].length >= effectiveGroupSize) return;
+        setGroups(prev => ({
+            ...prev,
+            [activeGroup]: [...prev[activeGroup], pairId]
+        }));
     };
 
-    const confirmGroup = () => {
-        if (selectedForGroup.length !== effectiveGroupSize) return;
-        const newGroupPairs = selectedForGroup.map(id => pairs.find(p => p.id === id)!);
-        const newOrder = [...orderedPairs, ...newGroupPairs];
-        setOrderedPairs(newOrder); setSelectedForGroup([]);
-        if (currentGroupIdx < groupNames.length - 1) setCurrentGroupIdx(currentGroupIdx + 1);
-        else onComplete(newOrder);
+    const handleRemovePair = (pairId: string, groupName: string) => {
+        setGroups(prev => ({
+            ...prev,
+            [groupName]: prev[groupName].filter(id => id !== pairId)
+        }));
+    };
+
+    const handleFinish = () => {
+        if (!isComplete) return;
+        // Flatten groups in order
+        const orderedPairs: Pair[] = [];
+        groupNames.forEach(g => {
+            groups[g].forEach(pairId => {
+                const pair = pairs.find(p => p.id === pairId);
+                if (pair) orderedPairs.push(pair);
+            });
+        });
+        onComplete(orderedPairs);
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[150] flex flex-col items-center justify-center p-4">
-            <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl h-[85vh] flex flex-col">
-                <div className="text-center mb-4"><h3 className="text-2xl font-black text-slate-900">Configurar Grupo {currentGroup}</h3><p className="text-slate-500 text-sm">Selecciona {effectiveGroupSize} parejas de la lista</p></div>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-2 mb-4 custom-scrollbar">
-                    {availablePairs.map(pair => {
-                        const p1 = players.find(p => p.id === pair.player1Id);
-                        const p2 = players.find(p => p.id === pair.player2Id);
-                        const isSelected = selectedForGroup.includes(pair.id);
-                        return (
-                            <div key={pair.id} onClick={() => toggleSelection(pair.id)} className={`p-3 rounded-xl border flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white hover:bg-slate-50'}`}>
-                                <div><div className="font-bold text-slate-800 text-sm">{formatName(p1)}</div><div className="font-bold text-slate-800 text-sm">& {formatName(p2)}</div></div>
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-[#575AF9] border-[#575AF9]' : 'border-slate-200'}`}>{isSelected && <CheckIcon size={14} className="text-white" strokeWidth={3}/>}</div>
-                            </div>
-                        )
-                    })}
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-[150] flex flex-col items-center justify-end sm:justify-center sm:p-4">
+            <div className="bg-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:rounded-3xl sm:max-w-4xl shadow-2xl flex flex-col overflow-hidden">
+                
+                {/* Header */}
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+                    <h3 className="text-lg font-black text-slate-900">Organizar Grupos ({totalAssigned}/{limit})</h3>
+                    <button onClick={onCancel} className="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={20}/></button>
                 </div>
-                <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
-                    <div className="text-center font-bold text-[#575AF9] mb-2">Seleccionadas: {selectedForGroup.length} / {effectiveGroupSize}</div>
-                    <button onClick={confirmGroup} disabled={selectedForGroup.length !== effectiveGroupSize} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === effectiveGroupSize ? 'bg-[#575AF9] text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>{currentGroupIdx === groupNames.length - 1 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}</button>
-                    <button onClick={onCancel} className="w-full py-3 bg-slate-100 text-slate-500 rounded-xl font-bold border border-slate-200">Cancelar</button>
+
+                <div className="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50">
+                    
+                    {/* LEFT PANEL: GROUPS & ACTIVE GROUP CONTENT */}
+                    <div className="flex-1 flex flex-col border-r border-slate-200 overflow-hidden">
+                        
+                        {/* Group Tabs */}
+                        <div className="flex overflow-x-auto p-2 gap-2 bg-white border-b border-slate-100 shrink-0 no-scrollbar">
+                            {groupNames.map(g => {
+                                const count = groups[g].length;
+                                const isFull = count === effectiveGroupSize;
+                                const isActive = activeGroup === g;
+                                return (
+                                    <button 
+                                        key={g} 
+                                        onClick={() => setActiveGroup(g)}
+                                        className={`flex-1 min-w-[60px] py-2 px-3 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${isActive ? 'border-indigo-500 bg-indigo-50 shadow-sm' : 'border-slate-100 bg-white text-slate-400 hover:bg-slate-50'}`}
+                                    >
+                                        <span className={`text-[10px] font-bold uppercase ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}>{g}</span>
+                                        <span className={`text-sm font-black ${isFull ? 'text-emerald-500' : isActive ? 'text-slate-800' : 'text-slate-300'}`}>{count}/{effectiveGroupSize}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Active Group Content */}
+                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Integrantes {activeGroup}</h4>
+                            {groups[activeGroup].length === 0 ? (
+                                <div className="h-32 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-2xl">
+                                    <Users size={24} className="mb-2 opacity-50"/>
+                                    <span className="text-xs font-bold">Grupo Vacío</span>
+                                    <span className="text-[10px]">Selecciona parejas para añadir</span>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-2">
+                                    {groups[activeGroup].map(pairId => {
+                                        const pair = pairs.find(p => p.id === pairId);
+                                        if (!pair) return null;
+                                        const p1 = players.find(p => p.id === pair.player1Id);
+                                        const p2 = players.find(p => p.id === pair.player2Id);
+                                        return (
+                                            <div key={pairId} className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm flex justify-between items-start animate-scale-in relative group">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="font-bold text-slate-800 text-xs truncate">{formatName(p1)}</div>
+                                                    <div className="font-bold text-slate-600 text-xs truncate">{formatName(p2)}</div>
+                                                </div>
+                                                <button onClick={() => handleRemovePair(pairId, activeGroup)} className="absolute top-1 right-1 p-1 text-rose-300 hover:text-rose-500 bg-white rounded-full transition-colors">
+                                                    <X size={14}/>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* RIGHT PANEL: AVAILABLE PAIRS */}
+                    <div className="flex-1 flex flex-col bg-white sm:border-l border-slate-200 h-1/2 sm:h-auto overflow-hidden shadow-[0_-4px_20px_rgba(0,0,0,0.05)] sm:shadow-none z-10">
+                        <div className="p-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
+                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><ListOrdered size={14}/> Disponibles ({availablePairs.length})</h4>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                            {availablePairs.length === 0 ? (
+                                <div className="text-center py-10 text-slate-400 text-sm">Todas las parejas asignadas.</div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-2">
+                                    {availablePairs.map(pair => {
+                                        const p1 = players.find(p => p.id === pair.player1Id);
+                                        const p2 = players.find(p => p.id === pair.player2Id);
+                                        const isGroupFull = groups[activeGroup].length >= effectiveGroupSize;
+                                        return (
+                                            <button 
+                                                key={pair.id} 
+                                                onClick={() => handleAddPair(pair.id)}
+                                                disabled={isGroupFull}
+                                                className={`w-full p-2 rounded-xl border flex flex-col items-start text-left transition-all relative ${isGroupFull ? 'opacity-50 cursor-not-allowed bg-slate-50 border-slate-100' : 'bg-white border-slate-100 hover:border-indigo-300 hover:shadow-md cursor-pointer'}`}
+                                            >
+                                                <div className="w-full">
+                                                    <div className="font-bold text-slate-800 text-xs truncate">{formatName(p1)}</div>
+                                                    <div className="font-bold text-slate-600 text-xs truncate">{formatName(p2)}</div>
+                                                </div>
+                                                {!isGroupFull && <div className="absolute top-1 right-1 text-indigo-200"><Plus size={12}/></div>}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-slate-100 bg-white shrink-0 flex justify-center">
+                    <button 
+                        onClick={handleFinish} 
+                        disabled={!isComplete} 
+                        className={`transition-all rounded-xl font-black flex items-center justify-center gap-2 ${isComplete ? 'w-full py-4 text-lg bg-[#575AF9] text-white shadow-lg hover:opacity-90 active:scale-95' : 'w-auto px-8 py-3 text-sm bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                    >
+                        {isComplete ? 'CONFIRMAR Y EMPEZAR' : `Asignando... (${totalAssigned}/${limit})`}
+                        {isComplete && <Play size={20} fill="currentColor"/>}
+                    </button>
                 </div>
             </div>
         </div>
@@ -92,7 +208,7 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
 
 // 2. TOURNAMENT MANAGER (Single Mini Context)
 const TournamentManager: React.FC = () => {
-  const { state, startTournamentDB, formatPlayerName, closeTournament } = useTournament();
+  const { state, startTournamentDB, formatPlayerName, closeTournament, setOverlayOpen } = useTournament();
   const { clubData } = useHistory();
   const { resetTimer, startTimer } = useTimer();
   const { user } = useAuth();
@@ -103,6 +219,12 @@ const TournamentManager: React.FC = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
   const [showManualWizard, setShowManualWizard] = useState(false);
+
+  // Sync Overlay State
+  useEffect(() => {
+      setOverlayOpen(showManualWizard || showGenerationModal || showShareModal);
+      return () => setOverlayOpen(false);
+  }, [showManualWizard, showGenerationModal, showShareModal]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -280,6 +402,7 @@ const TournamentManager: React.FC = () => {
                   <div className="space-y-3 mb-6">
                       <button onClick={() => setGenerationMethod('elo-balanced')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'elo-balanced' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white'}`}><TrendingUp size={24} className="text-[#575AF9]"/><div><div className="font-bold text-slate-900">Por Nivel (Equilibrado)</div><div className="text-xs text-slate-500">Mejores al Grupo A, peores al D.</div></div></button>
                       <button onClick={() => setGenerationMethod('elo-mixed')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'elo-mixed' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white'}`}><Shuffle size={24} className="text-[#575AF9]"/><div><div className="font-bold text-slate-900">Mix (Cremallera)</div><div className="text-xs text-slate-500">Reparte el nivel en todos los grupos.</div></div></button>
+                      <button onClick={() => setGenerationMethod('manual')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'manual' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white'}`}><ListOrdered size={24} className="text-[#575AF9]"/><div><div className="font-bold text-slate-900">Manual</div><div className="text-xs text-slate-500">Elige tú mismo los grupos.</div></div></button>
                   </div>
                   <button onClick={handleStartTournament} style={{ backgroundColor: THEME.cta }} className="w-full py-4 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-95"><Play size={20} fill="currentColor"/> EMPEZAR YA</button>
               </div>
@@ -306,6 +429,18 @@ const TournamentManager: React.FC = () => {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* MANUAL WIZARD */}
+      {showManualWizard && (
+          <ManualGroupingWizard 
+              pairs={confirmedPairs}
+              players={state.players}
+              onComplete={handleManualWizardComplete}
+              onCancel={() => setShowManualWizard(false)}
+              formatName={formatPlayerName}
+              limit={currentLimit}
+          />
       )}
 
     </div>

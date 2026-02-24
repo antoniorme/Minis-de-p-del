@@ -92,6 +92,8 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         phone: data.phone, 
                         logoUrl: data.logo_url, 
                         league_enabled: data.league_enabled || false,
+                        minis_lite_enabled: data.minis_lite_enabled, // NEW
+                        minis_full_enabled: data.minis_full_enabled, // NEW
                         mapsUrl: data.maps_url
                     };
                     setClubData(mapped);

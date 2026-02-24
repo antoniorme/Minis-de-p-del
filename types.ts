@@ -159,6 +159,8 @@ export interface ClubData {
     phone?: string;
     logoUrl?: string;
     league_enabled?: boolean; 
+    minis_lite_enabled?: boolean; // NEW
+    minis_full_enabled?: boolean; // NEW
 }
 
 export interface PastTournament {

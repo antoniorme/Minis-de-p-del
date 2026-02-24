@@ -17,7 +17,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const navigate = useNavigate();
   const { user, signOut, role } = useAuth();
   const { clubData } = useHistory();
-  const { state, closeTournament } = useTournament(); 
+  const { state, closeTournament, isOverlayOpen } = useTournament(); 
   const { unreadCount } = useNotifications();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -226,8 +226,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                </div>
           </div>
 
-          {/* CONTENT */}
-          <main className="flex-1 p-4 pb-32 md:p-8 md:pb-24 overflow-y-auto">
+          {/* CONTENT - Added pb-32/40 to clear bottom nav */}
+          <main className={`flex-1 p-4 md:p-8 overflow-y-auto ${contextNavItems ? 'pb-32 md:pb-24' : 'pb-10'}`}>
             <div className="w-full max-w-[1600px] mx-auto">
               {children}
             </div>
@@ -235,8 +235,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </div>
 
       {/* --- CONTEXT NAVIGATION (BOTTOM DOCK) --- */}
-      {contextNavItems && (
-        <div className="fixed bottom-0 left-0 right-0 z-[40] p-4 pointer-events-none flex justify-center md:pl-20">
+      {contextNavItems && !isOverlayOpen && (
+        <div className="fixed bottom-0 left-0 right-0 z-[40] p-4 pointer-events-none flex justify-center md:pl-20 safe-pb">
             <nav className={`w-full max-w-md backdrop-blur-md border rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex justify-around items-center px-2 py-1 pointer-events-auto transition-all duration-500 ${isSpecificMini ? 'bg-white/95 border-slate-200' : 'bg-white/95 border-slate-200'}`}>
               {contextNavItems.map((item) => {
                 const Icon = item.icon;

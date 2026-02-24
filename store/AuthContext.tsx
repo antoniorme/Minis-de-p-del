@@ -94,10 +94,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
     const initSession = async () => {
+        // Safety Timeout
+        const timeoutId = setTimeout(() => {
+            if (mounted) {
+                console.warn("[Auth] Session init timeout - forcing load completion");
+                setLoading(false);
+            }
+        }, 5000);
+
         // Check Explicit Dev Mode Only
         // @ts-ignore
         if ((supabase as any).supabaseUrl === 'https://placeholder.supabase.co' || sessionStorage.getItem('padelpro_dev_mode') === 'true') {
-             if(mounted) { setIsOfflineMode(true); setLoading(false); }
+             if(mounted) { setIsOfflineMode(true); setLoading(false); clearTimeout(timeoutId); }
              return;
         }
 
@@ -108,21 +116,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setSession(session);
                 setUser(session?.user ?? null);
                 const hasCachedRole = !!role; 
-                if (hasCachedRole) { setLoading(false); }
+                if (hasCachedRole) { setLoading(false); clearTimeout(timeoutId); }
                 if (session?.user) {
                     checkUserRole(session.user.id, session.user.email).then(serverRole => {
                         if (mounted) {
                             if (serverRole !== role) setRole(serverRole);
-                            if (!hasCachedRole) setLoading(false);
+                            if (!hasCachedRole) { setLoading(false); clearTimeout(timeoutId); }
                         }
                     });
-                } else { setRole(null); setLoading(false); }
+                } else { setRole(null); setLoading(false); clearTimeout(timeoutId); }
             }
         } catch (error) {
             console.error("[Auth] Error inicial:", error);
             // DO NOT FALLBACK TO OFFLINE MODE AUTOMATICALLY ANYMORE
             // The user wants to avoid the "parallel universe" confusion.
-            if(mounted) { setSession(null); setUser(null); setRole(null); setLoading(false); }
+            if(mounted) { setSession(null); setUser(null); setRole(null); setLoading(false); clearTimeout(timeoutId); }
         }
     };
     initSession();

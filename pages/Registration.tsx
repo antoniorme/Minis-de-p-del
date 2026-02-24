@@ -234,7 +234,7 @@ const Registration: React.FC = () => {
       {/* PAIR MODAL */}
       {isPairModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col text-slate-900">
+              <div className="bg-white w-full h-[90dvh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col text-slate-900">
                   {/* Compact Header */}
                   <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
                       <h3 className="text-lg font-bold flex items-center gap-2">

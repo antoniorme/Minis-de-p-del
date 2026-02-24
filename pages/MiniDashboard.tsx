@@ -31,7 +31,13 @@ const MiniDashboard: React.FC = () => {
                     <h2 className="text-2xl font-black text-white">Mis Minis</h2>
                     <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Gestión de Torneos Express</p>
                 </div>
-                <div className="ml-auto">
+                <div className="ml-auto flex gap-2">
+                    <button 
+                        onClick={() => navigate('/lite/setup')} 
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 text-white font-bold text-sm shadow-lg active:scale-95 transition-transform hover:bg-emerald-600"
+                    >
+                        <Trophy size={20}/> MINI EXPRESS
+                    </button>
                     <button 
                         onClick={() => navigate('/setup')} 
                         style={{ backgroundColor: THEME.cta }}

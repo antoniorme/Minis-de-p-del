@@ -32,6 +32,7 @@ import SuperAdmin from './pages/SuperAdmin';
 import Notifications from './pages/Notifications';
 import NotificationSettings from './pages/NotificationSettings';
 import PendingVerification from './pages/PendingVerification';
+import LiteSetup from './pages/lite/LiteSetup'; // NEW
 
 // League Pages
 import LeagueDashboard from './pages/LeagueDashboard';
@@ -67,7 +68,10 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 
 const AppRoutes = () => {
   const { user, role, loading } = useAuth();
-  if (loading) null;
+  
+  if (loading) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold animate-pulse">Cargando Aplicación...</div>;
+  }
 
   const getHomeRoute = () => {
       if (!user) return <Landing />;
@@ -124,6 +128,7 @@ const AppRoutes = () => {
                     {/* SPECIFIC MINI TOURNAMENT ROUTES */}
                     <Route path="/tournament/manage" element={<ProtectedRoute requireAdmin><TournamentManager /></ProtectedRoute>} />
                     <Route path="/setup" element={<ProtectedRoute requireAdmin><TournamentSetup /></ProtectedRoute>} />
+                    <Route path="/lite/setup" element={<ProtectedRoute requireAdmin><LiteSetup /></ProtectedRoute>} /> {/* NEW */}
                     <Route path="/tournament/registration" element={<ProtectedRoute requireAdmin><Registration /></ProtectedRoute>} />
                     <Route path="/tournament/checkin" element={<ProtectedRoute requireAdmin><CheckIn /></ProtectedRoute>} />
                     <Route path="/tournament/active" element={<ProtectedRoute requireAdmin><ActiveTournament /></ProtectedRoute>} />
