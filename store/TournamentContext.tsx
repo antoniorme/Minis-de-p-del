@@ -167,8 +167,11 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         nameToFormat = nameToFormat.replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])+/g, '');
         // 3. Remove other symbols and dingbats globally
         nameToFormat = nameToFormat.replace(/[\u2600-\u27BF\u2B00-\u2BFF\u2000-\u206F\uFE0F]+/g, '');
-        // 4. Remove leading numbering (e.g. "1.", "1)", "1-") - Only at start
-        nameToFormat = nameToFormat.replace(/^[\d]+[\.\-\)\s]+\s*/, '');
+        
+        // 4. Remove leading non-alphanumeric characters (aggressive start cleaning)
+        // Matches anything at the start that is NOT a letter (a-z, A-Z, accents) or number
+        // This removes "• ", "- ", "1. ", etc.
+        nameToFormat = nameToFormat.replace(/^[^a-zA-Z0-9\u00C0-\u00FF]+/, '');
         
         nameToFormat = nameToFormat.trim();
 
