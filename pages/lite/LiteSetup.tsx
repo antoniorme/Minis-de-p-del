@@ -95,11 +95,20 @@ const LiteSetup: React.FC = () => {
                     }
 
                     if (rawNames) {
-                        // Aggressive cleaning of leading garbage (numbers, dots, emojis, dashes, spaces)
-                        // Removes: 1. , 1- , 1) , - , * , # , > , and emojis
-                        rawNames = rawNames.replace(/^[\s\d\.\)\-\]\|\*\#\>]+/, '');
-                        // Remove leading emojis (surrogate pairs)
-                        rawNames = rawNames.replace(/^[\uD800-\uDBFF][\uDC00-\uDFFF]\s*/, '');
+                        // 1. Remove Keycap sequences globally (e.g. 1️⃣, 10️⃣)
+                        // Matches digit/hash/star + optional VS16 + Keycap
+                        rawNames = rawNames.replace(/[\d#\*]\uFE0F?\u20E3/g, '');
+
+                        // 2. Remove standard emojis globally (Surrogate pairs)
+                        rawNames = rawNames.replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])+/g, '');
+
+                        // 3. Remove other symbols and dingbats globally
+                        rawNames = rawNames.replace(/[\u2600-\u27BF\u2B00-\u2BFF\u2000-\u206F\uFE0F]+/g, '');
+
+                        // 4. Aggressive cleaning of leading garbage
+                        // Removes digits, dots, dashes, parentheses, spaces, etc. at the start
+                        // Keeps only letters (including accents) and numbers that are part of the name
+                        rawNames = rawNames.replace(/^[^a-zA-Z\u00C0-\u00FF]+/, '');
                         
                         // Split by " y ", " Y ", " & ", " Y ", " / ", " - ", " e "
                         const splitNames = rawNames.split(/\s+(?:y|Y|&|e|\/|-)\s+/);
