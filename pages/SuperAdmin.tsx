@@ -7,7 +7,7 @@ import {
     LayoutDashboard, Smartphone, Lock, RefreshCw, 
     Mail, Key, Trash2, X, Copy, Edit2, Send, Save, 
     ShieldCheck, Users, Trophy, Activity, Eye, 
-    BarChart3, CalendarRange, Power, Clock, CheckCircle, FilePlus
+    BarChart3, CalendarRange, Power, Clock, CheckCircle, FilePlus, History
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
