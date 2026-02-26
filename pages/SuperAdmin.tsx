@@ -38,6 +38,8 @@ interface Club {
     email?: string;
     is_active: boolean;
     league_enabled?: boolean; 
+    minis_lite_enabled?: boolean; // NEW
+    minis_full_enabled?: boolean; // NEW
     created_at: string;
 }
 
@@ -466,7 +468,12 @@ const SuperAdmin: React.FC = () => {
                                             onClick={() => {
                                                 const newState = !club.minis_full_enabled;
                                                 supabase.from('clubs').update({ minis_full_enabled: newState }).eq('id', club.id).then(({ error }) => {
-                                                    if (!error) setClubs(prev => prev.map(c => c.id === club.id ? { ...c, minis_full_enabled: newState } : c));
+                                                    if (!error) {
+                                                        setClubs(prev => prev.map(c => c.id === club.id ? { ...c, minis_full_enabled: newState } : c));
+                                                    } else {
+                                                        alert("Error actualizando módulo Minis: " + error.message);
+                                                        console.error("Update failed:", error);
+                                                    }
                                                 });
                                             }}
                                             className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-all w-1/3 ${club.minis_full_enabled !== false ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
@@ -481,7 +488,12 @@ const SuperAdmin: React.FC = () => {
                                             onClick={() => {
                                                 const newState = !club.minis_lite_enabled;
                                                 supabase.from('clubs').update({ minis_lite_enabled: newState }).eq('id', club.id).then(({ error }) => {
-                                                    if (!error) setClubs(prev => prev.map(c => c.id === club.id ? { ...c, minis_lite_enabled: newState } : c));
+                                                    if (!error) {
+                                                        setClubs(prev => prev.map(c => c.id === club.id ? { ...c, minis_lite_enabled: newState } : c));
+                                                    } else {
+                                                        alert("Error actualizando módulo Lite: " + error.message);
+                                                        console.error("Update failed:", error);
+                                                    }
                                                 });
                                             }}
                                             className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-all w-1/3 ${club.minis_lite_enabled ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
