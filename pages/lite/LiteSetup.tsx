@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageSquare, Play, RefreshCw, AlertTriangle, Users, Calendar, Trophy, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Play, RefreshCw, AlertTriangle, Users, Calendar, Trophy, Plus, Trash2, X, Check } from 'lucide-react';
 import { useHistory } from '../../store/HistoryContext';
 import { useTournament } from '../../store/TournamentContext';
 import { TournamentFormat } from '../../types';
@@ -35,6 +35,7 @@ const LiteSetup: React.FC = () => {
     const [step, setStep] = useState<'input' | 'review'>('input');
     const [parsedData, setParsedData] = useState<ParsedTournament | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [createError, setCreateError] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
 
     const parseWhatsAppText = () => {
@@ -240,13 +241,20 @@ const LiteSetup: React.FC = () => {
 
         } catch (e: any) {
             console.error(e);
-            alert(`Hubo un error al crear el torneo: ${e.message || e}`);
+            setCreateError(`Hubo un error al crear el torneo: ${e.message || e}`);
             setIsCreating(false);
         }
     };
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20">
+            {createError && (
+                <div className="fixed top-4 right-4 z-[300] p-4 rounded-2xl text-sm font-bold flex items-center gap-3 shadow-xl animate-fade-in border-l-4 max-w-sm bg-white border-rose-500 text-rose-700">
+                    <AlertTriangle size={20} className="shrink-0"/>
+                    <div className="flex-1">{createError}</div>
+                    <button onClick={() => setCreateError(null)} className="p-1 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"><X size={16}/></button>
+                </div>
+            )}
             {/* Header */}
             <div className="bg-white sticky top-0 z-10 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
                 <button onClick={() => step === 'review' ? setStep('input') : navigate(-1)} className="p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full">

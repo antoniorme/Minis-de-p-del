@@ -161,6 +161,8 @@ export interface ClubData {
     league_enabled?: boolean; 
     minis_lite_enabled?: boolean; // NEW
     minis_full_enabled?: boolean; // NEW
+    show_players?: boolean; // NEW
+    show_history?: boolean; // NEW
 }
 
 export interface PastTournament {

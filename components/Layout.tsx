@@ -32,14 +32,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   
   // 1. GLOBAL NAVIGATION (SIDEBAR)
   const menuItems = [
-      { path: '/dashboard', label: 'Inicio', icon: Home },
-      { path: '/minis', label: 'Minis', icon: Trophy },
-      { path: '/league', label: 'Ligas', icon: CalendarRange },
-      { path: '/players', label: 'Jugadores', icon: UserCog },
-      { path: '/history', label: 'Historial', icon: History },
-      { path: '/club', label: 'Mi Club', icon: Settings },
-      { path: '/help', label: 'Ayuda', icon: HelpCircle },
-  ];
+      { path: '/dashboard', label: 'Inicio', icon: Home, visible: true },
+      { path: '/minis', label: 'Minis', icon: Trophy, visible: clubData.minis_full_enabled !== false || clubData.minis_lite_enabled === true },
+      { path: '/league', label: 'Ligas', icon: CalendarRange, visible: clubData.league_enabled === true },
+      { path: '/players', label: 'Jugadores', icon: UserCog, visible: clubData.show_players !== false },
+      { path: '/history', label: 'Historial', icon: History, visible: clubData.show_history !== false },
+      { path: '/club', label: 'Mi Club', icon: Settings, visible: true },
+      { path: '/help', label: 'Ayuda', icon: HelpCircle, visible: true },
+  ].filter(item => item.visible);
 
   if (role === 'superadmin') {
       menuItems.unshift({ path: '/superadmin', label: 'Super Admin', icon: Shield });

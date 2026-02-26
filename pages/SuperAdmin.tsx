@@ -40,6 +40,8 @@ interface Club {
     league_enabled?: boolean; 
     minis_lite_enabled?: boolean; // NEW
     minis_full_enabled?: boolean; // NEW
+    show_players?: boolean; // NEW
+    show_history?: boolean; // NEW
     created_at: string;
 }
 
@@ -276,7 +278,7 @@ const SuperAdmin: React.FC = () => {
                 setInspectedClub({ ...inspectedClub, league_enabled: newState });
             }
         } catch(e: any) {
-            alert("Error cambiando estado del módulo de liga: " + e.message);
+            setCreateError("Error cambiando estado del módulo de liga: " + e.message);
         }
     };
 
@@ -381,9 +383,10 @@ const SuperAdmin: React.FC = () => {
             </div>
 
             {(createError || successMessage) && (
-                <div className={`p-4 rounded-2xl text-sm font-bold flex items-center gap-2 shadow-sm animate-fade-in ${createError ? 'bg-rose-50 border-l-4 border-rose-500 text-rose-700' : 'bg-emerald-50 border-l-4 border-emerald-500 text-emerald-700'}`}>
-                    {createError ? <AlertTriangle size={20}/> : <Check size={20}/>}
-                    {createError || successMessage}
+                <div className={`fixed top-4 right-4 z-[300] p-4 rounded-2xl text-sm font-bold flex items-center gap-3 shadow-xl animate-fade-in border-l-4 max-w-sm ${createError ? 'bg-white border-rose-500 text-rose-700' : 'bg-white border-emerald-500 text-emerald-700'}`}>
+                    {createError ? <AlertTriangle size={20} className="shrink-0"/> : <Check size={20} className="shrink-0"/>}
+                    <div className="flex-1">{createError || successMessage}</div>
+                    <button onClick={() => { setCreateError(null); setSuccessMessage(null); }} className="p-1 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"><X size={16}/></button>
                 </div>
             )}
 
@@ -471,7 +474,7 @@ const SuperAdmin: React.FC = () => {
                                                     if (!error) {
                                                         setClubs(prev => prev.map(c => c.id === club.id ? { ...c, minis_full_enabled: newState } : c));
                                                     } else {
-                                                        alert("Error actualizando módulo Minis: " + error.message);
+                                                        setCreateError("Error actualizando módulo Minis: " + error.message);
                                                         console.error("Update failed:", error);
                                                     }
                                                 });
@@ -491,7 +494,7 @@ const SuperAdmin: React.FC = () => {
                                                     if (!error) {
                                                         setClubs(prev => prev.map(c => c.id === club.id ? { ...c, minis_lite_enabled: newState } : c));
                                                     } else {
-                                                        alert("Error actualizando módulo Lite: " + error.message);
+                                                        setCreateError("Error actualizando módulo Lite: " + error.message);
                                                         console.error("Update failed:", error);
                                                     }
                                                 });
@@ -511,6 +514,52 @@ const SuperAdmin: React.FC = () => {
                                             <CalendarRange size={14} className={club.league_enabled ? 'text-indigo-600' : 'text-slate-400'}/>
                                             <span className={`text-xs font-bold flex-1 text-left ${club.league_enabled ? 'text-indigo-700' : 'text-slate-500'}`}>Ligas</span>
                                             <div className={`w-3 h-3 rounded-full border ${club.league_enabled ? 'bg-indigo-500 border-indigo-600' : 'bg-slate-200 border-slate-300'}`}></div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* MENU VISIBILITY SECTION */}
+                                <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Visibilidad Menú</span>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        {/* Players Visibility */}
+                                        <button 
+                                            onClick={() => {
+                                                const newState = !club.show_players;
+                                                supabase.from('clubs').update({ show_players: newState }).eq('id', club.id).then(({ error }) => {
+                                                    if (!error) {
+                                                        setClubs(prev => prev.map(c => c.id === club.id ? { ...c, show_players: newState } : c));
+                                                    } else {
+                                                        setCreateError("Error actualizando visibilidad Jugadores: " + error.message);
+                                                    }
+                                                });
+                                            }}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-all w-1/2 ${club.show_players !== false ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
+                                        >
+                                            <Users size={14} className={club.show_players !== false ? 'text-emerald-600' : 'text-slate-400'}/>
+                                            <span className={`text-xs font-bold flex-1 text-left ${club.show_players !== false ? 'text-emerald-700' : 'text-slate-500'}`}>Jugadores</span>
+                                            <div className={`w-3 h-3 rounded-full border ${club.show_players !== false ? 'bg-emerald-500 border-emerald-600' : 'bg-slate-200 border-slate-300'}`}></div>
+                                        </button>
+
+                                        {/* History Visibility */}
+                                        <button 
+                                            onClick={() => {
+                                                const newState = !club.show_history;
+                                                supabase.from('clubs').update({ show_history: newState }).eq('id', club.id).then(({ error }) => {
+                                                    if (!error) {
+                                                        setClubs(prev => prev.map(c => c.id === club.id ? { ...c, show_history: newState } : c));
+                                                    } else {
+                                                        setCreateError("Error actualizando visibilidad Historial: " + error.message);
+                                                    }
+                                                });
+                                            }}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-all w-1/2 ${club.show_history !== false ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
+                                        >
+                                            <History size={14} className={club.show_history !== false ? 'text-amber-600' : 'text-slate-400'}/>
+                                            <span className={`text-xs font-bold flex-1 text-left ${club.show_history !== false ? 'text-amber-700' : 'text-slate-500'}`}>Historial</span>
+                                            <div className={`w-3 h-3 rounded-full border ${club.show_history !== false ? 'bg-amber-500 border-amber-600' : 'bg-slate-200 border-slate-300'}`}></div>
                                         </button>
                                     </div>
                                 </div>
