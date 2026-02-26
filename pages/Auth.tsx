@@ -8,32 +8,17 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
 
-// ------------------------------------------------------------------
-// CONFIGURACIÓN DE ENTORNO (BLINDADA)
-// ------------------------------------------------------------------
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 let HCAPTCHA_SITE_TOKEN = "";
-let IS_DEV_ENV = false;
-
 try {
     // @ts-ignore
-    if (import.meta && import.meta.env) {
+    if (import.meta && import.meta.env && import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) {
         // @ts-ignore
-        if (import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) {
-            // @ts-ignore
-            HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN;
-        }
-        // @ts-ignore
-        if (import.meta.env.DEV) {
-            // @ts-ignore
-            IS_DEV_ENV = import.meta.env.DEV;
-        }
+        HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN;
     }
-} catch (e) {
-    console.warn("Entorno seguro: No se pudieron leer variables de entorno (usando defaults).", e);
-}
+} catch (e) {}
 
-const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const IS_LOCAL = isLocalHost || IS_DEV_ENV;
+// ... (existing code)
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -79,42 +64,7 @@ const AuthPage: React.FC = () => {
       if(captchaRef.current) captchaRef.current.resetCaptcha();
   };
 
-  const ensurePlayerRecord = async (userId: string, userEmail: string) => {
-      // 1. Verificar si es Club
-      const { data: clubData } = await supabase
-          .from('clubs')
-          .select('id, email') // Select email to check if it needs updating
-          .eq('owner_id', userId)
-          .maybeSingle();
-
-      if (clubData) {
-          console.log("Usuario identificado como Club.");
-          // AUTO-HEAL: Si el club no tiene email guardado en la tabla pública, lo guardamos ahora.
-          // Esto permite que el SuperAdmin vea el email sin necesidad de una ficha de jugador.
-          if (!clubData.email || clubData.email !== userEmail) {
-              console.log("Actualizando email público del club...");
-              await supabase.from('clubs').update({ email: userEmail }).eq('id', clubData.id);
-          }
-          return;
-      }
-
-      // 2. Si no es Club, verificar/crear ficha de Jugador
-      const { data: existingPlayer } = await supabase
-          .from('players')
-          .select('id')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-      if (!existingPlayer) {
-          await supabase.from('players').insert([{
-              user_id: userId,
-              email: userEmail,
-              name: userEmail.split('@')[0], // Placeholder name
-              categories: ['Iniciación'], 
-              manual_rating: 5
-          }]);
-      }
-  };
+  // ... (existing ensurePlayerRecord)
 
   const handlePasswordReset = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -128,8 +78,10 @@ const AuthPage: React.FC = () => {
       }
 
       try {
+          // Use a cleaner redirect URL that works with HashRouter
+          // We point to the root, but include the hash path we want to end up at
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: window.location.origin + '/#/auth?type=recovery',
+              redirectTo: window.location.origin + '/#/reset-password',
               captchaToken: captchaToken || undefined 
           });
           if (error) throw error;
@@ -143,105 +95,79 @@ const AuthPage: React.FC = () => {
       }
   };
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    // 1. CHECK CRÍTICO DE CONFIGURACIÓN
-    if (!IS_LOCAL && !HCAPTCHA_SITE_TOKEN) {
-        setError("ERROR CONFIG: Falta VITE_HCAPTCHA_SITE_TOKEN. Contacta al admin.");
-        setLoading(false);
-        return;
-    }
-
-    // 2. CHECK DE RESOLUCIÓN DE CAPTCHA
-    if (HCAPTCHA_SITE_TOKEN && !captchaToken && !IS_LOCAL) {
-        setError("Por favor, completa el Captcha para continuar.");
-        setLoading(false);
-        return;
-    }
-
-    try {
-      let result;
-      const authOptions = captchaToken ? { options: { captchaToken } } : undefined;
-
-      console.log("🔐 AUTH:", { view, email, token: !!captchaToken });
-
-      if (view === 'login') {
-        result = await supabase.auth.signInWithPassword({ 
-            email, 
-            password,
-            ...authOptions
-        });
-      } else {
-        // Register Logic
-        if (password !== confirmPassword) {
-            throw new Error("Las contraseñas no coinciden.");
-        }
-        
-        result = await supabase.auth.signUp({ 
-            email, 
-            password,
-            ...authOptions
-        });
+  const ensurePlayerRecord = async (userId: string, userEmail: string) => {
+      const { data } = await supabase.from('players').select('id').eq('user_id', userId).maybeSingle();
+      if (!data) {
+          await supabase.from('players').insert([{
+              user_id: userId,
+              email: userEmail,
+              name: userEmail.split('@')[0],
+              role: 'player'
+          }]);
       }
-
-      if (result.error) throw result.error;
-
-      if (result.data.user) {
-          // If login successful or auto-login after signup, ensure player record exists (basic)
-          if (view === 'login' || (view === 'register' && result.data.session)) {
-              await ensurePlayerRecord(result.data.user.id, result.data.user.email!);
-          }
-          
-          if (view === 'register' && !result.data.session) {
-               // Email confirmation required case
-               setSuccessMsg("¡Cuenta creada! Revisa tu email para confirmarla.");
-               if(captchaRef.current) captchaRef.current.resetCaptcha(); 
-               setCaptchaToken(null);
-               setView('login');
-          }
-      }
-
-    } catch (err: any) {
-      console.error("Auth Error:", err);
-      let message = err.message || 'Error de autenticación';
-      
-      if (message.includes('Captcha')) message = 'Error de Captcha: Supabase lo ha rechazado o ha expirado.';
-      else if (message === 'Failed to fetch') message = 'Error de conexión con el servidor.';
-      else if (message.includes('Invalid login')) message = 'Credenciales incorrectas.';
-      
-      setError(message);
-      if(captchaRef.current) captchaRef.current.resetCaptcha();
-      setCaptchaToken(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBypass = (role: 'admin' | 'player' | 'superadmin') => {
-      loginWithDevBypass(role);
-      if (role === 'player') navigate('/p/dashboard');
-      else navigate('/dashboard');
   };
 
   const onCaptchaVerify = (token: string) => {
       setCaptchaToken(token);
-      setError(null);
+  };
+
+  const handleBypass = (role: 'admin' | 'player' | 'superadmin') => {
+      loginWithDevBypass(role);
+      navigate('/dashboard');
   };
 
   const getDiagnosticInfo = () => {
-      let output = "";
-      try {
-          output += `Host: ${window.location.hostname}\n`;
-          output += `Mode: ${IS_LOCAL ? 'LOCAL/DEV' : 'PROD'}\n`;
-          output += `Key Configured: ${HCAPTCHA_SITE_TOKEN ? 'YES' : 'NO'}\n`;
-          if (HCAPTCHA_SITE_TOKEN) output += `Key Prefix: ${HCAPTCHA_SITE_TOKEN.substring(0, 4)}...\n`;
-      } catch (e) {
-          output += "Error getting diagnostics.";
+      return JSON.stringify({
+          url: window.location.href,
+          isLocal: IS_LOCAL,
+          hasCaptcha: !!HCAPTCHA_SITE_TOKEN,
+          mode: isOfflineMode ? 'OFFLINE' : 'ONLINE',
+          view
+      }, null, 2);
+  };
+
+  const handleAuth = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setLoading(true);
+      setError(null);
+      
+      if (!IS_LOCAL && (!HCAPTCHA_SITE_TOKEN || !captchaToken)) {
+          setError("Por seguridad, debes completar el captcha.");
+          setLoading(false);
+          return;
       }
-      return output;
+
+      try {
+          if (view === 'login') {
+              const { error } = await supabase.auth.signInWithPassword({
+                  email,
+                  password,
+                  options: { captchaToken: captchaToken || undefined }
+              });
+              if (error) throw error;
+              navigate('/dashboard');
+          } else {
+              if (password !== confirmPassword) {
+                  throw new Error("Las contraseñas no coinciden");
+              }
+              const { data, error } = await supabase.auth.signUp({
+                  email,
+                  password,
+                  options: { captchaToken: captchaToken || undefined }
+              });
+              if (error) throw error;
+              if (data.user && data.user.email) {
+                  await ensurePlayerRecord(data.user.id, data.user.email);
+                  setSuccessMsg("Cuenta creada. Por favor verifica tu email.");
+              }
+          }
+      } catch (err: any) {
+          setError(err.message || "Error de autenticación");
+          if(captchaRef.current) captchaRef.current.resetCaptcha();
+          setCaptchaToken(null);
+      } finally {
+          setLoading(false);
+      }
   };
 
   // --- RECOVERY VIEW ---
@@ -315,6 +241,7 @@ const AuthPage: React.FC = () => {
         </div>
       );
   }
+
 
   // --- LOGIN / REGISTER VIEW ---
   return (

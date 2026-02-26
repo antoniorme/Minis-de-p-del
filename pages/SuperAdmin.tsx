@@ -310,7 +310,7 @@ const SuperAdmin: React.FC = () => {
         if (!isOfflineMode && HCAPTCHA_SITE_TOKEN && !captchaToken) { setCreateError("Captcha requerido."); return; }
         try {
             await supabase.from('clubs').update({ email: manualEmailInput }).eq('id', clubToRepair.id);
-            await supabase.auth.resetPasswordForEmail(manualEmailInput, { redirectTo: window.location.origin + '/#/auth?type=recovery', captchaToken: captchaToken || undefined });
+            await supabase.auth.resetPasswordForEmail(manualEmailInput, { redirectTo: window.location.origin + '/#/reset-password', captchaToken: captchaToken || undefined });
             setSuccessMessage(`Enviado a ${manualEmailInput}`); setClubToRepair(null); setCaptchaToken(null); fetchClubs();
         } catch (err: any) { setCreateError(err.message); }
     };
