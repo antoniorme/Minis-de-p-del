@@ -1,51 +1,95 @@
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, TrendingUp, BookOpen, Settings, Users, RefreshCw, Table, Sliders, Calculator, ShieldAlert } from 'lucide-react';
+import { ChevronDown, ChevronUp, TrendingUp, BookOpen, Settings, Users, RefreshCw, Table, Sliders, Calculator, ShieldAlert, Smartphone, Trophy, CalendarRange } from 'lucide-react';
+import { useHistory } from '../store/HistoryContext';
 
 const Help: React.FC = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const { clubData } = useHistory();
 
-  const faqs = [
-      {
-        q: "1. Pasos para crear un torneo",
-        a: "1. Ve a 'Mis Torneos' y pulsa 'Nuevo'.\n2. Completa los detalles del evento (precio, fecha, premios).\n3. En la fase de **Configuración**, gestiona las inscripciones hasta llegar al cupo.\n4. Pulsa 'GENERAR CUADROS Y EMPEZAR' y elige el método de sorteo.\n5. El torneo pasará a fase **En Juego** y podrás ir a la pantalla de 'Directo' para gestionar los partidos."
-      },
-      {
-        q: "2. Jugadores vs Parejas: ¿Cuál es la diferencia?",
-        a: "Esta es una distinción clave:\n• **Jugadores:** Se guardan en la base de datos de tu club para siempre. Tienen su historial, ELO y estadísticas acumuladas. Los gestionas en 'Gestión Jugadores'.\n• **Parejas:** Son temporales y existen solo para el torneo actual. Al archivar un torneo, la pareja se disuelve, pero los jugadores siguen existiendo. \n\n*Nota:* Si eliminas una pareja del registro, los jugadores NO se borran."
-      },
-      {
-          q: "3. Sustitución de Parejas (Reservas)",
-          a: "Si una pareja titular no puede jugar o se lesiona, puedes sustituirla por una reserva sin alterar el calendario:\n1. Ve a la pestaña 'Control'.\n2. En la tarjeta de la pareja titular, pulsa el icono de refrescar (🔄).\n3. Selecciona qué pareja reserva entrará en su lugar.\n\nLa nueva pareja heredará los partidos ya jugados, los puntos y la posición en el grupo."
-      },
-      {
-        q: "4. Métodos de Generación: ¿Cuál elijo?",
-        a: "• NIVEL (Equilibrado): Ordena a las parejas por ELO. Las mejores van al Grupo A (Champions) y las de menor nivel al Grupo D (Europa). Ideal si quieres niveles homogéneos dentro de cada grupo.\n\n• MIX (Mezclado): Usa un sistema de 'bombos' o cremallera. Reparte a los mejores equitativamente entre todos los grupos (1º al A, 2º al B, 3º al C...). Ideal para que todos los grupos tengan una dificultad similar.\n\n• LLEGADA: Orden estricto de inscripción.\n\n• MANUAL: Se abrirá un asistente para que tú elijas dedo a dedo quién va a cada grupo."
-      },
-      { 
-        q: "5. Formatos y Lógica", 
-        a: "Elige el formato según el número de inscritos:\n\n• **Mini 16:** 4 Grupos de 4. Si tienes <8 pistas, es rotativo con descansos (4 rondas). Si tienes >=8 pistas, es simultáneo (3 rondas).\n• **Mini 12:** 3 Grupos de 4. Pasan a cuartos los 2 primeros de cada grupo y los 2 mejores terceros.\n• **Mini 10:** 2 Grupos de 5. Juegan todos contra todos (5 partidos). Los cruces de cuartos son A vs B.\n• **Mini 8:** 2 Grupos de 4. Formato rápido con cruces directos." 
-      },
-      { 
-        q: "6. Botón de Pánico (Reiniciar)", 
-        a: "Si te has equivocado al crear el torneo (ej. elegiste 'Nivel' y querías 'Mix'), ve a la pantalla de Directo y pulsa el icono de engranaje ⚙️. Allí verás 'Reiniciar Configuración'. Esto borrará los partidos generados y te devolverá a la fase de Configuración." 
-      },
-      { 
-        q: "7. ¿Cómo funcionan los Puntos (ELO)?", 
-        a: "Hemos actualizado el sistema a una escala de 0 a 6000 puntos para mayor claridad. Cada categoría representa un salto de 1000 puntos. Consulta la tabla detallada abajo." 
-      },
-  ];
+  const showMinisFull = clubData.minis_full_enabled !== false;
+  const showMinisLite = clubData.minis_lite_enabled === true;
+  const showLeagues = clubData.league_enabled === true;
+
+  const faqs = [];
+
+  // --- CONTENIDO MINIS LITE ---
+  if (showMinisLite) {
+      faqs.push(
+          {
+              q: "Lite: ¿Cómo funciona la Importación de WhatsApp?",
+              a: "Es mágico ✨. Copia el mensaje completo de tu grupo de WhatsApp (con la lista de inscritos) y pégalo en el cuadro de texto. El sistema detectará automáticamente:\n\n• Nombres de las parejas\n• Reservas\n• Formato sugerido\n\nSi algo no cuadra, puedes editarlo manualmente antes de empezar."
+          },
+          {
+              q: "Lite: ¿Puedo gestionar resultados?",
+              a: "Sí. Una vez creado el torneo Lite, verás una lista simple de partidos. Toca en cualquier partido para añadir el resultado. Al finalizar, puedes generar un resumen para compartirlo de nuevo en el grupo."
+          }
+      );
+  }
+
+  // --- CONTENIDO MINIS FULL ---
+  if (showMinisFull) {
+      faqs.push(
+          {
+            q: "Minis: Pasos para crear un torneo",
+            a: "1. Ve a 'Mis Torneos' y pulsa 'Nuevo'.\n2. Completa los detalles del evento (precio, fecha, premios).\n3. En la fase de **Configuración**, gestiona las inscripciones hasta llegar al cupo.\n4. Pulsa 'GENERAR CUADROS Y EMPEZAR' y elige el método de sorteo.\n5. El torneo pasará a fase **En Juego** y podrás ir a la pantalla de 'Directo' para gestionar los partidos."
+          },
+          {
+            q: "Minis: Jugadores vs Parejas",
+            a: "Esta es una distinción clave:\n• **Jugadores:** Se guardan en la base de datos de tu club para siempre. Tienen su historial, ELO y estadísticas acumuladas. Los gestionas en 'Gestión Jugadores'.\n• **Parejas:** Son temporales y existen solo para el torneo actual. Al archivar un torneo, la pareja se disuelve, pero los jugadores siguen existiendo."
+          },
+          {
+              q: "Minis: Sustitución de Parejas (Reservas)",
+              a: "Si una pareja titular no puede jugar o se lesiona, puedes sustituirla por una reserva sin alterar el calendario:\n1. Ve a la pestaña 'Control'.\n2. En la tarjeta de la pareja titular, pulsa el icono de refrescar (🔄).\n3. Selecciona qué pareja reserva entrará en su lugar.\n\nLa nueva pareja heredará los partidos ya jugados, los puntos y la posición en el grupo."
+          },
+          {
+            q: "Minis: Métodos de Generación",
+            a: "• NIVEL (Equilibrado): Ordena a las parejas por ELO. Las mejores van al Grupo A (Champions) y las de menor nivel al Grupo D (Europa).\n\n• MIX (Mezclado): Usa un sistema de 'bombos' o cremallera. Reparte a los mejores equitativamente entre todos los grupos.\n\n• LLEGADA: Orden estricto de inscripción.\n\n• MANUAL: Se abrirá un asistente para que tú elijas quién va a cada grupo."
+          },
+          { 
+            q: "Minis: Formatos y Lógica", 
+            a: "Elige el formato según el número de inscritos:\n\n• **Mini 16:** 4 Grupos de 4. Si tienes <8 pistas, es rotativo con descansos (4 rondas). Si tienes >=8 pistas, es simultáneo (3 rondas).\n• **Mini 12:** 3 Grupos de 4. Pasan a cuartos los 2 primeros de cada grupo y los 2 mejores terceros.\n• **Mini 10:** 2 Grupos de 5. Juegan todos contra todos (5 partidos). Los cruces de cuartos son A vs B.\n• **Mini 8:** 2 Grupos de 4. Formato rápido con cruces directos." 
+          },
+          { 
+            q: "Minis: Botón de Pánico (Reiniciar)", 
+            a: "Si te has equivocado al crear el torneo (ej. elegiste 'Nivel' y querías 'Mix'), ve a la pantalla de Directo y pulsa el icono de engranaje ⚙️. Allí verás 'Reiniciar Configuración'. Esto borrará los partidos generados y te devolverá a la fase de Configuración." 
+          }
+      );
+  }
+
+  // --- CONTENIDO LIGAS ---
+  if (showLeagues) {
+      faqs.push(
+          {
+              q: "Ligas: Estructura de la Competición",
+              a: "Las ligas funcionan por Fases y Grupos. Puedes crear una Fase Regular (todos contra todos) y luego una Fase de Playoffs. Dentro de cada fase, puedes tener múltiples grupos (División 1, División 2, etc.)."
+          },
+          {
+              q: "Ligas: Gestión de Jornadas",
+              a: "Puedes generar un calendario automático o dejar que los jugadores acuerden sus partidos. Si activas 'Calendario Flexible', los jugadores podrán subir sus propios resultados desde su área privada."
+          }
+      );
+  }
+
+  // --- CONTENIDO COMÚN (ELO) ---
+  // Solo mostrar si Minis Full está activo, ya que Lite no usa ELO complejo visible
+  const showEloHelp = showMinisFull;
 
   return (
-    <div className="space-y-6 pb-20">
-      <h2 className="text-2xl font-bold text-slate-900">Ayuda & Lógica</h2>
+    <div className="space-y-6 pb-20 animate-fade-in">
+      <h2 className="text-2xl font-bold text-slate-900">Ayuda & Documentación</h2>
       
       {/* Introduction */}
       <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex gap-4 items-start">
           <div className="bg-white p-2 rounded-full text-emerald-600 shadow-sm"><BookOpen size={24}/></div>
           <div>
-              <h3 className="font-bold text-emerald-800">Manual del Organizador</h3>
-              <p className="text-sm text-emerald-700 mt-1">Aquí explicamos cómo el algoritmo decide los cruces y gestiona los tiempos de tu torneo.</p>
+              <h3 className="font-bold text-emerald-800">Centro de Ayuda</h3>
+              <p className="text-sm text-emerald-700 mt-1">
+                  Documentación adaptada a tus módulos activos: 
+                  {showMinisLite && <span className="inline-flex items-center gap-1 ml-2 bg-emerald-200/50 px-2 py-0.5 rounded text-xs font-bold"><Smartphone size={10}/> Lite</span>}
+                  {showMinisFull && <span className="inline-flex items-center gap-1 ml-2 bg-indigo-200/50 px-2 py-0.5 rounded text-xs font-bold"><Trophy size={10}/> Minis</span>}
+                  {showLeagues && <span className="inline-flex items-center gap-1 ml-2 bg-purple-200/50 px-2 py-0.5 rounded text-xs font-bold"><CalendarRange size={10}/> Ligas</span>}
+              </p>
           </div>
       </div>
 
@@ -69,7 +113,8 @@ const Help: React.FC = () => {
           ))}
       </div>
 
-      {/* DETAILED ELO EXPLANATION CARD */}
+      {/* DETAILED ELO EXPLANATION CARD (Only for Full Minis) */}
+      {showEloHelp && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden mt-8">
           <div className="bg-slate-900 p-5 text-white flex items-center gap-3">
               <div className="bg-white/10 p-2 rounded-lg text-blue-300">
@@ -153,6 +198,7 @@ const Help: React.FC = () => {
 
           </div>
       </div>
+      )}
     </div>
   );
 };

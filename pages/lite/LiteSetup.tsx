@@ -211,25 +211,91 @@ const LiteSetup: React.FC = () => {
 
             if (!tournamentId) throw new Error("No se pudo crear el torneo (ID nulo).");
 
-            // 2. Create Players and Pairs using Context Methods (works for both Online and Offline)
-            for (const pair of parsedData.pairs) {
-                // Create Player 1
-                const p1Id = await addPlayerToDB({ name: pair.player1 }, currentUserId);
-                if (!p1Id) {
-                    console.error("Error creating P1:", pair.player1);
-                    continue;
+            // 2. Create Players and Pairs
+            if (!isOfflineMode) {
+                // ONLINE BULK IMPORT
+                const uniqueNames = new Set<string>();
+                parsedData.pairs.forEach(p => {
+                    if (p.player1) uniqueNames.add(p.player1.trim());
+                    if (p.player2) uniqueNames.add(p.player2.trim());
+                });
+
+                const namesArray = Array.from(uniqueNames);
+                
+                // Fetch existing players
+                const { data: existingPlayers, error: fetchErr } = await supabase
+                    .from('players')
+                    .select('id, name')
+                    .eq('user_id', currentUserId)
+                    .in('name', namesArray);
+
+                if (fetchErr) throw fetchErr;
+
+                const existingMap = new Map<string, string>();
+                if (existingPlayers) {
+                    existingPlayers.forEach(p => existingMap.set(p.name.toLowerCase(), p.id));
+                }
+                
+                // Find missing players
+                const missingNames = namesArray.filter(name => !existingMap.has(name.toLowerCase()));
+                
+                // Insert missing players
+                if (missingNames.length > 0) {
+                    const newPlayersData = missingNames.map(name => ({
+                        name,
+                        user_id: currentUserId,
+                        matches_played: 0,
+                        manual_rating: 3
+                    }));
+                    
+                    const { data: insertedPlayers, error: insertErr } = await supabase
+                        .from('players')
+                        .insert(newPlayersData)
+                        .select('id, name');
+                        
+                    if (insertErr) throw insertErr;
+                    
+                    if (insertedPlayers) {
+                        insertedPlayers.forEach(p => existingMap.set(p.name.toLowerCase(), p.id));
+                    }
                 }
 
-                // Create Player 2
-                const p2Id = await addPlayerToDB({ name: pair.player2 }, currentUserId);
-                if (!p2Id) {
-                    console.error("Error creating P2:", pair.player2);
-                    continue;
+                // Now insert all pairs
+                const pairsData = parsedData.pairs.map(pair => {
+                    const p1Id = existingMap.get(pair.player1.trim().toLowerCase());
+                    const p2Id = existingMap.get(pair.player2.trim().toLowerCase());
+                    if (!p1Id || !p2Id) return null;
+                    return {
+                        tournament_id: tournamentId,
+                        player1_id: p1Id,
+                        player2_id: p2Id,
+                        status: 'confirmed'
+                    };
+                }).filter(Boolean);
+
+                if (pairsData.length > 0) {
+                    const { error: pairErr } = await supabase.from('tournament_pairs').insert(pairsData);
+                    if (pairErr) throw pairErr;
                 }
 
-                // Create Pair
-                const pairId = await createPairInDB(p1Id, p2Id, 'confirmed', tournamentId);
-                if (!pairId) console.error("Error creating pair for:", pair.originalText);
+            } else {
+                // OFFLINE MODE (Sequential, uses localStorage, very fast)
+                for (const pair of parsedData.pairs) {
+                    const p1Id = await addPlayerToDB({ name: pair.player1 }, currentUserId);
+                    if (!p1Id) {
+                        console.error("Error creating P1:", pair.player1);
+                        continue;
+                    }
+
+                    const p2Id = await addPlayerToDB({ name: pair.player2 }, currentUserId);
+                    if (!p2Id) {
+                        console.error("Error creating P2:", pair.player2);
+                        continue;
+                    }
+
+                    const pairId = await createPairInDB(p1Id, p2Id, 'confirmed', tournamentId);
+                    if (!pairId) console.error("Error creating pair for:", pair.originalText);
+                }
             }
 
             // 3. Select the tournament to refresh context

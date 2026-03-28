@@ -32,6 +32,22 @@ const GeneralDashboard: React.FC = () => {
 
     const showMinisFull = clubData.minis_full_enabled !== false;
     const showMinisLite = clubData.minis_lite_enabled === true;
+    const showLeagues = clubData.league_enabled === true;
+
+    useEffect(() => {
+        // Redirect if only one module is active
+        const activeCount = [showMinisFull, showMinisLite, showLeagues].filter(Boolean).length;
+        
+        if (activeCount === 1) {
+            if (showMinisLite) navigate('/lite/setup', { replace: true });
+            else if (showMinisFull) navigate('/minis', { replace: true });
+            else if (showLeagues) navigate('/league', { replace: true });
+        }
+    }, [showMinisFull, showMinisLite, showLeagues, navigate]);
+
+    // If redirecting, render nothing or a loader
+    const activeCount = [showMinisFull, showMinisLite, showLeagues].filter(Boolean).length;
+    if (activeCount === 1) return null;
 
     return (
         <div className="space-y-8 pb-20 animate-fade-in">
@@ -86,8 +102,7 @@ const GeneralDashboard: React.FC = () => {
                     </div>
                 )}
 
-                {/* CARD MINIS LITE (Only if Full is disabled and Lite is enabled, OR if explicitly enabled) */}
-                {/* Logic: If Full is hidden, show Lite. If both enabled, show both? For now, let's show both if both enabled. */}
+                {/* CARD MINIS LITE */}
                 {showMinisLite && (
                     <div 
                         onClick={() => navigate('/lite/setup')}
@@ -127,6 +142,7 @@ const GeneralDashboard: React.FC = () => {
                 )}
 
                 {/* CARD LIGAS */}
+                {showLeagues && (
                 <div 
                     onClick={() => navigate('/league')}
                     className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-lg relative overflow-hidden group hover:border-emerald-500/50 transition-all cursor-pointer flex flex-col justify-between"
@@ -168,6 +184,7 @@ const GeneralDashboard: React.FC = () => {
                         </button>
                     </div>
                 </div>
+                )}
 
             </div>
         </div>
